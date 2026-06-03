@@ -1,4 +1,5 @@
 import express from 'express';
+import readline from 'node:readline';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +60,13 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGHUP', () => shutdown('SIGHUP'));
 // Windows Ctrl+Break.
 if (process.platform === 'win32') process.on('SIGBREAK', () => shutdown('SIGBREAK'));
+
+// On Windows, ConPTY child processes (node-pty) attach to our console and can
+// swallow Ctrl+C, so the host never receives SIGINT. readline reads the console
+// input directly and re-emits SIGINT, bypassing the broken signal routing.
+if (process.platform === 'win32' && process.stdin.isTTY) {
+  readline.createInterface({ input: process.stdin }).on('SIGINT', () => shutdown('SIGINT'));
+}
 
 // If the port is already held (e.g. a previous run is still alive), exit with a
 // clear message instead of an unhandled-error stack trace.
