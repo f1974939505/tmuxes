@@ -3,6 +3,7 @@ import type { SessionInfo, Selection, Target } from '../types';
 import { api, ApiError } from '../api';
 import { isValidSessionName } from '../util';
 import { useFolders } from '../folders';
+import { useAttention } from '../attention';
 import { SessionTree } from './SessionTree';
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
 }
 
 const POLL_MS = 5000;
+/** Seconds of observed silence (after activity) before we flag a session. */
+const ATTENTION_IDLE_SEC = 10;
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
   // Expand the "local-ish" targets by default (local tmux, WSL, native shells).
@@ -31,9 +34,35 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const [creating, setCreating] = useState(false);
 
   const folders = useFolders(target.id, expanded);
+  const attention = useAttention();
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
+  // Sessions currently flagged as needing attention (edge detection per poll).
+  const alerting = useRef<Set<string>>(new Set());
+
+  const detectAttention = useCallback(
+    (sessions: SessionInfo[]) => {
+      const present = new Set<string>();
+      for (const s of sessions) {
+        present.add(s.name);
+        const idle = !!s.observedActive && (s.idleSeconds ?? 0) >= ATTENTION_IDLE_SEC;
+        const wasAlerting = alerting.current.has(s.name);
+        if (idle && !wasAlerting) {
+          alerting.current.add(s.name);
+          attention.fire(target.id, s.name);
+        } else if (!idle && wasAlerting) {
+          alerting.current.delete(s.name);
+          attention.clearAlert(target.id, s.name);
+        }
+      }
+      // Forget sessions that vanished.
+      for (const name of [...alerting.current]) {
+        if (!present.has(name)) alerting.current.delete(name);
+      }
+    },
+    [attention, target.id],
+  );
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return;
@@ -42,6 +71,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
     try {
       const { sessions } = await api.getSessions(target.id);
       setSessions(sessions);
+      detectAttention(sessions);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to list sessions');
@@ -49,7 +79,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       setLoading(false);
       inFlight.current = false;
     }
-  }, [target.id]);
+  }, [target.id, detectAttention]);
 
   useEffect(() => {
     if (!expanded) return;

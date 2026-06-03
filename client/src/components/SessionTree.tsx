@@ -161,6 +161,7 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
         {subSessions.map((s) => (
           <SessionRow
             key={s.name}
+            targetId={targetId}
             session={s}
             nowMs={nowMs}
             depth={depth}

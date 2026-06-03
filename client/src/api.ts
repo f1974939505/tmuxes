@@ -1,4 +1,4 @@
-import type { FileEntry, FilePreview, SessionInfo, Target, WindowInfo } from './types';
+import type { AttentionPeek, FileEntry, FilePreview, SessionInfo, Target, WindowInfo } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -60,6 +60,11 @@ export const api = {
   getWindows(targetId: string, name: string): Promise<{ windows: WindowInfo[] }> {
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/windows`,
+    );
+  },
+  peekSession(targetId: string, name: string): Promise<AttentionPeek> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/peek`,
     );
   },
   getCwd(targetId: string, name: string): Promise<{ cwd: string }> {

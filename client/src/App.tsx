@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './api';
 import type { OpenFile, Selection, Target } from './types';
 import { useSettings } from './settings';
+import { useAttention } from './attention';
 import { Sidebar } from './components/Sidebar';
 import { TerminalPanel } from './components/TerminalPanel';
 import { FileViewer } from './components/FileViewer';
 
 export function App() {
   const { settings } = useSettings();
+  const attention = useAttention();
   const [targets, setTargets] = useState<Target[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -35,6 +37,12 @@ export function App() {
   useEffect(() => {
     setOpenFile(null);
   }, [selection?.targetId, selection?.session]);
+
+  // Tell the attention tracker which session is in view, so it acknowledges
+  // (clears) that session's badge and won't alert the one you're watching.
+  useEffect(() => {
+    attention.setActive(selection?.targetId ?? null, selection?.session ?? null);
+  }, [attention, selection?.targetId, selection?.session]);
 
   // Tick for relative "created" times in the sidebar.
   useEffect(() => {

@@ -18,6 +18,20 @@ export interface SessionInfo {
   attached: boolean;
   /** unix epoch seconds */
   created: number;
+  /** epoch seconds of last output activity */
+  lastActivity?: number;
+  /** seconds since the server last observed activity change */
+  idleSeconds?: number;
+  /** the server has seen this session produce output during this watch */
+  observedActive?: boolean;
+}
+
+/** Why a session is asking for attention. */
+export type AttentionReason = 'decision' | 'done';
+
+export interface AttentionPeek {
+  reason: AttentionReason;
+  tail: string;
 }
 
 export interface WindowInfo {

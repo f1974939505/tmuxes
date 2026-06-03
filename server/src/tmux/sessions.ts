@@ -11,6 +11,7 @@ import {
   type WindowInfo,
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
+import { classifyTail, lastLines, type AttentionPeek } from '../attention.js';
 
 /** A management error carrying the HTTP status the router should return. */
 export class TmuxError extends Error {
@@ -107,6 +108,14 @@ export async function killSession(target: Target, name: string): Promise<void> {
     throw new TmuxError(404, `session "${name}" not found`);
   }
   throw new TmuxError(502, firstStderrLine(r.stderr));
+}
+
+/** Grab the active pane's last lines and classify whether the session is
+ *  waiting on the user. `capture-pane -p` returns plain text (no escapes). */
+export async function peekSession(target: Target, name: string): Promise<AttentionPeek> {
+  const r = await run(target, ['capture-pane', '-t', name, '-p', '-S', '-12']);
+  const tail = r.code === 0 ? r.stdout : '';
+  return { reason: classifyTail(tail), tail: lastLines(tail, 6) };
 }
 
 export async function listWindows(target: Target, name: string): Promise<WindowInfo[]> {

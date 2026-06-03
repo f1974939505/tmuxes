@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { SessionInfo } from '../types';
 import { ago, isValidSessionName } from '../util';
+import { useAttention } from '../attention';
 
 interface Props {
+  targetId: string;
   session: SessionInfo;
   selected: boolean;
   nowMs: number;
@@ -14,6 +16,7 @@ interface Props {
 }
 
 export function SessionRow({
+  targetId,
   session,
   selected,
   nowMs,
@@ -23,6 +26,8 @@ export function SessionRow({
   onKill,
   onDragStart,
 }: Props) {
+  const attention = useAttention();
+  const reason = attention.reasonFor(targetId, session.name);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(session.name);
 
@@ -53,7 +58,7 @@ export function SessionRow({
 
   return (
     <div
-      className={`session-row ${selected ? 'selected' : ''}`}
+      className={`session-row ${selected ? 'selected' : ''} ${reason ? 'attention' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
       draggable={!!onDragStart}
       onDragStart={onDragStart}
@@ -62,6 +67,14 @@ export function SessionRow({
     >
       <span className={`dot ${session.attached ? 'on' : ''}`} title={session.attached ? 'attached' : 'detached'} />
       <span className="name">{session.name}</span>
+      {reason && (
+        <span
+          className={`attn-badge ${reason}`}
+          title={reason === 'decision' ? 'Waiting for your input' : 'Finished / idle'}
+        >
+          {reason === 'decision' ? '✋' : '✓'}
+        </span>
+      )}
       <span className="meta">
         {session.windows} win{session.created ? ` · ${ago(session.created, nowMs)}` : ''}
       </span>

@@ -12,6 +12,7 @@ export const SESSION_FORMAT = [
   '#{session_windows}',
   '#{session_attached}',
   '#{session_created}',
+  '#{session_activity}', // epoch of last activity in any window (idle detection)
   '#{session_name}', // free-form → must be last
 ].join(SEP);
 
@@ -28,6 +29,12 @@ export interface SessionInfo {
   attached: boolean;
   /** unix epoch seconds */
   created: number;
+  /** epoch seconds of last output activity (drives idle/attention detection) */
+  lastActivity: number;
+  /** Seconds idle since we last observed activity change. Filled by the monitor. */
+  idleSeconds?: number;
+  /** True once we've observed this session produce output during this watch. */
+  observedActive?: boolean;
 }
 
 export interface WindowInfo {
@@ -47,7 +54,8 @@ export function parseSessions(stdout: string): SessionInfo[] {
         windows: Number(parts[0]) || 0,
         attached: Number(parts[1]) > 0,
         created: Number(parts[2]) || 0,
-        name: parts.slice(3).join(SEP), // name may legitimately contain "|"
+        lastActivity: Number(parts[3]) || 0,
+        name: parts.slice(4).join(SEP), // name may legitimately contain "|"
       };
     })
     .filter((s) => s.name);

@@ -9,6 +9,8 @@
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
 横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器。
 
+🔔 **agent 跑完、或停下来问你要不要继续时,浏览器会自动提醒你** —— 侧边栏徽标 + 提示音 + 后台标签页标题闪烁。再也不用挨个窗格去盯「它好了没」。
+
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
 <img alt="platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%2011-2b2b2b?style=flat-square">
@@ -20,7 +22,7 @@
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
 </p>
 
-<sub>🔒 仅本机 · ⚡ 一键启动 · 🪟 Windows 上直通 WSL · 🧩 零配置</sub>
+<sub>🔒 仅本机 · ⚡ 一键启动 · 🔔 完成即提醒 · 🪟 Windows 上直通 WSL · 🧩 零配置</sub>
 
 </div>
 
@@ -35,6 +37,7 @@
 | | |
 |---|---|
 | 🧠 **为 agent 而生** | 每个 agent 独占一个 tmux 会话。新建时可带初始命令（比如 `claude` 或 `codex`），选中后右侧就是一个**完全可交互的实时终端**。 |
+| 🔔 **完成 / 提问即提醒** | 零配置监测每个会话:agent **跑完或停下来等你拍板**时,自动**侧边栏徽标 + 提示音 + 后台标题闪烁**。还会区分「✋ 等你输入」和「✓ 已完成」。Claude Code / Codex / OpenCode / Hermes 开箱即用,无需改 agent 配置。 |
 | 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧边栏同时列出你的本机、`~/.ssh/config` 里的主机、（Windows 上）你的 WSL 发行版，以及（Windows）原生 PowerShell / cmd 会话 —— 全部并排排开。 |
 | 🗂️ **文件夹树** | 像资源管理器一样，把会话拖进**可拖拽的文件夹**里整理。按目标分别持久化到本地。 |
 | 📂 **实时文件浏览 + 编辑** | 侧边栏底部跟随每个会话的**工作目录** —— 点一个代码文件就能把终端一分为二，在下面**直接读和改**（可保存、撤销/重做）。 |
@@ -217,6 +220,9 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 > 提示：在 tmuxes 里**新建 / 选择 / 重命名 / 杀会话**直接点 UI 就行，不用记命令；但**往上滚看历史、复制文字、拆面板**这些是 tmux 自己的功能，得用上面的快捷键。
 
 ## 📋 更新日志
+
+### 0.1.2
+- **新增:完成 / 提问提醒**。零配置监测每个会话——agent 跑完或停下来等你决策时,通过**侧边栏徽标 + 提示音 + 后台标签页标题闪烁**提醒你,并区分「✋ 等待输入」与「✓ 已完成」。原理:用 `session_activity` 做抗时钟偏差的空闲检测,触发时 `capture-pane` 抓屏分类。设置面板可开关提醒与提示音。
 
 ### 0.1.1
 - **修复 (Windows)**：`Ctrl+C` 现在可以正常终止服务端进程。node-pty 的 ConPTY 子进程会拦截 `CTRL_C_EVENT` 导致 SIGINT 无法到达宿主 node；通过 `readline` 从控制台输入层直接桥接 SIGINT 修复此问题。

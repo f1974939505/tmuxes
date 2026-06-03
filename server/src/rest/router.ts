@@ -8,7 +8,9 @@ import {
   renameSession,
   killSession,
   listWindows,
+  peekSession,
 } from '../tmux/sessions.js';
+import { annotate } from '../monitor.js';
 import { getSessionCwd, listDirectory, readFilePreview, resolveScopedPath, writeFile } from '../files.js';
 import { readFolders, writeFolders } from '../foldersStore.js';
 import { winShell, ManagerError } from '../winshell/manager.js';
@@ -78,11 +80,17 @@ apiRouter.get(
   '/targets/:id/sessions',
   wrap(async (req, res) => {
     const target = requireTarget(req);
-    if (target.kind === 'winlocal') {
-      res.json({ sessions: winShell.list() });
-      return;
-    }
-    res.json({ sessions: await listSessions(target) });
+    const sessions = target.kind === 'winlocal' ? winShell.list() : await listSessions(target);
+    res.json({ sessions: annotate(target.id, sessions) });
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/peek',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const name = requireSessionName(req.params.name);
+    res.json(target.kind === 'winlocal' ? winShell.peek(name) : await peekSession(target, name));
   }),
 );
 

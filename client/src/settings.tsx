@@ -7,12 +7,18 @@ export interface Settings {
   terminalFontSize: number;
   /** File viewer font size, px. */
   viewerFontSize: number;
+  /** Notify when a session's agent goes idle / asks for a decision. */
+  notifyAttention: boolean;
+  /** Play a sound with the notification. */
+  notifySound: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   sidebarFontSize: 13,
   terminalFontSize: 13,
   viewerFontSize: 13,
+  notifyAttention: true,
+  notifySound: true,
 };
 
 export const FONT_LIMITS = { min: 8, max: 28 };

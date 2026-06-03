@@ -26,6 +26,23 @@ function Stepper({
   );
 }
 
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="toggle">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="toggle-label">{label}</span>
+    </label>
+  );
+}
+
 export function SettingsButton() {
   const { settings, setSetting, reset } = useSettings();
   const [open, setOpen] = useState(false);
@@ -45,6 +62,17 @@ export function SettingsButton() {
             <Stepper label="Sidebar" value={settings.sidebarFontSize} onChange={step('sidebarFontSize')} />
             <Stepper label="Terminal" value={settings.terminalFontSize} onChange={step('terminalFontSize')} />
             <Stepper label="File viewer" value={settings.viewerFontSize} onChange={step('viewerFontSize')} />
+            <div className="settings-title">Notifications</div>
+            <Toggle
+              label="Alert when an agent finishes / asks"
+              checked={settings.notifyAttention}
+              onChange={(v) => setSetting('notifyAttention', v)}
+            />
+            <Toggle
+              label="Play a sound"
+              checked={settings.notifySound}
+              onChange={(v) => setSetting('notifySound', v)}
+            />
             <div className="settings-actions">
               <button onClick={reset}>Reset</button>
               <button className="primary" onClick={() => setOpen(false)}>

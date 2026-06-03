@@ -9,6 +9,8 @@
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
 live across **Local · SSH · WSL**, with a file browser of every agent's working directory.
 
+🔔 **When an agent finishes — or stops to ask whether to continue — your browser pings you**: a sidebar badge, a sound, and a flashing tab title when you're away. No more babysitting panes to see "is it done yet?".
+
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
 <img alt="platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%2011-2b2b2b?style=flat-square">
@@ -20,7 +22,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
 </p>
 
-<sub>🔒 localhost-only · ⚡ one-click launch · 🪟 reaches into WSL on Windows · 🧩 zero config</sub>
+<sub>🔒 localhost-only · ⚡ one-click launch · 🔔 pings you when done · 🪟 reaches into WSL on Windows · 🧩 zero config</sub>
 
 </div>
 
@@ -35,6 +37,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 | | |
 |---|---|
 | 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
+| 🔔 **Done / asking → you're notified** | Zero-config monitoring of every session: when an agent **finishes or stops to ask for a decision**, you get a **sidebar badge + sound + background title flash** — and it tells "✋ waiting on you" apart from "✓ done". Works out of the box for Claude Code / Codex / OpenCode / Hermes, no agent config needed. |
 | 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
 | 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
 | 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
@@ -216,6 +219,9 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 
 
 ## 📋 Changelog
+
+### 0.1.2
+- **New: done / asking notifications.** Zero-config monitoring of every session — when an agent finishes or stops for a decision, you get a **sidebar badge + sound + background tab-title flash**, distinguishing "✋ waiting for input" from "✓ done". Uses `session_activity` for clock-skew-safe idle detection, then `capture-pane` to classify on trigger. Toggle notifications and sound in Settings.
 
 ### 0.1.1
 - **fix (Windows)**: `Ctrl+C` now correctly stops the server. ConPTY child processes (node-pty) were consuming the `CTRL_C_EVENT` before it reached the host node process; fixed by bridging SIGINT via `readline` directly from the console input layer.

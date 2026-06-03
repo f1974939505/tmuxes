@@ -270,6 +270,24 @@ input:focus {
 .dot.on {
   background: var(--green);
 }
+.attn-badge {
+  flex: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 6px;
+}
+.attn-badge.decision {
+  color: var(--bg);
+  background: var(--yellow);
+}
+.attn-badge.done {
+  color: var(--bg);
+  background: var(--green);
+}
+.session-row.attention .name {
+  font-weight: 600;
+}
 .meta {
   font-size: 11px;
   color: var(--fg-dim);
@@ -547,6 +565,26 @@ input:focus {
   text-align: center;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.toggle input {
+  cursor: pointer;
+}
+.toggle-label {
+  font-size: 13px;
+}
+.settings-panel .settings-title + .stepper,
+.settings-panel .settings-title:not(:first-child) {
+  margin-top: 2px;
+}
+.settings-panel .settings-title:not(:first-of-type) {
+  margin-top: 12px;
 }
 .settings-actions {
   display: flex;
