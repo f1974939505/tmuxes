@@ -6,6 +6,8 @@ import { basename, isTextFile, joinPath, parentPath } from '../util';
 interface Props {
   selection: Selection | null;
   openFile: OpenFile | null;
+  /** Native shell sessions have no tmux cwd — disables the file browser. */
+  enabled: boolean;
   onOpenFile: (file: OpenFile) => void;
 }
 
@@ -19,7 +21,7 @@ function samePath(a: string | null, b: string | null): boolean {
 
 /** Bottom of the sidebar: the files/folders of the selected session's current
  *  working directory. Follows the session's cwd until you navigate away. */
-export function FileExplorer({ selection, openFile, onOpenFile }: Props) {
+export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props) {
   const [cwd, setCwd] = useState<string | null>(null);
   const [manualPath, setManualPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -53,16 +55,24 @@ export function FileExplorer({ selection, openFile, onOpenFile }: Props) {
   }, [targetId, session, manualPath]);
 
   useEffect(() => {
-    if (!targetId || !session) return;
+    if (!targetId || !session || !enabled) return;
     void tick();
     const id = window.setInterval(() => void tick(), POLL_MS);
     return () => window.clearInterval(id);
-  }, [targetId, session, tick]);
+  }, [targetId, session, enabled, tick]);
 
   if (!selection) {
     return (
       <div className="explorer">
         <div className="explorer-empty">Select a session to browse its working directory.</div>
+      </div>
+    );
+  }
+
+  if (!enabled) {
+    return (
+      <div className="explorer">
+        <div className="explorer-empty">File browser isn't available for native shell sessions.</div>
       </div>
     );
   }

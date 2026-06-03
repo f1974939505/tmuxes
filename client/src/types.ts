@@ -2,12 +2,14 @@
 
 export interface Target {
   id: string;
-  kind: 'local' | 'ssh' | 'wsl';
+  kind: 'local' | 'ssh' | 'wsl' | 'winlocal';
   label: string;
   host?: string;
   user?: string;
   port?: number;
   distro?: string;
+  /** Launchable shells (winlocal target only). */
+  shells?: { id: string; label: string }[];
 }
 
 export interface SessionInfo {

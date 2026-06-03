@@ -10,6 +10,7 @@ import {
   listWindows,
 } from '../tmux/sessions.js';
 import { getSessionCwd, listDirectory, readFilePreview, resolveScopedPath, writeFile } from '../files.js';
+import { winShell, ManagerError } from '../winshell/manager.js';
 
 /** Cap on a saved file's size (matches the editor's text-only use). */
 const MAX_WRITE_BYTES = 5_000_000;
@@ -76,6 +77,10 @@ apiRouter.get(
   '/targets/:id/sessions',
   wrap(async (req, res) => {
     const target = requireTarget(req);
+    if (target.kind === 'winlocal') {
+      res.json({ sessions: winShell.list() });
+      return;
+    }
     res.json({ sessions: await listSessions(target) });
   }),
 );
@@ -84,7 +89,7 @@ apiRouter.post(
   '/targets/:id/sessions',
   wrap(async (req, res) => {
     const target = requireTarget(req);
-    const body = (req.body ?? {}) as { name?: unknown; command?: unknown };
+    const body = (req.body ?? {}) as { name?: unknown; command?: unknown; shell?: unknown };
 
     const name = body.name === undefined || body.name === '' ? undefined : body.name;
     if (name !== undefined && !isValidSessionName(name)) {
@@ -92,6 +97,12 @@ apiRouter.post(
     }
     const command =
       typeof body.command === 'string' && body.command.length > 0 ? body.command : undefined;
+
+    if (target.kind === 'winlocal') {
+      const shellId = typeof body.shell === 'string' ? body.shell : undefined;
+      res.status(201).json(winShell.create({ name, shellId, command }));
+      return;
+    }
 
     const result = await createSession(target, { name, command });
     res.status(201).json(result);
@@ -105,6 +116,11 @@ apiRouter.patch(
     const name = requireSessionName(req.params.name);
     const newName = (req.body ?? {}).newName;
     if (!isValidSessionName(newName)) throw new TmuxError(400, 'invalid new session name');
+    if (target.kind === 'winlocal') {
+      winShell.rename(name, newName);
+      res.json({ name: newName });
+      return;
+    }
     await renameSession(target, name, newName);
     res.json({ name: newName });
   }),
@@ -115,6 +131,11 @@ apiRouter.delete(
   wrap(async (req, res) => {
     const target = requireTarget(req);
     const name = requireSessionName(req.params.name);
+    if (target.kind === 'winlocal') {
+      winShell.kill(name);
+      res.status(204).end();
+      return;
+    }
     await killSession(target, name);
     res.status(204).end();
   }),
@@ -125,9 +146,20 @@ apiRouter.get(
   wrap(async (req, res) => {
     const target = requireTarget(req);
     const name = requireSessionName(req.params.name);
+    if (target.kind === 'winlocal') {
+      res.json({ windows: winShell.windows(name) });
+      return;
+    }
     res.json({ windows: await listWindows(target, name) });
   }),
 );
+
+/** The file browser relies on tmux's pane cwd; native Windows shells have none. */
+function rejectIfWinlocal(target: Target): void {
+  if (target.kind === 'winlocal') {
+    throw new TmuxError(400, 'file browsing is not available for native shell sessions');
+  }
+}
 
 // --- File browser (current pane cwd + directory listing + file preview) ---
 
@@ -135,6 +167,7 @@ apiRouter.get(
   '/targets/:id/sessions/:name/cwd',
   wrap(async (req, res) => {
     const target = requireTarget(req);
+    rejectIfWinlocal(target);
     const name = requireSessionName(req.params.name);
     res.json({ cwd: await getSessionCwd(target, name) });
   }),
@@ -144,6 +177,7 @@ apiRouter.get(
   '/targets/:id/files',
   wrap(async (req, res) => {
     const target = requireTarget(req);
+    rejectIfWinlocal(target);
     const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
     res.json({ path, entries: await listDirectory(target, path) });
   }),
@@ -153,6 +187,7 @@ apiRouter.get(
   '/targets/:id/file',
   wrap(async (req, res) => {
     const target = requireTarget(req);
+    rejectIfWinlocal(target);
     const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
     res.json(await readFilePreview(target, path));
   }),
@@ -162,6 +197,7 @@ apiRouter.put(
   '/targets/:id/file',
   wrap(async (req, res) => {
     const target = requireTarget(req);
+    rejectIfWinlocal(target);
     const body = (req.body ?? {}) as { session?: unknown; path?: unknown; content?: unknown };
     const path = await requireSessionScopedPath(target, body.session, body.path, { forWrite: true });
     if (typeof body.content !== 'string') throw new TmuxError(400, 'content must be a string');
@@ -175,7 +211,7 @@ apiRouter.put(
 
 // Central error mapper.
 apiRouter.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  if (err instanceof TmuxError) {
+  if (err instanceof TmuxError || err instanceof ManagerError) {
     res.status(err.status).json({ error: err.message });
     return;
   }

@@ -4,12 +4,13 @@ import { join } from 'node:path';
 import { isValidHostAlias, parseHostSpec } from './validate.js';
 import { isWindows } from './platform.js';
 import { listWslDistros } from './wsl.js';
+import { winShell } from './winshell/manager.js';
 import { log } from './logger.js';
 
 export interface Target {
   /** Stable, URL-safe id used in REST paths and the WS query. */
   id: string;
-  kind: 'local' | 'ssh' | 'wsl';
+  kind: 'local' | 'ssh' | 'wsl' | 'winlocal';
   label: string;
   /** ssh destination host or config-alias (ssh targets only). */
   host?: string;
@@ -19,6 +20,21 @@ export interface Target {
   port?: number;
   /** WSL distro name (wsl targets only). */
   distro?: string;
+  /** Launchable shells (winlocal target only). */
+  shells?: { id: string; label: string }[];
+}
+
+/** Native Windows shells (PowerShell/cmd via ConPTY). Enabled on Windows, or
+ *  anywhere via TMUXES_FAKE_WINSHELL for testing the path on Linux/macOS. */
+const WINSHELL_ENABLED = isWindows || !!process.env.TMUXES_FAKE_WINSHELL;
+
+function winlocalTarget(): Target {
+  return {
+    id: 'winlocal',
+    kind: 'winlocal',
+    label: isWindows ? 'Windows (local)' : 'Local shell (fake)',
+    shells: winShell.listShells(),
+  };
 }
 
 const ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
@@ -94,8 +110,10 @@ function sshTargets(): Target[] {
 
 /** The synchronous part of the target list (everything except WSL discovery). */
 function baseTargets(): Target[] {
-  // Windows has no native tmux; the "local" machine is reached through WSL.
-  const base: Target[] = isWindows ? [] : [LOCAL];
+  const base: Target[] = [];
+  if (WINSHELL_ENABLED) base.push(winlocalTarget());
+  // Windows has no native tmux; its "local" machine is reached through WSL.
+  if (!isWindows) base.push(LOCAL);
   return [...base, ...sshTargets()];
 }
 
@@ -113,7 +131,7 @@ export async function refreshTargets(): Promise<Target[]> {
       label: name,
       distro: name,
     }));
-    cachedTargets = [...wsl, ...sshTargets()];
+    cachedTargets = [winlocalTarget(), ...wsl, ...sshTargets()];
   } else {
     cachedTargets = baseTargets();
   }

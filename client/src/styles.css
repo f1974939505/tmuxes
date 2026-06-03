@@ -302,6 +302,14 @@ input:focus {
   flex: 1;
   min-width: 0;
 }
+.create-form select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+}
 .field-error {
   color: var(--red);
   font-size: 11px;

@@ -9,6 +9,7 @@ import { apiRouter } from './rest/router.js';
 import { attachWebSocket } from './ws/wsServer.js';
 import { disposeAll } from './ws/terminalSession.js';
 import { refreshTargets } from './targets.js';
+import { winShell } from './winshell/manager.js';
 import { openBrowser } from './openBrowser.js';
 
 const app = express();
@@ -45,6 +46,7 @@ function shutdown(signal: string): void {
   shuttingDown = true;
   log.info(`received ${signal}, shutting down`);
   disposeAll();
+  winShell.disposeAll();
   server.close(() => process.exit(0));
   // Don't wait forever for lingering sockets.
   setTimeout(() => process.exit(0), 3000).unref();

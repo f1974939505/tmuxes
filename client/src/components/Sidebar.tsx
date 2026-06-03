@@ -53,6 +53,9 @@ export function Sidebar({
     [bottomHeight],
   );
 
+  const selectedTarget = selection ? targets.find((t) => t.id === selection.targetId) : undefined;
+  const fileBrowsingEnabled = !selectedTarget || selectedTarget.kind !== 'winlocal';
+
   return (
     <div className="sidebar" style={{ fontSize: settings.sidebarFontSize }}>
       <div className="sidebar-header">
@@ -74,7 +77,12 @@ export function Sidebar({
 
       <div className="sidebar-bottom" style={{ height: bottomHeight }}>
         <div className="section-label">Working directory</div>
-        <FileExplorer selection={selection} openFile={openFile} onOpenFile={onOpenFile} />
+        <FileExplorer
+          selection={selection}
+          openFile={openFile}
+          enabled={fileBrowsingEnabled}
+          onOpenFile={onOpenFile}
+        />
       </div>
 
       <div className="sidebar-footer">

@@ -38,7 +38,7 @@ export const api = {
   },
   createSession(
     targetId: string,
-    body: { name?: string; command?: string },
+    body: { name?: string; command?: string; shell?: string },
   ): Promise<{ name: string }> {
     return request(`/api/targets/${encodeURIComponent(targetId)}/sessions`, {
       method: 'POST',

@@ -15,8 +15,10 @@ interface Props {
 const POLL_MS = 5000;
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
-  // Expand the "local-ish" targets by default (local tmux, or WSL on Windows).
-  const [expanded, setExpanded] = useState(target.kind === 'local' || target.kind === 'wsl');
+  // Expand the "local-ish" targets by default (local tmux, WSL, native shells).
+  const [expanded, setExpanded] = useState(
+    target.kind === 'local' || target.kind === 'wsl' || target.kind === 'winlocal',
+  );
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +26,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCommand, setNewCommand] = useState('');
+  const [newShell, setNewShell] = useState(target.shells?.[0]?.id ?? '');
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -67,6 +70,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       const { name: created } = await api.createSession(target.id, {
         name: name || undefined,
         command: newCommand.trim() || undefined,
+        shell: target.kind === 'winlocal' ? newShell || undefined : undefined,
       });
       setNewName('');
       setNewCommand('');
@@ -140,6 +144,15 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
 
           {showForm && (
             <div className="create-form" onClick={(e) => e.stopPropagation()}>
+              {target.kind === 'winlocal' && target.shells && target.shells.length > 0 && (
+                <select value={newShell} onChange={(e) => setNewShell(e.target.value)}>
+                  {target.shells.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 autoFocus
                 placeholder="name (optional)"
