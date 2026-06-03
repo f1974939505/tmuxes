@@ -1,0 +1,184 @@
+import { Router, type Request, type Response, type NextFunction } from 'express';
+import { getTarget, isValidTargetId, refreshTargets, type Target } from '../targets.js';
+import { isValidSessionName } from '../validate.js';
+import {
+  TmuxError,
+  listSessions,
+  createSession,
+  renameSession,
+  killSession,
+  listWindows,
+} from '../tmux/sessions.js';
+import { getSessionCwd, listDirectory, readFilePreview, resolveScopedPath, writeFile } from '../files.js';
+
+/** Cap on a saved file's size (matches the editor's text-only use). */
+const MAX_WRITE_BYTES = 5_000_000;
+
+type AsyncHandler = (req: Request, res: Response) => Promise<unknown>;
+
+const wrap =
+  (fn: AsyncHandler) =>
+  (req: Request, res: Response, next: NextFunction): void => {
+    fn(req, res).catch(next);
+  };
+
+/** Resolve :id → Target or throw a TmuxError with the right status. */
+function requireTarget(req: Request): Target {
+  const id = req.params.id;
+  if (!isValidTargetId(id)) throw new TmuxError(400, 'invalid target id');
+  const target = getTarget(id);
+  if (!target) throw new TmuxError(404, 'target not found');
+  return target;
+}
+
+function requireSessionName(raw: unknown): string {
+  if (!isValidSessionName(raw)) throw new TmuxError(400, 'invalid session name');
+  return raw;
+}
+
+/** A filesystem path supplied via query. Passed as a single argv element (no
+ *  shell), so we only sanity-check shape, not contents — this app already
+ *  grants full shell access on the target by design. */
+function requirePath(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 4096 || raw.includes('\0')) {
+    throw new TmuxError(400, 'invalid path');
+  }
+  return raw;
+}
+
+async function requireSessionScopedPath(
+  target: Target,
+  session: unknown,
+  path: unknown,
+  opts: { forWrite?: boolean } = {},
+): Promise<string> {
+  const name = requireSessionName(session);
+  const rawPath = requirePath(path);
+  const cwd = await getSessionCwd(target, name);
+  return resolveScopedPath(target, cwd, rawPath, opts);
+}
+
+export const apiRouter = Router();
+
+apiRouter.get('/health', (_req, res) => {
+  res.json({ ok: true });
+});
+
+apiRouter.get(
+  '/targets',
+  wrap(async (_req, res) => {
+    // Re-discover (WSL distros / ssh config can change between loads).
+    res.json({ targets: await refreshTargets() });
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/sessions',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    res.json({ sessions: await listSessions(target) });
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const body = (req.body ?? {}) as { name?: unknown; command?: unknown };
+
+    const name = body.name === undefined || body.name === '' ? undefined : body.name;
+    if (name !== undefined && !isValidSessionName(name)) {
+      throw new TmuxError(400, 'invalid session name');
+    }
+    const command =
+      typeof body.command === 'string' && body.command.length > 0 ? body.command : undefined;
+
+    const result = await createSession(target, { name, command });
+    res.status(201).json(result);
+  }),
+);
+
+apiRouter.patch(
+  '/targets/:id/sessions/:name',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const name = requireSessionName(req.params.name);
+    const newName = (req.body ?? {}).newName;
+    if (!isValidSessionName(newName)) throw new TmuxError(400, 'invalid new session name');
+    await renameSession(target, name, newName);
+    res.json({ name: newName });
+  }),
+);
+
+apiRouter.delete(
+  '/targets/:id/sessions/:name',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const name = requireSessionName(req.params.name);
+    await killSession(target, name);
+    res.status(204).end();
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/windows',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const name = requireSessionName(req.params.name);
+    res.json({ windows: await listWindows(target, name) });
+  }),
+);
+
+// --- File browser (current pane cwd + directory listing + file preview) ---
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/cwd',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const name = requireSessionName(req.params.name);
+    res.json({ cwd: await getSessionCwd(target, name) });
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/files',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
+    res.json({ path, entries: await listDirectory(target, path) });
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/file',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
+    res.json(await readFilePreview(target, path));
+  }),
+);
+
+apiRouter.put(
+  '/targets/:id/file',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const body = (req.body ?? {}) as { session?: unknown; path?: unknown; content?: unknown };
+    const path = await requireSessionScopedPath(target, body.session, body.path, { forWrite: true });
+    if (typeof body.content !== 'string') throw new TmuxError(400, 'content must be a string');
+    if (Buffer.byteLength(body.content, 'utf8') > MAX_WRITE_BYTES) {
+      throw new TmuxError(413, 'file too large to save');
+    }
+    await writeFile(target, path, body.content);
+    res.json({ ok: true });
+  }),
+);
+
+// Central error mapper.
+apiRouter.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof TmuxError) {
+    res.status(err.status).json({ error: err.message });
+    return;
+  }
+  const message = err instanceof Error ? err.message : 'internal error';
+  res.status(500).json({ error: message });
+});

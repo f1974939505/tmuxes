@@ -1,0 +1,22 @@
+{
+  "name": "tmuxes",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Web frontend to manage local and remote (SSH) tmux sessions",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace client run build && npm --workspace server run build",
+    "start": "npm --workspace server run start",
+    "test": "npm --workspace server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
