@@ -214,48 +214,6 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 | Quit copy / scroll mode | `q` |
 | **Enable mouse wheel** (scroll + select with the mouse) | run `tmux set -g mouse on`, or put it in `~/.tmux.conf` |
 
-### Sessions
-
-| Action | Command / keys |
-|---|---|
-| List sessions | `tmux ls` |
-| New / attach | `tmux new -s <name>` / `tmux attach -t <name>` |
-| Detach (keeps running) | `C-b` then `d` |
-| Rename current session | `C-b` then `$` |
-| Switch between sessions | `C-b` then `s` |
-
-### Windows
-
-| Action | Keys |
-|---|---|
-| New window | `C-b` then `c` |
-| Rename window | `C-b` then `,` |
-| Previous / next window | `C-b` then `p` / `n` |
-| Jump to window N | `C-b` then a digit |
-| Window list | `C-b` then `w` |
-
-### Panes (splits)
-
-| Action | Keys |
-|---|---|
-| Split vertical / horizontal | `C-b` then `%` / `"` |
-| Move between panes | `C-b` then `↑ ↓ ← →` |
-| Zoom (maximize / restore) | `C-b` then `z` |
-| Close pane | `C-b` then `x` |
-
-### Misc
-
-| Action | Keys |
-|---|---|
-| Show all key bindings | `C-b` then `?` |
-| tmux command prompt | `C-b` then `:` (e.g. type `set -g mouse on`) |
-| Kill a session | `tmux kill-session -t <name>` |
-
-> Tip: in tmuxes you can **create / select / rename / kill** sessions right in the UI — no need to memorize those. But **scrolling back, copying text, and splitting panes** are tmux's own features, so use the keys above.
-
-<div align="center">
-<sub>Built with React, TypeScript, node-pty &amp; xterm.js — and a lot of tmux. Happy supervising. 🤖</sub>
-</div>
 
 ## 🧑‍🔬 About the author
 
