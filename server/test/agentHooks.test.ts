@@ -6,14 +6,14 @@ afterEach(() => {
 });
 
 describe('detectAgentKind', () => {
-  it('recognizes Claude Code, cc, and Codex commands', () => {
+  it('recognizes Claude Code and Codex commands', () => {
     expect(detectAgentKind('claude')).toBe('claude');
-    expect(detectAgentKind('/usr/local/bin/cc')).toBe('claude');
     expect(detectAgentKind('codex')).toBe('codex');
   });
 
-  it('ignores non-agent commands and the opt-out flag', () => {
+  it('ignores non-agent commands, including the POSIX cc compiler, and the opt-out flag', () => {
     expect(detectAgentKind('bash')).toBeUndefined();
+    expect(detectAgentKind('cc')).toBeUndefined();
     process.env.TMUXES_NO_AUTOHOOK = '1';
     expect(detectAgentKind('codex')).toBeUndefined();
   });
@@ -33,12 +33,6 @@ describe('augmentAgentCommand', () => {
     expect(out.command).toContain('@tmuxes_agent claude:running::UserPromptSubmit:$(date +%s).$$');
     expect(out.command).toContain('@tmuxes_agent claude:waiting:decision:PermissionRequest:$(date +%s).$$');
     expect(out.command).toContain('@tmuxes_agent claude:idle:done:Stop:$(date +%s).$$');
-  });
-
-  it('supports the cc alias for Claude Code', () => {
-    const out = augmentAgentCommand('cc');
-    expect(out.kind).toBe('claude');
-    expect(out.command.startsWith('cc --settings ')).toBe(true);
   });
 
   it('produces valid JSON for Claude settings', () => {

@@ -17,7 +17,7 @@ import {
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
 
-export type LaunchAgent = 'cc' | 'codex';
+export type LaunchAgent = 'claude' | 'codex';
 
 /** A management error carrying the HTTP status the router should return. */
 export class TmuxError extends Error {

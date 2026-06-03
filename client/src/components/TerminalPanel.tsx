@@ -130,10 +130,10 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
         <div className="agent-toolbar">
           <button
             disabled={startingAgent !== null}
-            onClick={() => void launchAgent('cc')}
-            title="Run hooked cc in this tmux session"
+            onClick={() => void launchAgent('claude')}
+            title="Run hooked Claude Code in this tmux session"
           >
-            cc
+            claude
           </button>
           <button
             disabled={startingAgent !== null}

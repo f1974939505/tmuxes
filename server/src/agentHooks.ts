@@ -28,7 +28,6 @@ export function detectAgentKind(command: string): AgentKind | undefined {
   if (!m) return undefined;
   switch (baseName(m[1])) {
     case 'claude':
-    case 'cc':
       return 'claude';
     case 'codex':
       return 'codex';

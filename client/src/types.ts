@@ -35,7 +35,7 @@ export interface SessionInfo {
 export type AgentKind = 'claude' | 'codex';
 export type AgentState = 'running' | 'waiting' | 'idle';
 export type AttentionReason = 'decision' | 'done';
-export type LaunchAgent = 'cc' | 'codex';
+export type LaunchAgent = 'claude' | 'codex';
 
 export interface WindowInfo {
   index: number;

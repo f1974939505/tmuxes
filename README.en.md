@@ -37,7 +37,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 | | |
 |---|---|
 | 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
-| 🔔 **Done / decision notifications** | Sessions created with an initial `claude`, `cc`, or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `cc` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished or waiting for your decision, and badges tell those cases apart. |
+| 🔔 **Done / decision notifications** | Sessions created with an initial `claude` or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `claude` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished or waiting for your decision, and badges tell those cases apart. |
 | 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
 | 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
 | 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
@@ -105,14 +105,14 @@ npm run build
 npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-open the browser)
 ```
 
-## 🔔 Launch Hooked cc / Codex
+## 🔔 Launch Hooked Claude Code / Codex
 
-tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`cc`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, or waiting for your decision.
+tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`claude`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, or waiting for your decision.
 
 Two launch paths:
 
-1. Create a session with `cc` or `codex` as the initial command.
-2. Create an empty session, `cd /your/project` in the terminal, then click the terminal's top-right `cc` / `codex` button.
+1. Create a session with `claude` or `codex` as the initial command.
+2. Create an empty session, `cd /your/project` in the terminal, then click the terminal's top-right `claude` / `codex` button.
 
 Status meanings:
 
@@ -121,7 +121,7 @@ Status meanings:
 - `done` badge: the current turn finished.
 - `decision` badge: the agent is waiting for permission or user input.
 
-Note: the top-right buttons send a hooked `cc` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Native Windows shells have no tmux session option, so this hook status is not supported there.
+Note: the top-right buttons send a hooked `claude` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Bare `cc` is often the system C compiler, so tmuxes does not treat it as Claude Code by default. Native Windows shells have no tmux session option, so this hook status is not supported there.
 
 ## 🧩 Targets
 
@@ -139,7 +139,7 @@ Note: the top-right buttons send a hooked `cc` / `codex` command into the curren
 
 ## 💻 Requirements
 
-All platforms need **Node 18+** (developed on 22) and **npm**. The rest:
+All platforms need **Node 22.12+** (the project version files pin 22.22.2) and **npm 10+**. The rest:
 
 <details>
 <summary><b>🪟 Windows 11</b></summary>
@@ -245,8 +245,12 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.5
+- **fix: Claude Code launch now uses the `claude` command.** Bare `cc` is the system C compiler in many Linux/SSH environments, so tmuxes no longer treats it as Claude Code by default; the top-right buttons are now `claude` / `codex`.
+- **change: project Node version is standardized on 22.** Added `.nvmrc` / `.node-version`, and package engines now require Node `>=22.12.0 <23`.
+
 ### 0.1.4
-- **improve: notifications now use official Claude Code / Codex lifecycle hooks.** Sessions created with an initial `claude`, `cc`, or `codex` command get hooks injected automatically; you can also open an empty session, `cd` to the target directory, then click the top-right `cc` / `codex` button to launch a hooked agent there. tmuxes syncs their tmux session option every 5 seconds. A red dot means running, a green dot means finished or waiting for a decision, and badges distinguish done vs. decision alerts.
+- **improve: notifications now use official Claude Code / Codex lifecycle hooks.** Sessions created with an initial `claude` or `codex` command get hooks injected automatically; you can also open an empty session, `cd` to the target directory, then click the top-right `claude` / `codex` button to launch a hooked agent there. tmuxes syncs their tmux session option every 5 seconds. A red dot means running, a green dot means finished or waiting for a decision, and badges distinguish done vs. decision alerts.
 
 ### 0.1.3
 - **fix (Windows)**: `Ctrl+C` actually stops the server now. The previous fix was buggy (the readline bridge never entered terminal mode, so it was a no-op), and node-pty's ConPTY backend breaks the host's `CTRL_C_EVENT → SIGINT` path. We now **read the raw Ctrl+C byte (0x03) straight from the console**, bypassing the broken signal machinery. `Ctrl+Break` still works too.
