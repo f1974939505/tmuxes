@@ -215,6 +215,15 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 | **Enable mouse wheel** (scroll + select with the mouse) | run `tmux set -g mouse on`, or put it in `~/.tmux.conf` |
 
 
+## 📋 Changelog
+
+### 0.1.1
+- **fix (Windows)**: `Ctrl+C` now correctly stops the server. ConPTY child processes (node-pty) were consuming the `CTRL_C_EVENT` before it reached the host node process; fixed by bridging SIGINT via `readline` directly from the console input layer.
+- **fix (terminal)**: Right-click now works in tmux mouse mode. The browser's native context menu is suppressed inside the terminal area so right-click events flow through xterm → tmux. Requires `set -g mouse on` in tmux.
+
+### 0.1.0
+- Initial release.
+
 ## 🧑‍🔬 About the author
 
 > Hey, I'm the human behind this thing 👋

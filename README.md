@@ -216,6 +216,15 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 > 提示：在 tmuxes 里**新建 / 选择 / 重命名 / 杀会话**直接点 UI 就行，不用记命令；但**往上滚看历史、复制文字、拆面板**这些是 tmux 自己的功能，得用上面的快捷键。
 
+## 📋 更新日志
+
+### 0.1.1
+- **修复 (Windows)**：`Ctrl+C` 现在可以正常终止服务端进程。node-pty 的 ConPTY 子进程会拦截 `CTRL_C_EVENT` 导致 SIGINT 无法到达宿主 node；通过 `readline` 从控制台输入层直接桥接 SIGINT 修复此问题。
+- **修复 (终端)**：鼠标右键现在可以在 tmux 鼠标模式里正常使用。浏览器原生右键菜单在终端区域被禁用，右键事件直接传入 xterm → tmux。需要在 tmux 里开启 `set -g mouse on`。
+
+### 0.1.0
+- 初次发布。
+
 <div align="center">
 <sub>用 React、TypeScript、node-pty &amp; xterm.js 打造 —— 外加大量 tmux。盯娃愉快。🤖</sub>
 </div>
