@@ -22,5 +22,9 @@ call npm run build
 if errorlevel 1 ( echo [tmuxes] build failed. & pause & exit /b 1 )
 
 echo [tmuxes] Starting on http://127.0.0.1:7420 (a browser window will open)...
+REM Run node DIRECTLY (not via npm) so the server is the console's own child:
+REM closing this window (or Ctrl+C) reaches it, it shuts down, and the port is
+REM released. Going through `npm start` can orphan the node process, leaving
+REM 7420 held until the next reboot.
 set TMUXES_OPEN=1
-call npm start
+node "%~dp0server\dist\index.js"

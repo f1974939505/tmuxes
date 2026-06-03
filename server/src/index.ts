@@ -53,3 +53,21 @@ function shutdown(signal: string): void {
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+// Console window closed (Windows) / terminal hangup (POSIX) → free the port.
+process.on('SIGHUP', () => shutdown('SIGHUP'));
+// Windows Ctrl+Break.
+if (process.platform === 'win32') process.on('SIGBREAK', () => shutdown('SIGBREAK'));
+
+// If the port is already held (e.g. a previous run is still alive), exit with a
+// clear message instead of an unhandled-error stack trace.
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    log.error(
+      `port ${config.port} is already in use — another tmuxes instance is still running. ` +
+        `Close it (or its window), then start again.`,
+    );
+  } else {
+    log.error(`server error: ${err.message}`);
+  }
+  process.exit(1);
+});
