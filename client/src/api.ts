@@ -83,6 +83,18 @@ export const api = {
       body: JSON.stringify({ session, path, content }),
     });
   },
+  getFolders(targetId: string): Promise<{ folders: unknown[]; assign: Record<string, unknown> }> {
+    return request(`/api/targets/${encodeURIComponent(targetId)}/folders`);
+  },
+  saveFolders(
+    targetId: string,
+    payload: { folders: unknown[]; assign: Record<string, string> },
+  ): Promise<{ ok: true }> {
+    return request(`/api/targets/${encodeURIComponent(targetId)}/folders`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 /** Build the WebSocket URL for an interactive attach (same-origin). */

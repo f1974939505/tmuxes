@@ -30,7 +30,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const folders = useFolders(target.id);
+  const folders = useFolders(target.id, expanded);
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);

@@ -10,6 +10,7 @@ import {
   listWindows,
 } from '../tmux/sessions.js';
 import { getSessionCwd, listDirectory, readFilePreview, resolveScopedPath, writeFile } from '../files.js';
+import { readFolders, writeFolders } from '../foldersStore.js';
 import { winShell, ManagerError } from '../winshell/manager.js';
 
 /** Cap on a saved file's size (matches the editor's text-only use). */
@@ -205,6 +206,39 @@ apiRouter.put(
       throw new TmuxError(413, 'file too large to save');
     }
     await writeFile(target, path, body.content);
+    res.json({ ok: true });
+  }),
+);
+
+// --- Sidebar folder organization, persisted on the target (syncs clients) ---
+
+apiRouter.get(
+  '/targets/:id/folders',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    res.json(await readFolders(target));
+  }),
+);
+
+apiRouter.put(
+  '/targets/:id/folders',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    const body = req.body as { folders?: unknown; assign?: unknown };
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      !Array.isArray(body.folders) ||
+      typeof body.assign !== 'object' ||
+      body.assign === null
+    ) {
+      throw new TmuxError(400, 'invalid folders payload');
+    }
+    await writeFolders(target, {
+      folders: body.folders,
+      assign: body.assign as Record<string, unknown>,
+    });
     res.json({ ok: true });
   }),
 );

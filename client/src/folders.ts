@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from './api';
 
 /** A virtual folder used to organize tmux sessions in the sidebar tree.
- *  Folders are a client-only overlay (tmux has no folders); they persist in
- *  localStorage, keyed per target. */
+ *  Stored ON THE TARGET (server: $HOME/.config/tmuxes/folders.json) so the tree
+ *  follows the cluster and syncs across browsers/machines. localStorage is kept
+ *  only as an offline cache + one-time migration source. */
 export interface FolderNode {
   id: string;
   name: string;
@@ -15,27 +17,41 @@ interface TargetFolders {
   assign: Record<string, string>;
 }
 
-type Store = Record<string, TargetFolders>;
-
-const STORAGE_KEY = 'tmuxes.folders';
 const EMPTY: TargetFolders = { folders: [], assign: {} };
+const CACHE_KEY = 'tmuxes.folders';
+const POLL_MS = 15_000;
+const SAVE_DEBOUNCE_MS = 350;
 
-function loadStore(): Store {
+type Cache = Record<string, TargetFolders>;
+
+function loadCacheStore(): Cache {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Store;
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') as Cache;
   } catch {
     return {};
   }
 }
-
-function saveSlice(targetId: string, slice: TargetFolders): void {
-  const store = loadStore(); // read-modify-write so sibling targets aren't clobbered
+function loadCache(targetId: string): TargetFolders {
+  return loadCacheStore()[targetId] ?? EMPTY;
+}
+function saveCache(targetId: string, slice: TargetFolders): void {
+  const store = loadCacheStore();
   store[targetId] = slice;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(store));
   } catch {
     /* ignore */
   }
+}
+
+function isEmpty(s: TargetFolders): boolean {
+  return s.folders.length === 0 && Object.keys(s.assign).length === 0;
+}
+function sameJson(a: TargetFolders, b: TargetFolders): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+function coerce(payload: { folders: unknown[]; assign: Record<string, unknown> }): TargetFolders {
+  return { folders: payload.folders as FolderNode[], assign: payload.assign as Record<string, string> };
 }
 
 function newId(): string {
@@ -58,7 +74,6 @@ function isAncestor(folders: FolderNode[], maybeAncestor: string, node: string |
 
 export interface FoldersApi {
   folders: FolderNode[];
-  /** Resolve a session to its folder id, or null if at root / folder deleted. */
   folderOf: (sessionName: string) => string | null;
   addFolder: (parentId: string | null) => void;
   renameFolder: (id: string, name: string) => void;
@@ -67,22 +82,93 @@ export interface FoldersApi {
   moveFolder: (id: string, parentId: string | null) => void;
 }
 
-export function useFolders(targetId: string): FoldersApi {
-  const [slice, setSlice] = useState<TargetFolders>(() => loadStore()[targetId] ?? EMPTY);
+export function useFolders(targetId: string, enabled: boolean): FoldersApi {
+  const [slice, setSlice] = useState<TargetFolders>(() => loadCache(targetId));
+  const sliceRef = useRef(slice);
+  const pendingSave = useRef(false);
+  const saveTimer = useRef<number | undefined>(undefined);
 
+  const applySlice = useCallback((next: TargetFolders) => {
+    sliceRef.current = next;
+    setSlice(next);
+  }, []);
+
+  const saveToServer = useCallback(
+    (data: TargetFolders) => {
+      pendingSave.current = true;
+      return api
+        .saveFolders(targetId, { folders: data.folders, assign: data.assign })
+        .then(() => saveCache(targetId, data))
+        .catch(() => {
+          /* offline / host down — cache keeps it; retried on next change */
+        })
+        .finally(() => {
+          pendingSave.current = false;
+        });
+    },
+    [targetId],
+  );
+
+  // Load from the target on open (with localStorage migration + cache fallback).
   useEffect(() => {
-    setSlice(loadStore()[targetId] ?? EMPTY);
-  }, [targetId]);
+    if (!enabled) return;
+    let cancelled = false;
+    const cached = loadCache(targetId);
+    applySlice(cached);
+    api
+      .getFolders(targetId)
+      .then((payload) => {
+        if (cancelled) return;
+        const remote = coerce(payload);
+        if (isEmpty(remote) && !isEmpty(cached)) {
+          // First run on the server side — push existing local folders up.
+          applySlice(cached);
+          void saveToServer(cached);
+        } else {
+          applySlice(remote);
+          saveCache(targetId, remote);
+        }
+      })
+      .catch(() => {
+        /* keep cache */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetId, enabled, applySlice, saveToServer]);
+
+  // Light poll so changes from another browser/machine show up here too.
+  useEffect(() => {
+    if (!enabled) return;
+    const id = window.setInterval(() => {
+      if (pendingSave.current) return;
+      api
+        .getFolders(targetId)
+        .then((payload) => {
+          if (pendingSave.current) return;
+          const remote = coerce(payload);
+          if (!sameJson(remote, sliceRef.current)) {
+            applySlice(remote);
+            saveCache(targetId, remote);
+          }
+        })
+        .catch(() => {
+          /* transient — keep current */
+        });
+    }, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [targetId, enabled, applySlice]);
 
   const update = useCallback(
     (fn: (prev: TargetFolders) => TargetFolders) => {
-      setSlice((prev) => {
-        const next = fn(prev);
-        saveSlice(targetId, next);
-        return next;
-      });
+      const next = fn(sliceRef.current);
+      applySlice(next);
+      saveCache(targetId, next);
+      pendingSave.current = true; // block poll clobber until the save lands
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => void saveToServer(next), SAVE_DEBOUNCE_MS);
     },
-    [targetId],
+    [targetId, applySlice, saveToServer],
   );
 
   const folderOf = useCallback(
@@ -96,26 +182,19 @@ export function useFolders(targetId: string): FoldersApi {
 
   const addFolder = useCallback(
     (parentId: string | null) =>
-      update((p) => ({
-        ...p,
-        folders: [...p.folders, { id: newId(), name: 'New folder', parentId }],
-      })),
+      update((p) => ({ ...p, folders: [...p.folders, { id: newId(), name: 'New folder', parentId }] })),
     [update],
   );
 
   const renameFolder = useCallback(
     (id: string, name: string) =>
-      update((p) => ({
-        ...p,
-        folders: p.folders.map((f) => (f.id === id ? { ...f, name } : f)),
-      })),
+      update((p) => ({ ...p, folders: p.folders.map((f) => (f.id === id ? { ...f, name } : f)) })),
     [update],
   );
 
   const deleteFolder = useCallback(
     (id: string) =>
       update((p) => {
-        // Reparent children to the deleted folder's parent; unassign its sessions.
         const target = p.folders.find((f) => f.id === id);
         const parent = target?.parentId ?? null;
         const folders = p.folders
@@ -123,8 +202,8 @@ export function useFolders(targetId: string): FoldersApi {
           .map((f) => (f.parentId === id ? { ...f, parentId: parent } : f));
         const assign: Record<string, string> = {};
         for (const [name, fid] of Object.entries(p.assign)) {
-          assign[name] = fid === id ? (parent ?? '') : fid;
-          if (!assign[name]) delete assign[name];
+          const moved = fid === id ? (parent ?? '') : fid;
+          if (moved) assign[name] = moved;
         }
         return { folders, assign };
       }),
@@ -146,7 +225,7 @@ export function useFolders(targetId: string): FoldersApi {
     (id: string, parentId: string | null) =>
       update((p) => {
         if (id === parentId) return p;
-        if (parentId && isAncestor(p.folders, id, parentId)) return p; // no cycles
+        if (parentId && isAncestor(p.folders, id, parentId)) return p;
         return { ...p, folders: p.folders.map((f) => (f.id === id ? { ...f, parentId } : f)) };
       }),
     [update],
