@@ -8,7 +8,8 @@ import {
   renameSession,
   killSession,
   listWindows,
-  peekSession,
+  launchAgentInSession,
+  type LaunchAgent,
 } from '../tmux/sessions.js';
 import { annotate } from '../monitor.js';
 import { getSessionCwd, listDirectory, readFilePreview, resolveScopedPath, writeFile } from '../files.js';
@@ -38,6 +39,11 @@ function requireTarget(req: Request): Target {
 function requireSessionName(raw: unknown): string {
   if (!isValidSessionName(raw)) throw new TmuxError(400, 'invalid session name');
   return raw;
+}
+
+function requireLaunchAgent(raw: unknown): LaunchAgent {
+  if (raw === 'cc' || raw === 'codex') return raw;
+  throw new TmuxError(400, 'invalid agent');
 }
 
 /** A filesystem path supplied via query. Passed as a single argv element (no
@@ -85,15 +91,6 @@ apiRouter.get(
   }),
 );
 
-apiRouter.get(
-  '/targets/:id/sessions/:name/peek',
-  wrap(async (req, res) => {
-    const target = requireTarget(req);
-    const name = requireSessionName(req.params.name);
-    res.json(target.kind === 'winlocal' ? winShell.peek(name) : await peekSession(target, name));
-  }),
-);
-
 apiRouter.post(
   '/targets/:id/sessions',
   wrap(async (req, res) => {
@@ -132,6 +129,18 @@ apiRouter.patch(
     }
     await renameSession(target, name, newName);
     res.json({ name: newName });
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/agent',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    if (target.kind === 'winlocal') throw new TmuxError(400, 'agent hooks require a tmux target');
+    const name = requireSessionName(req.params.name);
+    const agent = requireLaunchAgent((req.body ?? {}).agent);
+    await launchAgentInSession(target, name, agent);
+    res.json({ ok: true });
   }),
 );
 

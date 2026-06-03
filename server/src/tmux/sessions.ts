@@ -2,6 +2,11 @@ import { runCommand } from '../exec.js';
 import { managementArgv, newSessionArgv } from './builder.js';
 import type { Target } from '../targets.js';
 import {
+  AGENT_OPTION,
+  agentInitialValue,
+} from '../agentState.js';
+import { augmentAgentCommand } from '../agentHooks.js';
+import {
   SESSION_FORMAT,
   WINDOW_FORMAT,
   parseSessions,
@@ -11,8 +16,8 @@ import {
   type WindowInfo,
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
-import { classifyTail, lastLines, type AttentionPeek } from '../attention.js';
-import { augmentAgentCommand } from '../agentHooks.js';
+
+export type LaunchAgent = 'cc' | 'codex';
 
 /** A management error carrying the HTTP status the router should return. */
 export class TmuxError extends Error {
@@ -76,15 +81,53 @@ export async function createSession(
   }
 
   if (opts.command && opts.command.length > 0) {
-    // Recognized agents get notification hooks spliced in (see agentHooks).
-    const cmd = augmentAgentCommand(opts.command);
+    const augmented = augmentAgentCommand(opts.command);
+    if (augmented.kind) {
+      await run(target, [
+        'set-option',
+        '-t',
+        name,
+        '-q',
+        AGENT_OPTION,
+        agentInitialValue(augmented.kind),
+      ]);
+    }
     // Type the command literally, then press Enter. Two send-keys calls so the
     // command text can never be misparsed as a key name.
-    await run(target, ['send-keys', '-t', name, '-l', cmd]);
+    await run(target, ['send-keys', '-t', name, '-l', augmented.command]);
     await run(target, ['send-keys', '-t', name, 'Enter']);
   }
 
   return { name };
+}
+
+export async function launchAgentInSession(
+  target: Target,
+  name: string,
+  agent: LaunchAgent,
+): Promise<void> {
+  const augmented = augmentAgentCommand(agent);
+  if (!augmented.kind) throw new TmuxError(400, 'unsupported agent');
+
+  const set = await run(target, [
+    'set-option',
+    '-t',
+    name,
+    '-q',
+    AGENT_OPTION,
+    agentInitialValue(augmented.kind),
+  ]);
+  if (set.code !== 0) {
+    if (/can't find session|session not found|no server running/i.test(set.stderr)) {
+      throw new TmuxError(404, `session "${name}" not found`);
+    }
+    throw new TmuxError(502, firstStderrLine(set.stderr));
+  }
+
+  const send = await run(target, ['send-keys', '-t', name, '-l', augmented.command]);
+  if (send.code !== 0) throw new TmuxError(502, firstStderrLine(send.stderr));
+  const enter = await run(target, ['send-keys', '-t', name, 'Enter']);
+  if (enter.code !== 0) throw new TmuxError(502, firstStderrLine(enter.stderr));
 }
 
 export async function renameSession(
@@ -111,14 +154,6 @@ export async function killSession(target: Target, name: string): Promise<void> {
     throw new TmuxError(404, `session "${name}" not found`);
   }
   throw new TmuxError(502, firstStderrLine(r.stderr));
-}
-
-/** Grab the active pane's last lines and classify whether the session is
- *  waiting on the user. `capture-pane -p` returns plain text (no escapes). */
-export async function peekSession(target: Target, name: string): Promise<AttentionPeek> {
-  const r = await run(target, ['capture-pane', '-t', name, '-p', '-S', '-12']);
-  const tail = r.code === 0 ? r.stdout : '';
-  return { reason: classifyTail(tail), tail: lastLines(tail, 6) };
 }
 
 export async function listWindows(target: Target, name: string): Promise<WindowInfo[]> {

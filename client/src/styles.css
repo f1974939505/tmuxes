@@ -264,29 +264,34 @@ input:focus {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--border);
   flex: none;
 }
-.dot.on {
+.dot.inactive {
   background: var(--green);
 }
-.attn-badge {
-  flex: none;
-  font-size: 11px;
-  line-height: 1;
-  padding: 1px 4px;
-  border-radius: 6px;
-}
-.attn-badge.decision {
-  color: var(--bg);
-  background: var(--yellow);
-}
-.attn-badge.done {
-  color: var(--bg);
-  background: var(--green);
+.dot.active {
+  background: var(--red);
+  box-shadow: 0 0 0 2px rgba(247, 118, 142, 0.24);
 }
 .session-row.attention .name {
   font-weight: 600;
+}
+.attn-badge {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.attn-badge.decision {
+  border-color: var(--red);
+  color: var(--red);
+}
+.attn-badge.done {
+  border-color: var(--green);
+  color: var(--green);
 }
 .meta {
   font-size: 11px;
@@ -334,6 +339,32 @@ input:focus {
 }
 
 /* ---------- terminal panel ---------- */
+.agent-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(4px);
+}
+.agent-toolbar button {
+  padding: 2px 7px;
+  min-width: 0;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
+}
+.agent-error {
+  color: var(--red);
+  font-size: 12px;
+  padding: 0 4px;
+}
 .term-host {
   position: absolute;
   inset: 0;

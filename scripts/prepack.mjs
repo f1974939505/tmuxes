@@ -10,6 +10,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url))); // scripts/.. = r
 const log = (m) => console.log(`[prepack] ${m}`);
 
 log('building client + server…');
+rmSync(join(root, 'server', 'dist'), { recursive: true, force: true });
 execSync('npm run build', { cwd: root, stdio: 'inherit' });
 
 const clientDist = join(root, 'client', 'dist');

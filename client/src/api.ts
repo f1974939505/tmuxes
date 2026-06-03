@@ -1,4 +1,4 @@
-import type { AttentionPeek, FileEntry, FilePreview, SessionInfo, Target, WindowInfo } from './types';
+import type { FileEntry, FilePreview, LaunchAgent, SessionInfo, Target, WindowInfo } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -57,14 +57,15 @@ export const api = {
       { method: 'DELETE' },
     );
   },
+  launchAgent(targetId: string, name: string, agent: LaunchAgent): Promise<{ ok: true }> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/agent`,
+      { method: 'POST', body: JSON.stringify({ agent }) },
+    );
+  },
   getWindows(targetId: string, name: string): Promise<{ windows: WindowInfo[] }> {
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/windows`,
-    );
-  },
-  peekSession(targetId: string, name: string): Promise<AttentionPeek> {
-    return request(
-      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/peek`,
     );
   },
   getCwd(targetId: string, name: string): Promise<{ cwd: string }> {

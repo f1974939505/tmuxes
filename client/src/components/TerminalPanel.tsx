@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createTerminal, type TerminalHandle } from '../hooks/useTerminal';
 import { createTmuxSocket, type TmuxSocket } from '../hooks/useTmuxSocket';
-import { terminalSocketUrl } from '../api';
-import type { ConnStatus } from '../types';
+import { api, ApiError, terminalSocketUrl } from '../api';
+import type { ConnStatus, LaunchAgent, Target } from '../types';
 import { StatusBanner } from './StatusBanner';
 
 interface Props {
   targetId: string;
+  targetKind: Target['kind'];
   targetLabel: string;
   session: string;
   fontSize: number;
@@ -16,12 +17,14 @@ const RESIZE_DEBOUNCE_MS = 80;
 
 /** Mounted with key={targetId/session}, so a selection change is a full
  *  remount — no stale terminal/socket state. */
-export function TerminalPanel({ targetId, targetLabel, session, fontSize }: Props) {
+export function TerminalPanel({ targetId, targetKind, targetLabel, session, fontSize }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<TerminalHandle | null>(null);
   const socketRef = useRef<TmuxSocket | null>(null);
   const [status, setStatus] = useState<ConnStatus>({ kind: 'connecting' });
   const [generation, setGeneration] = useState(0);
+  const [startingAgent, setStartingAgent] = useState<LaunchAgent | null>(null);
+  const [agentError, setAgentError] = useState<string | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -108,8 +111,40 @@ export function TerminalPanel({ targetId, targetLabel, session, fontSize }: Prop
     if (geo) socketRef.current?.resize(geo.cols, geo.rows);
   }, [fontSize]);
 
+  const launchAgent = async (agent: LaunchAgent) => {
+    setStartingAgent(agent);
+    setAgentError(null);
+    try {
+      await api.launchAgent(targetId, session, agent);
+      handleRef.current?.term.focus();
+    } catch (e) {
+      setAgentError(e instanceof ApiError ? e.message : 'failed to launch agent');
+    } finally {
+      setStartingAgent(null);
+    }
+  };
+
   return (
     <div className="panel">
+      {targetKind !== 'winlocal' && (
+        <div className="agent-toolbar">
+          <button
+            disabled={startingAgent !== null}
+            onClick={() => void launchAgent('cc')}
+            title="Run hooked cc in this tmux session"
+          >
+            cc
+          </button>
+          <button
+            disabled={startingAgent !== null}
+            onClick={() => void launchAgent('codex')}
+            title="Run hooked codex in this tmux session"
+          >
+            codex
+          </button>
+          {agentError && <span className="agent-error" title={agentError}>!</span>}
+        </div>
+      )}
       <div className="term-host" ref={hostRef} />
       <StatusBanner status={status} onReconnect={() => setGeneration((g) => g + 1)} />
       {status.kind !== 'connected' && status.kind !== 'connecting' && (

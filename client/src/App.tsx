@@ -92,6 +92,7 @@ export function App() {
             <TerminalPanel
               key={`${selection.targetId}/${selection.session}`}
               targetId={selection.targetId}
+              targetKind={selectedTarget.kind}
               targetLabel={selectedTarget.label}
               session={selection.session}
               fontSize={settings.terminalFontSize}

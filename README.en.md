@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
 live across **Local · SSH · WSL**, with a file browser of every agent's working directory.
 
-🔔 **When an agent finishes — or stops to ask whether to continue — your browser pings you**: a sidebar badge, a sound, and a flashing tab title when you're away. No more babysitting panes to see "is it done yet?".
+🔔 **When Claude Code / Codex finishes or needs a decision, your browser pings you**: red/green sidebar status dots, done/decision badges, a sound, and a flashing tab title when you're away. No more babysitting panes to see whether it is still running.
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -22,7 +22,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
 </p>
 
-<sub>🔒 localhost-only · ⚡ one-click launch · 🔔 pings you when done · 🪟 reaches into WSL on Windows · 🧩 zero config</sub>
+<sub>🔒 localhost-only · ⚡ one-click launch · 🔔 agent-hook notifications · 🪟 reaches into WSL on Windows · 🧩 zero config</sub>
 
 </div>
 
@@ -37,7 +37,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 | | |
 |---|---|
 | 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
-| 🔔 **Done / asking → you're notified** | Zero-config monitoring of every session: when an agent **finishes or stops to ask for a decision**, you get a **sidebar badge + sound + background title flash** — and it tells "✋ waiting on you" apart from "✓ done". Works out of the box for Claude Code / Codex / OpenCode / Hermes, no agent config needed. |
+| 🔔 **Done / decision notifications** | Sessions created with an initial `claude`, `cc`, or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `cc` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished or waiting for your decision, and badges tell those cases apart. |
 | 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
 | 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
 | 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
@@ -104,6 +104,24 @@ npm run dev            # → http://localhost:5173
 npm run build
 npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-open the browser)
 ```
+
+## 🔔 Launch Hooked cc / Codex
+
+tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`cc`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, or waiting for your decision.
+
+Two launch paths:
+
+1. Create a session with `cc` or `codex` as the initial command.
+2. Create an empty session, `cd /your/project` in the terminal, then click the terminal's top-right `cc` / `codex` button.
+
+Status meanings:
+
+- Red dot: the agent is running.
+- Green dot: the agent finished, is waiting for your decision, or this session has no agent hook.
+- `done` badge: the current turn finished.
+- `decision` badge: the agent is waiting for permission or user input.
+
+Note: the top-right buttons send a hooked `cc` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Native Windows shells have no tmux session option, so this hook status is not supported there.
 
 ## 🧩 Targets
 
@@ -227,13 +245,15 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.4
+- **improve: notifications now use official Claude Code / Codex lifecycle hooks.** Sessions created with an initial `claude`, `cc`, or `codex` command get hooks injected automatically; you can also open an empty session, `cd` to the target directory, then click the top-right `cc` / `codex` button to launch a hooked agent there. tmuxes syncs their tmux session option every 5 seconds. A red dot means running, a green dot means finished or waiting for a decision, and badges distinguish done vs. decision alerts.
+
 ### 0.1.3
 - **fix (Windows)**: `Ctrl+C` actually stops the server now. The previous fix was buggy (the readline bridge never entered terminal mode, so it was a no-op), and node-pty's ConPTY backend breaks the host's `CTRL_C_EVENT → SIGINT` path. We now **read the raw Ctrl+C byte (0x03) straight from the console**, bypassing the broken signal machinery. `Ctrl+Break` still works too.
-- **improve: done / asking notifications now use agent hooks (fixes SSH false positives).** The old idle heuristic misfired on SSH clusters (an agent that pauses output while queuing / on slow I/O looked "done"). tmuxes now **auto-injects hooks** when launching Claude Code / Codex: the agent reports completion / decision via a `@tmuxes_attn` option on its own tmux session, which tmuxes reads over its existing management poll (SSH-safe, no reverse network). Claude: `Stop`=done / `Notification`=decision; Codex: done only. No more idle false alerts on SSH/local/WSL; native Windows shells keep the idle fallback. Disable injection with `TMUXES_NO_AUTOHOOK=1`.
 - **change: native browser right-click restored.** The terminal no longer suppresses the context menu. To use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking (bypasses tmux mouse mode).
 
 ### 0.1.2
-- **New: done / asking notifications.** Zero-config monitoring of every session — when an agent finishes or stops for a decision, you get a **sidebar badge + sound + background tab-title flash**, distinguishing "✋ waiting for input" from "✓ done". Uses `session_activity` for clock-skew-safe idle detection, then `capture-pane` to classify on trigger. Toggle notifications and sound in Settings.
+- **New: active-to-quiet notifications.** Zero-config monitoring of every session: when a session's terminal screen stops changing, you get a **sidebar status dot + sound + background tab-title flash**. Toggle notifications and sound in Settings.
 
 ### 0.1.1
 - **fix (Windows)**: `Ctrl+C` now correctly stops the server. ConPTY child processes (node-pty) were consuming the `CTRL_C_EVENT` before it reached the host node process; fixed by bridging SIGINT via `readline` directly from the console input layer.

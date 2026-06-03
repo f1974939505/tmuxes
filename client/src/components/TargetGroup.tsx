@@ -14,8 +14,6 @@ interface Props {
 }
 
 const POLL_MS = 5000;
-/** Native Windows shells have no tmux/hooks — fall back to observed silence. */
-const ATTENTION_IDLE_SEC = 10;
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
   // Expand the "local-ish" targets by default (local tmux, WSL, native shells).
@@ -38,49 +36,50 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
-  // winlocal: sessions currently flagged via idle edge detection.
-  const alerting = useRef<Set<string>>(new Set());
-  // tmux targets: last-seen @tmuxes_attn value per session (hook-event edges).
-  const lastAttn = useRef<Map<string, string>>(new Map());
+  // Last-seen agent hook event key per session; first sight is a baseline.
+  const lastAgentEvent = useRef<Map<string, string>>(new Map());
+
+  const eventKey = (s: SessionInfo): string => {
+    if (!s.agentKind || !s.agentState || !s.agentNonce) return '';
+    return [
+      s.agentKind,
+      s.agentState,
+      s.attentionReason ?? '',
+      s.agentEvent ?? '',
+      s.agentNonce,
+    ].join(':');
+  };
 
   const detectAttention = useCallback(
     (sessions: SessionInfo[]) => {
       const present = new Set<string>();
       for (const s of sessions) {
         present.add(s.name);
-        if (target.kind === 'winlocal') {
-          // No tmux/hooks here — fall back to server idle detection.
-          const idle = !!s.observedActive && (s.idleSeconds ?? 0) >= ATTENTION_IDLE_SEC;
-          const wasAlerting = alerting.current.has(s.name);
-          if (idle && !wasAlerting) {
-            alerting.current.add(s.name);
-            attention.fire(target.id, s.name);
-          } else if (!idle && wasAlerting) {
-            alerting.current.delete(s.name);
-            attention.clearAlert(target.id, s.name);
-          }
-        } else {
-          // tmux targets: an agent hook set @tmuxes_attn = "<reason>:<nonce>".
-          const attn = s.attn ?? '';
-          const seen = lastAttn.current.has(s.name);
-          const prev = lastAttn.current.get(s.name);
-          lastAttn.current.set(s.name, attn);
-          // Baseline on first sight (skip stale values), then fire on each change.
-          if (seen && attn && attn !== prev) {
-            const reason = attn.startsWith('decision') ? 'decision' : 'done';
-            attention.fire(target.id, s.name, reason);
-          }
+        const key = eventKey(s);
+        const seen = lastAgentEvent.current.has(s.name);
+        const prev = lastAgentEvent.current.get(s.name);
+        lastAgentEvent.current.set(s.name, key);
+
+        if (s.agentState === 'running') {
+          attention.clearAlert(target.id, s.name);
+        } else if (
+          seen &&
+          key &&
+          key !== prev &&
+          (s.attentionReason === 'done' || s.attentionReason === 'decision')
+        ) {
+          attention.fire(target.id, s.name, s.attentionReason);
         }
       }
       // Forget sessions that vanished.
-      for (const name of [...alerting.current]) {
-        if (!present.has(name)) alerting.current.delete(name);
-      }
-      for (const name of [...lastAttn.current.keys()]) {
-        if (!present.has(name)) lastAttn.current.delete(name);
+      for (const name of [...lastAgentEvent.current.keys()]) {
+        if (!present.has(name)) {
+          lastAgentEvent.current.delete(name);
+          attention.clearAlert(target.id, name);
+        }
       }
     },
-    [attention, target.id, target.kind],
+    [attention, target.id],
   );
 
   const refresh = useCallback(async () => {

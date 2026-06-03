@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SessionInfo } from '../types';
 import { ago, isValidSessionName } from '../util';
 import { useAttention } from '../attention';
+import { agentStatusLabel, attentionLabel, isSessionActive } from '../activity';
 
 interface Props {
   targetId: string;
@@ -28,6 +29,7 @@ export function SessionRow({
 }: Props) {
   const attention = useAttention();
   const reason = attention.reasonFor(targetId, session.name);
+  const active = isSessionActive(session);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(session.name);
 
@@ -63,16 +65,13 @@ export function SessionRow({
       draggable={!!onDragStart}
       onDragStart={onDragStart}
       onClick={onSelect}
-      title={`${session.name} — ${session.windows} window(s)`}
+      title={`${session.name} — ${agentStatusLabel(session)} — ${session.windows} window(s)`}
     >
-      <span className={`dot ${session.attached ? 'on' : ''}`} title={session.attached ? 'attached' : 'detached'} />
+      <span className={`dot ${active ? 'active' : 'inactive'}`} title={agentStatusLabel(session)} />
       <span className="name">{session.name}</span>
       {reason && (
-        <span
-          className={`attn-badge ${reason}`}
-          title={reason === 'decision' ? 'Waiting for your input' : 'Finished / idle'}
-        >
-          {reason === 'decision' ? '✋' : '✓'}
+        <span className={`attn-badge ${reason}`} title={attentionLabel(reason)}>
+          {reason === 'decision' ? '决策' : '结束'}
         </span>
       )}
       <span className="meta">

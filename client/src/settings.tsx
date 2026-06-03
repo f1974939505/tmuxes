@@ -7,7 +7,7 @@ export interface Settings {
   terminalFontSize: number;
   /** File viewer font size, px. */
   viewerFontSize: number;
-  /** Notify when a session's agent goes idle / asks for a decision. */
+  /** Notify when a supported agent finishes or needs a decision. */
   notifyAttention: boolean;
   /** Play a sound with the notification. */
   notifySound: boolean;

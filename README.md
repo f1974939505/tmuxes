@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
 横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器。
 
-🔔 **agent 跑完、或停下来问你要不要继续时,浏览器会自动提醒你** —— 侧边栏徽标 + 提示音 + 后台标签页标题闪烁。再也不用挨个窗格去盯「它好了没」。
+🔔 **Claude Code / Codex 结束运行或需要决策时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 决策」提示 + 提示音 + 后台标签页标题闪烁。再也不用挨个窗格去盯「它还在跑吗」。
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -22,7 +22,7 @@
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
 </p>
 
-<sub>🔒 仅本机 · ⚡ 一键启动 · 🔔 完成即提醒 · 🪟 Windows 上直通 WSL · 🧩 零配置</sub>
+<sub>🔒 仅本机 · ⚡ 一键启动 · 🔔 agent hook 提醒 · 🪟 Windows 上直通 WSL · 🧩 零配置</sub>
 
 </div>
 
@@ -37,7 +37,7 @@
 | | |
 |---|---|
 | 🧠 **为 agent 而生** | 每个 agent 独占一个 tmux 会话。新建时可带初始命令（比如 `claude` 或 `codex`），选中后右侧就是一个**完全可交互的实时终端**。 |
-| 🔔 **完成 / 提问即提醒** | 零配置监测每个会话:agent **跑完或停下来等你拍板**时,自动**侧边栏徽标 + 提示音 + 后台标题闪烁**。还会区分「✋ 等你输入」和「✓ 已完成」。Claude Code / Codex / OpenCode / Hermes 开箱即用,无需改 agent 配置。 |
+| 🔔 **结束 / 决策提醒** | 新建会话时初始命令是 `claude`、`cc` 或 `codex` 会自动接入官方 lifecycle hooks。也可以先进入空 session `cd` 到目标目录,再点终端右上角的 `cc` / `codex` 按钮启动带 hook 的 agent。已展开目标每 5 秒同步一次:红点表示 agent 正在运行,绿点表示已结束或正在等你决策;结束运行和需要决策会显示不同提示。 |
 | 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧边栏同时列出你的本机、`~/.ssh/config` 里的主机、（Windows 上）你的 WSL 发行版，以及（Windows）原生 PowerShell / cmd 会话 —— 全部并排排开。 |
 | 🗂️ **文件夹树** | 像资源管理器一样，把会话拖进**可拖拽的文件夹**里整理。按目标分别持久化到本地。 |
 | 📂 **实时文件浏览 + 编辑** | 侧边栏底部跟随每个会话的**工作目录** —— 点一个代码文件就能把终端一分为二，在下面**直接读和改**（可保存、撤销/重做）。 |
@@ -104,6 +104,24 @@ npm run dev            # → http://localhost:5173
 npm run build
 npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自动打开浏览器）
 ```
+
+## 🔔 启动带 hook 的 cc / Codex
+
+tmuxes 目前会给 **Claude Code (`cc`)** 和 **Codex (`codex`)** 自动接入官方 lifecycle hooks，用来判断 agent 是正在运行、已经结束，还是正在等你做决策。
+
+两种用法：
+
+1. 新建 session 时，在初始命令里直接填 `cc` 或 `codex`。
+2. 先新建空 session，进入后在终端里 `cd /你的目标目录`，再点终端右上角的 `cc` / `codex` 按钮。
+
+状态含义：
+
+- 红点：agent 正在运行。
+- 绿点：agent 已结束、正在等你决策，或这个 session 没接入 agent hook。
+- `结束` badge：本轮运行结束。
+- `决策` badge：agent 正在等待权限确认或用户输入。
+
+注意：右上角按钮本质上是向当前 tmux pane 发送一条带 hook 的 `cc` / `codex` 命令。不要在当前 pane 里已有程序正在接收输入时点击它。原生 Windows shell 没有 tmux session option，因此不支持这套 hook 状态。
 
 ## 🧩 目标（Targets）
 
@@ -228,13 +246,15 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 ## 📋 更新日志
 
+### 0.1.4
+- **改进:提醒改为 Claude Code / Codex 官方 lifecycle hooks**。新建会话时初始命令是 `claude`、`cc` 或 `codex` 会自动注入 hooks;也可以先进入空 session `cd` 到目标目录,再点右上角 `cc` / `codex` 按钮启动带 hook 的 agent。tmuxes 每 5 秒读取 tmux session option 同步状态。红点表示正在运行,绿点表示已结束或需要决策,并分别显示「结束 / 决策」提示。
+
 ### 0.1.3
 - **修复 (Windows)**:`Ctrl+C` 现在真的能停掉服务了。之前的修复有 bug(readline 没进入终端模式,信号桥接形同虚设),而且 node-pty 的 ConPTY 会破坏宿主进程的 `CTRL_C_EVENT → SIGINT` 通路。改为**直接从控制台读取 `Ctrl+C` 原始字节(0x03)**,绕开被破坏的信号机制。`Ctrl+Break` 同样可用。
-- **改进:完成 / 提问提醒改用 agent hook(修 SSH 虚假提醒)**。旧的 idle 启发式在 SSH 集群上经常误报(agent 在排队 / 慢 I/O 时长时间不输出 → 被误判成「完成」)。现在启动 Claude Code / Codex 时**自动注入 hook**:agent 在完成 / 需要决策时,通过其自身 tmux 会话里的 `@tmuxes_attn` 选项上报,tmuxes 经已有的管理轮询读取(SSH 友好,无需反向网络)。Claude:`Stop`=完成 / `Notification`=决策;Codex:仅完成。SSH/本地/WSL 不再有 idle 误报;原生 Windows shell 仍用 idle 兜底。可用 `TMUXES_NO_AUTOHOOK=1` 关闭注入。
 - **变更:恢复浏览器原生右键**。终端区域不再拦截右键菜单。想用浏览器原生**框选 + 右键复制粘贴**,**按住 `Shift`** 拖动 / 右键即可(绕过 tmux 鼠标模式)。
 
 ### 0.1.2
-- **新增:完成 / 提问提醒**。零配置监测每个会话——agent 跑完或停下来等你决策时,通过**侧边栏徽标 + 提示音 + 后台标签页标题闪烁**提醒你,并区分「✋ 等待输入」与「✓ 已完成」。原理:用 `session_activity` 做抗时钟偏差的空闲检测,触发时 `capture-pane` 抓屏分类。设置面板可开关提醒与提示音。
+- **新增:活动转静止提醒**。零配置监测每个会话——session 终端画面从持续变化转为静止后,通过**侧边栏状态点 + 提示音 + 后台标签页标题闪烁**提醒你。设置面板可开关提醒与提示音。
 
 ### 0.1.1
 - **修复 (Windows)**：`Ctrl+C` 现在可以正常终止服务端进程。node-pty 的 ConPTY 子进程会拦截 `CTRL_C_EVENT` 导致 SIGINT 无法到达宿主 node；通过 `readline` 从控制台输入层直接桥接 SIGINT 修复此问题。

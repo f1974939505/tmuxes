@@ -1,41 +1,13 @@
-/** Auto-inject notification hooks into known agent launch commands.
- *
- *  When tmuxes launches a recognized agent (Claude Code, Codex) as a session's
- *  initial command, we splice in that agent's hook config so it sets a tmux
- *  SESSION user option `@tmuxes_attn` to "<reason>:<nonce>" on its events:
- *    done     — the agent finished a turn
- *    decision — the agent needs the user's input/permission
- *
- *  tmuxes reads `@tmuxes_attn` over its existing management poll. Because the
- *  agent runs inside the tmux pane, $TMUX is inherited and the option lands on
- *  the agent's own session — so this works over SSH/WSL with no reverse network.
- *
- *  The nonce ($(date +%s), portable across GNU/BSD date) just makes each event a
- *  distinct value; the client edge-detects on change. Opt out with
- *  TMUXES_NO_AUTOHOOK=1. */
+import {
+  agentHookCommand,
+  type AgentKind,
+  type AgentState,
+  type AttentionReason,
+} from './agentState.js';
 
-type Reason = 'done' | 'decision';
-
-/** Shell snippet (run by the agent's hook) that records an attention event. */
-function attnCmd(reason: Reason): string {
-  return `tmux set-option @tmuxes_attn ${reason}:$(date +%s)`;
-}
-
-/** Claude Code: file-less inline settings → Stop=done, Notification=decision.
- *  JSON.stringify emits only double quotes (our strings have no apostrophes), so
- *  the whole thing is safe to wrap in single quotes on the command line. */
-function claudeSettings(): string {
-  return JSON.stringify({
-    hooks: {
-      Stop: [{ matcher: '', hooks: [{ type: 'command', command: attnCmd('done') }] }],
-      Notification: [{ matcher: '', hooks: [{ type: 'command', command: attnCmd('decision') }] }],
-    },
-  });
-}
-
-/** Codex: notify fires only on agent-turn-complete → "done" (no decision event). */
-function codexNotify(): string {
-  return JSON.stringify(['sh', '-c', attnCmd('done')]);
+interface AugmentedCommand {
+  command: string;
+  kind?: AgentKind;
 }
 
 function isDisabled(): boolean {
@@ -43,29 +15,107 @@ function isDisabled(): boolean {
   return v === '1' || v === 'true';
 }
 
-/** lowercase basename without a .exe/.cmd/.bat suffix */
 function baseName(token: string): string {
   return (token.split(/[\\/]/).pop() || '').toLowerCase().replace(/\.(exe|cmd|bat)$/, '');
 }
 
-/** Splice notification hooks into a recognized agent command; pass others
- *  through unchanged. `command` is the literal line tmuxes types into the pane. */
-export function augmentAgentCommand(command: string): string {
-  if (isDisabled()) return command;
+export function detectAgentKind(command: string): AgentKind | undefined {
+  if (isDisabled()) return undefined;
   const trimmed = command.trim();
-  if (!trimmed) return command;
+  if (!trimmed) return undefined;
 
   const m = /^(\S+)(\s+[\s\S]*)?$/.exec(trimmed);
-  if (!m) return command;
-  const prog = m[1];
-  const rest = m[2] ?? ''; // includes its leading whitespace
-
-  switch (baseName(prog)) {
+  if (!m) return undefined;
+  switch (baseName(m[1])) {
     case 'claude':
-      return `${prog} --settings '${claudeSettings()}'${rest}`;
+    case 'cc':
+      return 'claude';
     case 'codex':
-      return `${prog} -c 'notify=${codexNotify()}'${rest}`;
+      return 'codex';
     default:
-      return command;
+      return undefined;
   }
+}
+
+function hook(
+  kind: AgentKind,
+  state: AgentState,
+  reason: AttentionReason | '',
+  event: string,
+) {
+  return { type: 'command', command: agentHookCommand(kind, state, reason, event) };
+}
+
+function claudeSettings(): string {
+  return JSON.stringify({
+    hooks: {
+      UserPromptSubmit: [{ hooks: [hook('claude', 'running', '', 'UserPromptSubmit')] }],
+      PreToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PreToolUse')] }],
+      PostToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PostToolUse')] }],
+      PermissionRequest: [
+        { matcher: '', hooks: [hook('claude', 'waiting', 'decision', 'PermissionRequest')] },
+      ],
+      Notification: [
+        {
+          matcher: 'permission_prompt',
+          hooks: [hook('claude', 'waiting', 'decision', 'Notification.permission_prompt')],
+        },
+        {
+          matcher: 'elicitation_dialog',
+          hooks: [hook('claude', 'waiting', 'decision', 'Notification.elicitation_dialog')],
+        },
+      ],
+      Stop: [{ hooks: [hook('claude', 'idle', 'done', 'Stop')] }],
+      StopFailure: [{ hooks: [hook('claude', 'idle', 'done', 'StopFailure')] }],
+      SessionEnd: [{ hooks: [hook('claude', 'idle', 'done', 'SessionEnd')] }],
+    },
+  });
+}
+
+function tomlString(v: string): string {
+  return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function codexHookConfig(
+  event: string,
+  cmd: string,
+  opts: { matcher?: string } = {},
+): string {
+  const matcher = opts.matcher === undefined ? '' : `matcher=${tomlString(opts.matcher)},`;
+  return `hooks.${event}=[{${matcher}hooks=[{type="command",command=${tomlString(cmd)}}]}]`;
+}
+
+function codexConfigArgs(): string {
+  const configs = [
+    codexHookConfig('UserPromptSubmit', agentHookCommand('codex', 'running', '', 'UserPromptSubmit')),
+    codexHookConfig('PreToolUse', agentHookCommand('codex', 'running', '', 'PreToolUse'), {
+      matcher: '',
+    }),
+    codexHookConfig('PostToolUse', agentHookCommand('codex', 'running', '', 'PostToolUse'), {
+      matcher: '',
+    }),
+    codexHookConfig(
+      'PermissionRequest',
+      agentHookCommand('codex', 'waiting', 'decision', 'PermissionRequest'),
+      { matcher: '' },
+    ),
+    codexHookConfig('Stop', agentHookCommand('codex', 'idle', 'done', 'Stop')),
+  ];
+  return configs.map((c) => `-c '${c}'`).join(' ');
+}
+
+export function augmentAgentCommand(command: string): AugmentedCommand {
+  const kind = detectAgentKind(command);
+  if (!kind) return { command };
+
+  const trimmed = command.trim();
+  const m = /^(\S+)(\s+[\s\S]*)?$/.exec(trimmed);
+  if (!m) return { command };
+  const prog = m[1];
+  const rest = m[2] ?? '';
+
+  if (kind === 'claude') {
+    return { kind, command: `${prog} --settings '${claudeSettings()}'${rest}` };
+  }
+  return { kind, command: `${prog} ${codexConfigArgs()}${rest}` };
 }

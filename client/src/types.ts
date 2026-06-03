@@ -18,23 +18,24 @@ export interface SessionInfo {
   attached: boolean;
   /** unix epoch seconds */
   created: number;
-  /** epoch seconds of last output activity */
+  /** epoch seconds from tmux / native shell */
   lastActivity?: number;
-  /** seconds since the server last observed activity change */
-  idleSeconds?: number;
-  /** the server has seen this session produce output during this watch */
-  observedActive?: boolean;
-  /** attention event from an agent hook — "<reason>:<nonce>", empty if unset */
-  attn?: string;
+  /** recognized agent whose hooks are driving status */
+  agentKind?: AgentKind;
+  /** current lifecycle state from agent hooks */
+  agentState?: AgentState;
+  /** why this session is asking for attention */
+  attentionReason?: AttentionReason;
+  /** hook event that last updated the state */
+  agentEvent?: string;
+  /** monotonic-ish event token for client edge detection */
+  agentNonce?: string;
 }
 
-/** Why a session is asking for attention. */
+export type AgentKind = 'claude' | 'codex';
+export type AgentState = 'running' | 'waiting' | 'idle';
 export type AttentionReason = 'decision' | 'done';
-
-export interface AttentionPeek {
-  reason: AttentionReason;
-  tail: string;
-}
+export type LaunchAgent = 'cc' | 'codex';
 
 export interface WindowInfo {
   index: number;

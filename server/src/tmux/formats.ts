@@ -6,14 +6,16 @@
  *  rejoin the remainder — robust even if a name itself contains "|", because
  *  the leading numeric fields never do. */
 
+import { AGENT_OPTION, parseAgentValue, type AgentKind, type AgentState, type AttentionReason } from '../agentState.js';
+
 const SEP = '|';
 
 export const SESSION_FORMAT = [
   '#{session_windows}',
   '#{session_attached}',
   '#{session_created}',
-  '#{session_activity}', // epoch of last activity in any window (winlocal idle fallback)
-  '#{@tmuxes_attn}', // attention event set by an agent hook: "<reason>:<nonce>" (or empty)
+  '#{session_activity}', // epoch from tmux; kept for display/debug
+  `#{${AGENT_OPTION}}`, // agent hook state: "<kind>:<state>:<reason>:<event>:<nonce>"
   '#{session_name}', // free-form → must be last
 ].join(SEP);
 
@@ -30,14 +32,18 @@ export interface SessionInfo {
   attached: boolean;
   /** unix epoch seconds */
   created: number;
-  /** epoch seconds of last output activity (drives idle/attention detection) */
+  /** unix epoch seconds from tmux; kept for display/debug. */
   lastActivity: number;
-  /** Seconds idle since we last observed activity change. Filled by the monitor. */
-  idleSeconds?: number;
-  /** True once we've observed this session produce output during this watch. */
-  observedActive?: boolean;
-  /** Attention event from an agent hook — "<reason>:<nonce>", empty if unset. */
-  attn?: string;
+  /** Recognized agent whose hooks are driving status. */
+  agentKind?: AgentKind;
+  /** Agent lifecycle state from official hooks. */
+  agentState?: AgentState;
+  /** Why this session is asking for attention, when known. */
+  attentionReason?: AttentionReason;
+  /** Hook event that last updated the state. */
+  agentEvent?: string;
+  /** Monotonic-ish event token for client edge detection. */
+  agentNonce?: string;
 }
 
 export interface WindowInfo {
@@ -53,12 +59,13 @@ export function parseSessions(stdout: string): SessionInfo[] {
     .filter((l) => l.length > 0)
     .map((line) => {
       const parts = line.split(SEP);
+      const agent = parseAgentValue(parts[4] || '');
       return {
         windows: Number(parts[0]) || 0,
         attached: Number(parts[1]) > 0,
         created: Number(parts[2]) || 0,
         lastActivity: Number(parts[3]) || 0,
-        attn: parts[4] || '',
+        ...agent,
         name: parts.slice(5).join(SEP), // name may legitimately contain "|"
       };
     })

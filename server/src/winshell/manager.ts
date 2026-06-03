@@ -4,7 +4,6 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { isWindows } from '../platform.js';
 import { log } from '../logger.js';
-import { classifyTail, lastLines, type AttentionPeek } from '../attention.js';
 import type { ServerControl } from '../ws/protocol.js';
 import type { SessionInfo, WindowInfo } from '../tmux/formats.js';
 
@@ -112,11 +111,6 @@ export class WinShellSession {
     };
   }
 
-  /** Decoded tail of the scrollback (for attention classification). */
-  tail(): string {
-    return Buffer.concat(this.scroll).toString('utf8');
-  }
-
   dispose(): void {
     if (this.disposed) {
       this.onClosed(this.name);
@@ -168,14 +162,6 @@ export class WinShellManager {
     const s = this.sessions.get(name);
     if (!s) return [];
     return [{ index: 0, name: s.shell.label, panes: 1, active: true }];
-  }
-
-  /** Classify a session's recent output → "needs decision" vs "done/idle". */
-  peek(name: string): AttentionPeek {
-    const s = this.sessions.get(name);
-    if (!s) throw new ManagerError(404, `session "${name}" not found`);
-    const tail = s.tail();
-    return { reason: classifyTail(tail), tail: lastLines(tail, 6) };
   }
 
   has(name: string): boolean {
