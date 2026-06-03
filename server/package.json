@@ -1,15 +1,49 @@
 {
-  "name": "@tmuxes/server",
+  "name": "tmuxes",
   "version": "0.1.0",
-  "private": true,
+  "description": "Web UI to run and supervise many CLI coding agents in tmux — local, SSH, and WSL.",
+  "keywords": [
+    "tmux",
+    "terminal",
+    "xterm",
+    "ssh",
+    "wsl",
+    "web-terminal",
+    "node-pty",
+    "cli-agents"
+  ],
   "license": "MIT",
+  "author": "f1974939505 (https://github.com/f1974939505)",
+  "homepage": "https://github.com/f1974939505/tmuxes#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/f1974939505/tmuxes.git",
+    "directory": "server"
+  },
+  "bugs": {
+    "url": "https://github.com/f1974939505/tmuxes/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "tmuxes": "bin/tmuxes.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "public",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node ../scripts/prepack.mjs"
   },
   "dependencies": {
     "express": "^5.2.1",

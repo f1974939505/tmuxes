@@ -81,7 +81,23 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 
 > **No native tmux on Windows?** No problem. The server runs natively (node-pty uses ConPTY) and reaches tmux **inside your WSL distros** via `wsl.exe`. On Linux/macOS it talks to local tmux directly. Remote hosts use the **system `ssh` binary**, reusing your existing `~/.ssh` keys / `ssh-agent` — **no passwords are ever stored.**
 
-## 🚀 Quick start
+## 📦 Install from npm
+
+```bash
+# One-shot (no clone, opens the browser):
+npx tmuxes
+
+# Or install globally and use the `tmuxes` command:
+npm install -g tmuxes
+tmuxes                       # → http://127.0.0.1:7420
+
+# Flags:
+tmuxes --port 8080 --no-open
+```
+
+> Needs **tmux** on the machine/host you connect to. On **Linux**, `node-pty` compiles from source (`build-essential` + `python3`); **Windows / macOS** ship prebuilt binaries — truly one-click. See Requirements below.
+
+## 🚀 One-click from source (for development)
 
 <table>
 <tr><th>OS</th><th>Do this</th></tr>

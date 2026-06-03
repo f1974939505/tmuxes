@@ -81,7 +81,23 @@
 
 > **Windows 上没有原生 tmux？** 没问题。服务端原生运行（node-pty 用 ConPTY），通过 `wsl.exe` 直通你 WSL 发行版里的 tmux。Linux/macOS 上则直接和本地 tmux 通信。远程主机用系统 `ssh` 二进制，复用你已有的 `~/.ssh` 密钥 / `ssh-agent` —— **绝不存储任何密码。**
 
-## 🚀 快速开始
+## 📦 用 npm 安装
+
+```bash
+# 一键运行(无需克隆,自动开浏览器):
+npx tmuxes
+
+# 或全局安装后用 tmuxes 命令:
+npm install -g tmuxes
+tmuxes                       # → http://127.0.0.1:7420
+
+# 常用参数:
+tmuxes --port 8080 --no-open
+```
+
+> 前提:你要连的机器/主机上装了 **tmux**。**Linux** 上 `node-pty` 需现场编译(装 `build-essential` + `python3`);**Windows / macOS** 有预编译二进制,真·一键。详见下方「环境要求」。
+
+## 🚀 从源码一键启动(开发用)
 
 <table>
 <tr><th>系统</th><th>怎么做</th></tr>

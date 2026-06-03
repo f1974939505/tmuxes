@@ -1,9 +1,9 @@
 {
-  "name": "tmuxes",
+  "name": "tmuxes-monorepo",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Web frontend to manage local and remote (SSH) tmux sessions",
+  "description": "Dev monorepo for tmuxes — the publishable package lives in server/ (name: tmuxes).",
   "workspaces": [
     "server",
     "client"
@@ -14,7 +14,9 @@
     "dev:client": "npm --workspace client run dev",
     "build": "npm --workspace client run build && npm --workspace server run build",
     "start": "npm --workspace server run start",
-    "test": "npm --workspace server run test"
+    "test": "npm --workspace server run test",
+    "pack:check": "npm pack --workspace server --dry-run",
+    "release": "npm publish --workspace server"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

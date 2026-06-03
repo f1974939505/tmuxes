@@ -16,9 +16,11 @@ const app = express();
 app.use(express.json({ limit: '5mb' }));
 app.use('/api', apiRouter);
 
-// In production, serve the built client (server/dist → ../../client/dist).
-const clientDist = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
-if (existsSync(clientDist)) {
+// Serve the built client. Published npm package bundles it at <pkg>/public;
+// in the dev monorepo it lives at server/../../client/dist.
+const here = dirname(fileURLToPath(import.meta.url));
+const clientDist = [join(here, '..', 'public'), join(here, '..', '..', 'client', 'dist')].find(existsSync);
+if (clientDist) {
   app.use(express.static(clientDist));
   // SPA fallback for non-API GET routes (avoids path-to-regexp '*' quirks in Express 5).
   app.use((req, res, next) => {
