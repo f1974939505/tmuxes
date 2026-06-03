@@ -47,27 +47,9 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 
 ## 🖼️ What it looks like
 
-```text
-┌───────────────────────────┬──────────────────────────────────────────────┐
-│ tmuxes                  ⟳ │  ● claude-code — agent1                        │
-│                           │                                                │
-│ ▾ Local            local  │   $ claude "refactor the auth module"          │
-│   📂 frontend             │   ⠿ thinking…                                  │
-│     ● agent1   2 win · 3m │   ▸ Editing src/auth/session.ts                │
-│     ○ agent2   1 win      │   ▸ Running tests…                             │
-│   📁 backend              │                                                │
-│   ○ scratch    1 win      │                                                │
-│ ▾ devbox             ssh  ├───────────────── src/auth/session.ts ─────────┤
-│   ○ build      1 win      │  1  export function createSession(user) {      │
-│ ─────────── drag ──────── │  2    const token = sign(user, KEY)            │
-│ WORKING DIRECTORY     ↑ ⌂ │  3    return { token, exp: Date.now() + TTL }  │
-│   📁 src                  │  4  }                                          │
-│   📄 session.ts           │                                                │
-│   📄 README.md            │                                                │
-│ ⚙ Settings                │                                                │
-└───────────────────────────┴──────────────────────────────────────────────┘
-   sidebar: tmux tree + cwd file browser        terminal  ╱  opened file
-```
+<div align="center">
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/fig1.png" alt="tmuxes screenshot — one tab to run a swarm of CLI agents" width="900">
+</div>
 
 ## 🏗️ Architecture
 
@@ -220,6 +202,28 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 
 > Tip: once `mouse on` is set, the mouse belongs to tmux; to use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking.
 
+
+## ❓ FAQ
+
+<details>
+<summary><b>On one cluster, Chinese (or other non-ASCII) text in tmux shows up as underscores <code>_</code>?</b></summary>
+
+That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` / `POSIX`), so tmux runs in **non-UTF-8 mode** and renders each multibyte character as `_`. Fix it **on that machine**:
+
+1. Set a UTF-8 locale — check what's available, then add it to `~/.bashrc` / `~/.zshrc`:
+   ```bash
+   locale -a | grep -i utf          # see which exist (C.UTF-8 / en_US.UTF-8 / zh_CN.UTF-8 …)
+   echo 'export LANG=C.UTF-8' >> ~/.bashrc   # use a real one from the list above
+   ```
+2. Restart that machine's tmux server so sessions are recreated under UTF-8:
+   ```bash
+   tmux kill-server
+   ```
+3. Reconnect / create a session from tmuxes.
+
+> ⚠️ A pane's UTF-8 mode is fixed **when it's created** — changing the locale **without restarting the server** won't fix already-broken sessions; they must be recreated.
+
+</details>
 
 ## 📋 Changelog
 

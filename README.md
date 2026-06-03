@@ -47,27 +47,9 @@
 
 ## 🖼️ 长这样
 
-```text
-┌───────────────────────────┬──────────────────────────────────────────────┐
-│ tmuxes                  ⟳ │  ● claude-code — agent1                        │
-│                           │                                                │
-│ ▾ Local            local  │   $ claude "refactor the auth module"          │
-│   📂 frontend             │   ⠿ thinking…                                  │
-│     ● agent1   2 win · 3m │   ▸ Editing src/auth/session.ts                │
-│     ○ agent2   1 win      │   ▸ Running tests…                             │
-│   📁 backend              │                                                │
-│   ○ scratch    1 win      │                                                │
-│ ▾ devbox             ssh  ├───────────────── src/auth/session.ts ─────────┤
-│   ○ build      1 win      │  1  export function createSession(user) {      │
-│ ─────────── drag ──────── │  2    const token = sign(user, KEY)            │
-│ WORKING DIRECTORY     ↑ ⌂ │  3    return { token, exp: Date.now() + TTL }  │
-│   📁 src                  │  4  }                                          │
-│   📄 session.ts           │                                                │
-│   📄 README.md            │                                                │
-│ ⚙ Settings                │                                                │
-└───────────────────────────┴──────────────────────────────────────────────┘
-   侧边栏：tmux 树 + 当前目录文件浏览器          终端  ╱  打开的文件
-```
+<div align="center">
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/fig1.png" alt="tmuxes 截图 —— 一个标签页掌控一群 CLI agent" width="900">
+</div>
 
 ## 🏗️ 架构
 
@@ -221,6 +203,28 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 > 提示：开了 `mouse on` 后鼠标归 tmux 管;想用浏览器原生的**框选 + 右键复制粘贴**,**按住 `Shift`** 再拖动 / 右键即可。
 >
 > 提示：在 tmuxes 里**新建 / 选择 / 重命名 / 杀会话**直接点 UI 就行，不用记命令；但**往上滚看历史、复制文字、拆面板**这些是 tmux 自己的功能，得用上面的快捷键。
+
+## ❓ 常见问题
+
+<details>
+<summary><b>某个集群里 tmux 的中文(或其它非 ASCII 字符)全变成了下划线 <code>_</code>?</b></summary>
+
+那台机器的登录 locale 不是 UTF-8(HPC 登录节点很常见,`LANG=C` / `POSIX`),于是 tmux 进入**非 UTF-8 模式**,把每个多字节字符用 `_` 占位。**在那台机器上**修:
+
+1. 设一个 UTF-8 locale —— 先看哪些可用,再写进 `~/.bashrc` / `~/.zshrc`:
+   ```bash
+   locale -a | grep -i utf          # 看有哪些(C.UTF-8 / en_US.UTF-8 / zh_CN.UTF-8 …)
+   echo 'export LANG=C.UTF-8' >> ~/.bashrc   # 换成上面真实存在的那个
+   ```
+2. 重启该机器上的 tmux 服务,让会话以 UTF-8 重新创建:
+   ```bash
+   tmux kill-server
+   ```
+3. 回到 tmuxes 重新连接 / 新建会话即可。
+
+> ⚠️ pane 的 UTF-8 模式在**创建时**就定死了 —— 只改 locale **不重启 server** 的话,已经变成下划线的旧会话不会自动恢复,必须重建。
+
+</details>
 
 ## 📋 更新日志
 
