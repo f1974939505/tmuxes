@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import type { WebSocket } from 'ws';
 import type { Target } from '../targets.js';
 import { attachArgv } from '../tmux/builder.js';
+import { resolveExecutable } from '../exe.js';
 import { classifySsh } from './sshState.js';
 import type { ClientControl, ServerControl } from './protocol.js';
 import { log } from '../logger.js';
@@ -34,7 +35,8 @@ export class TerminalSession {
     this.sshScanBudget = target.kind === 'ssh' ? 8192 : 0;
 
     const { file, args } = attachArgv(target, session);
-    this.ptyProc = pty.spawn(file, args, {
+    // node-pty on Windows needs a full exe path (no PATH/.exe resolution).
+    this.ptyProc = pty.spawn(resolveExecutable(file), args, {
       name: 'xterm-256color',
       cols,
       rows,
