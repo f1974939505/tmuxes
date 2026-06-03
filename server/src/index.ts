@@ -48,6 +48,12 @@ function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
   log.info(`received ${signal}, shutting down`);
+  // Restore the console we put into raw mode (Windows Ctrl+C handling).
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  } catch {
+    /* ignore */
+  }
   disposeAll();
   winShell.disposeAll();
   server.close(() => process.exit(0));
@@ -61,11 +67,36 @@ process.on('SIGHUP', () => shutdown('SIGHUP'));
 // Windows Ctrl+Break.
 if (process.platform === 'win32') process.on('SIGBREAK', () => shutdown('SIGBREAK'));
 
-// On Windows, ConPTY child processes (node-pty) attach to our console and can
-// swallow Ctrl+C, so the host never receives SIGINT. readline reads the console
-// input directly and re-emits SIGINT, bypassing the broken signal routing.
-if (process.platform === 'win32' && process.stdin.isTTY) {
-  readline.createInterface({ input: process.stdin }).on('SIGINT', () => shutdown('SIGINT'));
+// On Windows, node-pty's ConPTY backend breaks the normal CTRL_C_EVENT → SIGINT
+// path for the host process (see microsoft/node-pty#190), so `process.on('SIGINT')`
+// can't be relied on. Instead we read the raw Ctrl+C byte (0x03) straight from the
+// console, set up at startup (before any pty is spawned). This bypasses the signal
+// machinery entirely. Ctrl+Break still works via the SIGBREAK handler above.
+if (process.platform === 'win32') {
+  const stdin = process.stdin;
+  if (stdin.isTTY) {
+    try {
+      stdin.setRawMode(true); // deliver keys as bytes; Ctrl+C arrives as 0x03
+      stdin.resume();
+      stdin.on('data', (buf: Buffer) => {
+        if (buf.includes(0x03)) shutdown('Ctrl+C');
+      });
+    } catch {
+      // Fall back to the readline SIGINT bridge (needs explicit terminal mode).
+      readline
+        .createInterface({ input: stdin, terminal: true })
+        .on('SIGINT', () => shutdown('SIGINT'));
+    }
+  } else {
+    // stdin isn't a console TTY (e.g. piped) — best-effort bridge.
+    try {
+      readline
+        .createInterface({ input: stdin, terminal: true })
+        .on('SIGINT', () => shutdown('SIGINT'));
+    } catch {
+      /* nothing more we can do */
+    }
+  }
 }
 
 // If the port is already held (e.g. a previous run is still alive), exit with a

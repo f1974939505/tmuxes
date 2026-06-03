@@ -12,18 +12,18 @@ const SEP = '|';
 describe('parseSessions', () => {
   it('parses delimited session lines (name field last)', () => {
     const out = [
-      ['3', '1', '1700000000', '1700000050', 'work'].join(SEP),
-      ['1', '0', '1700000100', '1700000150', 'my proj'].join(SEP), // name with a space survives
+      ['3', '1', '1700000000', '1700000050', 'done:1700000051', 'work'].join(SEP),
+      ['1', '0', '1700000100', '1700000150', '', 'my proj'].join(SEP), // name with a space survives
     ].join('\n');
     expect(parseSessions(out)).toEqual([
-      { name: 'work', windows: 3, attached: true, created: 1700000000, lastActivity: 1700000050 },
-      { name: 'my proj', windows: 1, attached: false, created: 1700000100, lastActivity: 1700000150 },
+      { name: 'work', windows: 3, attached: true, created: 1700000000, lastActivity: 1700000050, attn: 'done:1700000051' },
+      { name: 'my proj', windows: 1, attached: false, created: 1700000100, lastActivity: 1700000150, attn: '' },
     ]);
   });
   it('keeps a separator that appears inside a name', () => {
-    const out = ['2', '0', '1700000200', '1700000250', 'a|b'].join(SEP);
+    const out = ['2', '0', '1700000200', '1700000250', '', 'a|b'].join(SEP);
     expect(parseSessions(out)).toEqual([
-      { name: 'a|b', windows: 2, attached: false, created: 1700000200, lastActivity: 1700000250 },
+      { name: 'a|b', windows: 2, attached: false, created: 1700000200, lastActivity: 1700000250, attn: '' },
     ]);
   });
   it('returns [] for empty output', () => {
@@ -36,6 +36,7 @@ describe('parseSessions', () => {
       '#{session_attached}',
       '#{session_created}',
       '#{session_activity}',
+      '#{@tmuxes_attn}',
       '#{session_name}',
     ]);
   });

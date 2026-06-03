@@ -110,9 +110,7 @@ export function TerminalPanel({ targetId, targetLabel, session, fontSize }: Prop
 
   return (
     <div className="panel">
-      {/* Suppress the browser's native context menu so right-click reaches
-          xterm → tmux mouse mode instead of popping the page menu. */}
-      <div className="term-host" ref={hostRef} onContextMenu={(e) => e.preventDefault()} />
+      <div className="term-host" ref={hostRef} />
       <StatusBanner status={status} onReconnect={() => setGeneration((g) => g + 1)} />
       {status.kind !== 'connected' && status.kind !== 'connecting' && (
         <div className="panel-placeholder" style={{ pointerEvents: 'none' }}>

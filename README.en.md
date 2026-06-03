@@ -216,9 +216,17 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 | Search in that mode | `C-s` forward / `C-r` backward (emacs-style default) |
 | Quit copy / scroll mode | `q` |
 | **Enable mouse wheel** (scroll + select with the mouse) | run `tmux set -g mouse on`, or put it in `~/.tmux.conf` |
+| **Hold Shift for the mouse** (bypass tmux mouse mode) | Hold `Shift`, drag to select → browser right-click "Copy"; right-click "Paste" |
+
+> Tip: once `mouse on` is set, the mouse belongs to tmux; to use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking.
 
 
 ## 📋 Changelog
+
+### 0.1.3
+- **fix (Windows)**: `Ctrl+C` actually stops the server now. The previous fix was buggy (the readline bridge never entered terminal mode, so it was a no-op), and node-pty's ConPTY backend breaks the host's `CTRL_C_EVENT → SIGINT` path. We now **read the raw Ctrl+C byte (0x03) straight from the console**, bypassing the broken signal machinery. `Ctrl+Break` still works too.
+- **improve: done / asking notifications now use agent hooks (fixes SSH false positives).** The old idle heuristic misfired on SSH clusters (an agent that pauses output while queuing / on slow I/O looked "done"). tmuxes now **auto-injects hooks** when launching Claude Code / Codex: the agent reports completion / decision via a `@tmuxes_attn` option on its own tmux session, which tmuxes reads over its existing management poll (SSH-safe, no reverse network). Claude: `Stop`=done / `Notification`=decision; Codex: done only. No more idle false alerts on SSH/local/WSL; native Windows shells keep the idle fallback. Disable injection with `TMUXES_NO_AUTOHOOK=1`.
+- **change: native browser right-click restored.** The terminal no longer suppresses the context menu. To use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking (bypasses tmux mouse mode).
 
 ### 0.1.2
 - **New: done / asking notifications.** Zero-config monitoring of every session — when an agent finishes or stops for a decision, you get a **sidebar badge + sound + background tab-title flash**, distinguishing "✋ waiting for input" from "✓ done". Uses `session_activity` for clock-skew-safe idle detection, then `capture-pane` to classify on trigger. Toggle notifications and sound in Settings.

@@ -12,6 +12,7 @@ import {
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
 import { classifyTail, lastLines, type AttentionPeek } from '../attention.js';
+import { augmentAgentCommand } from '../agentHooks.js';
 
 /** A management error carrying the HTTP status the router should return. */
 export class TmuxError extends Error {
@@ -75,9 +76,11 @@ export async function createSession(
   }
 
   if (opts.command && opts.command.length > 0) {
+    // Recognized agents get notification hooks spliced in (see agentHooks).
+    const cmd = augmentAgentCommand(opts.command);
     // Type the command literally, then press Enter. Two send-keys calls so the
     // command text can never be misparsed as a key name.
-    await run(target, ['send-keys', '-t', name, '-l', opts.command]);
+    await run(target, ['send-keys', '-t', name, '-l', cmd]);
     await run(target, ['send-keys', '-t', name, 'Enter']);
   }
 

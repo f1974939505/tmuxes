@@ -12,7 +12,8 @@ export const SESSION_FORMAT = [
   '#{session_windows}',
   '#{session_attached}',
   '#{session_created}',
-  '#{session_activity}', // epoch of last activity in any window (idle detection)
+  '#{session_activity}', // epoch of last activity in any window (winlocal idle fallback)
+  '#{@tmuxes_attn}', // attention event set by an agent hook: "<reason>:<nonce>" (or empty)
   '#{session_name}', // free-form → must be last
 ].join(SEP);
 
@@ -35,6 +36,8 @@ export interface SessionInfo {
   idleSeconds?: number;
   /** True once we've observed this session produce output during this watch. */
   observedActive?: boolean;
+  /** Attention event from an agent hook — "<reason>:<nonce>", empty if unset. */
+  attn?: string;
 }
 
 export interface WindowInfo {
@@ -55,7 +58,8 @@ export function parseSessions(stdout: string): SessionInfo[] {
         attached: Number(parts[1]) > 0,
         created: Number(parts[2]) || 0,
         lastActivity: Number(parts[3]) || 0,
-        name: parts.slice(4).join(SEP), // name may legitimately contain "|"
+        attn: parts[4] || '',
+        name: parts.slice(5).join(SEP), // name may legitimately contain "|"
       };
     })
     .filter((s) => s.name);

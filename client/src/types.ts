@@ -24,6 +24,8 @@ export interface SessionInfo {
   idleSeconds?: number;
   /** the server has seen this session produce output during this watch */
   observedActive?: boolean;
+  /** attention event from an agent hook — "<reason>:<nonce>", empty if unset */
+  attn?: string;
 }
 
 /** Why a session is asking for attention. */

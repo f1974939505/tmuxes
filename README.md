@@ -216,10 +216,18 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 | 在模式里搜索 | `C-s` 向前 / `C-r` 向后（默认 emacs 风格） |
 | 退出复制 / 滚动模式 | `q` |
 | **开鼠标滚轮**（直接滚轮翻 + 鼠标选） | 执行 `tmux set -g mouse on`，或写进 `~/.tmux.conf` |
+| **按住 Shift 用鼠标**（绕过 tmux 鼠标模式） | 按住 `Shift` 拖动选中文字 → 浏览器右键「复制」；右键「粘贴」 |
 
+> 提示：开了 `mouse on` 后鼠标归 tmux 管;想用浏览器原生的**框选 + 右键复制粘贴**,**按住 `Shift`** 再拖动 / 右键即可。
+>
 > 提示：在 tmuxes 里**新建 / 选择 / 重命名 / 杀会话**直接点 UI 就行，不用记命令；但**往上滚看历史、复制文字、拆面板**这些是 tmux 自己的功能，得用上面的快捷键。
 
 ## 📋 更新日志
+
+### 0.1.3
+- **修复 (Windows)**:`Ctrl+C` 现在真的能停掉服务了。之前的修复有 bug(readline 没进入终端模式,信号桥接形同虚设),而且 node-pty 的 ConPTY 会破坏宿主进程的 `CTRL_C_EVENT → SIGINT` 通路。改为**直接从控制台读取 `Ctrl+C` 原始字节(0x03)**,绕开被破坏的信号机制。`Ctrl+Break` 同样可用。
+- **改进:完成 / 提问提醒改用 agent hook(修 SSH 虚假提醒)**。旧的 idle 启发式在 SSH 集群上经常误报(agent 在排队 / 慢 I/O 时长时间不输出 → 被误判成「完成」)。现在启动 Claude Code / Codex 时**自动注入 hook**:agent 在完成 / 需要决策时,通过其自身 tmux 会话里的 `@tmuxes_attn` 选项上报,tmuxes 经已有的管理轮询读取(SSH 友好,无需反向网络)。Claude:`Stop`=完成 / `Notification`=决策;Codex:仅完成。SSH/本地/WSL 不再有 idle 误报;原生 Windows shell 仍用 idle 兜底。可用 `TMUXES_NO_AUTOHOOK=1` 关闭注入。
+- **变更:恢复浏览器原生右键**。终端区域不再拦截右键菜单。想用浏览器原生**框选 + 右键复制粘贴**,**按住 `Shift`** 拖动 / 右键即可(绕过 tmux 鼠标模式)。
 
 ### 0.1.2
 - **新增:完成 / 提问提醒**。零配置监测每个会话——agent 跑完或停下来等你决策时,通过**侧边栏徽标 + 提示音 + 后台标签页标题闪烁**提醒你,并区分「✋ 等待输入」与「✓ 已完成」。原理:用 `session_activity` 做抗时钟偏差的空闲检测,触发时 `capture-pane` 抓屏分类。设置面板可开关提醒与提示音。

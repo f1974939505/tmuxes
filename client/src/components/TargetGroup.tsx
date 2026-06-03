@@ -14,7 +14,7 @@ interface Props {
 }
 
 const POLL_MS = 5000;
-/** Seconds of observed silence (after activity) before we flag a session. */
+/** Native Windows shells have no tmux/hooks — fall back to observed silence. */
 const ATTENTION_IDLE_SEC = 10;
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
@@ -38,30 +38,49 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
-  // Sessions currently flagged as needing attention (edge detection per poll).
+  // winlocal: sessions currently flagged via idle edge detection.
   const alerting = useRef<Set<string>>(new Set());
+  // tmux targets: last-seen @tmuxes_attn value per session (hook-event edges).
+  const lastAttn = useRef<Map<string, string>>(new Map());
 
   const detectAttention = useCallback(
     (sessions: SessionInfo[]) => {
       const present = new Set<string>();
       for (const s of sessions) {
         present.add(s.name);
-        const idle = !!s.observedActive && (s.idleSeconds ?? 0) >= ATTENTION_IDLE_SEC;
-        const wasAlerting = alerting.current.has(s.name);
-        if (idle && !wasAlerting) {
-          alerting.current.add(s.name);
-          attention.fire(target.id, s.name);
-        } else if (!idle && wasAlerting) {
-          alerting.current.delete(s.name);
-          attention.clearAlert(target.id, s.name);
+        if (target.kind === 'winlocal') {
+          // No tmux/hooks here — fall back to server idle detection.
+          const idle = !!s.observedActive && (s.idleSeconds ?? 0) >= ATTENTION_IDLE_SEC;
+          const wasAlerting = alerting.current.has(s.name);
+          if (idle && !wasAlerting) {
+            alerting.current.add(s.name);
+            attention.fire(target.id, s.name);
+          } else if (!idle && wasAlerting) {
+            alerting.current.delete(s.name);
+            attention.clearAlert(target.id, s.name);
+          }
+        } else {
+          // tmux targets: an agent hook set @tmuxes_attn = "<reason>:<nonce>".
+          const attn = s.attn ?? '';
+          const seen = lastAttn.current.has(s.name);
+          const prev = lastAttn.current.get(s.name);
+          lastAttn.current.set(s.name, attn);
+          // Baseline on first sight (skip stale values), then fire on each change.
+          if (seen && attn && attn !== prev) {
+            const reason = attn.startsWith('decision') ? 'decision' : 'done';
+            attention.fire(target.id, s.name, reason);
+          }
         }
       }
       // Forget sessions that vanished.
       for (const name of [...alerting.current]) {
         if (!present.has(name)) alerting.current.delete(name);
       }
+      for (const name of [...lastAttn.current.keys()]) {
+        if (!present.has(name)) lastAttn.current.delete(name);
+      }
     },
-    [attention, target.id],
+    [attention, target.id, target.kind],
   );
 
   const refresh = useCallback(async () => {
