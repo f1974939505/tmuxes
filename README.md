@@ -10,6 +10,7 @@
 横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器。
 
 <p>
+<a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
 <img alt="platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%2011-2b2b2b?style=flat-square">
 <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black">
 <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white">
@@ -195,6 +196,62 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 ```bash
 npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 ```
+
+## 🐧 tmux 速查表
+
+> tmux 的「前缀键」默认是 **`Ctrl+b`**（下面记作 `C-b`）—— 先按它，松开，再按后面的键。
+> 在网页终端里**最常用的是滚动 / 复制模式**（往上看历史输出、复制文字）。
+
+### 滚动 & 复制（最常用）
+
+| 操作 | 按键 |
+|---|---|
+| 进入复制 / 滚动模式 | `C-b` 然后 `[` |
+| 在模式里上下翻 | `↑ ↓`、`PageUp` / `PageDown` |
+| 开始选择 → 复制 | `Space` 定起点 → 移动光标选中 → `Enter` 复制 |
+| 把复制的内容粘回来 | `C-b` 然后 `]` |
+| 在模式里搜索 | `C-s` 向前 / `C-r` 向后（默认 emacs 风格） |
+| 退出复制 / 滚动模式 | `q` |
+| **开鼠标滚轮**（直接滚轮翻 + 鼠标选） | 执行 `tmux set -g mouse on`，或写进 `~/.tmux.conf` |
+
+### 会话 Session
+
+| 操作 | 命令 / 按键 |
+|---|---|
+| 列出会话 | `tmux ls` |
+| 新建 / 接入会话 | `tmux new -s <名>` / `tmux attach -t <名>` |
+| 脱离（后台继续跑） | `C-b` 然后 `d` |
+| 重命名当前会话 | `C-b` 然后 `$` |
+| 会话间切换 | `C-b` 然后 `s` |
+
+### 窗口 Window
+
+| 操作 | 按键 |
+|---|---|
+| 新建窗口 | `C-b` 然后 `c` |
+| 重命名窗口 | `C-b` 然后 `,` |
+| 上 / 下一个窗口 | `C-b` 然后 `p` / `n` |
+| 跳到第 N 个窗口 | `C-b` 然后数字 |
+| 窗口列表 | `C-b` 然后 `w` |
+
+### 面板 Pane（分屏）
+
+| 操作 | 按键 |
+|---|---|
+| 垂直 / 水平拆分 | `C-b` 然后 `%` / `"` |
+| 在面板间移动 | `C-b` 然后 `↑ ↓ ← →` |
+| 最大化 / 还原当前面板 | `C-b` 然后 `z` |
+| 关闭面板 | `C-b` 然后 `x` |
+
+### 其它
+
+| 操作 | 按键 |
+|---|---|
+| 查看全部快捷键 | `C-b` 然后 `?` |
+| 进入 tmux 命令行 | `C-b` 然后 `:`（例：输 `set -g mouse on`） |
+| 杀掉会话 | `tmux kill-session -t <名>` |
+
+> 提示：在 tmuxes 里**新建 / 选择 / 重命名 / 杀会话**直接点 UI 就行，不用记命令；但**往上滚看历史、复制文字、拆面板**这些是 tmux 自己的功能，得用上面的快捷键。
 
 <div align="center">
 <sub>用 React、TypeScript、node-pty &amp; xterm.js 打造 —— 外加大量 tmux。盯娃愉快。🤖</sub>

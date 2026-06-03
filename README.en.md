@@ -10,6 +10,7 @@
 live across **Local · SSH · WSL**, with a file browser of every agent's working directory.
 
 <p>
+<a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
 <img alt="platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%2011-2b2b2b?style=flat-square">
 <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black">
 <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white">
@@ -195,6 +196,62 @@ By design it:
 ```bash
 npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 ```
+
+## 🐧 tmux cheat sheet
+
+> tmux's "prefix" key is **`Ctrl+b`** by default (written `C-b` below) — press it, release, then press the next key.
+> In a web terminal the thing you'll reach for most is **scroll / copy mode** (scroll back through output, copy text).
+
+### Scroll & copy (most used)
+
+| Action | Keys |
+|---|---|
+| Enter copy / scroll mode | `C-b` then `[` |
+| Scroll in that mode | `↑ ↓`, `PageUp` / `PageDown` |
+| Select → copy | `Space` to start → move cursor → `Enter` to copy |
+| Paste it back | `C-b` then `]` |
+| Search in that mode | `C-s` forward / `C-r` backward (emacs-style default) |
+| Quit copy / scroll mode | `q` |
+| **Enable mouse wheel** (scroll + select with the mouse) | run `tmux set -g mouse on`, or put it in `~/.tmux.conf` |
+
+### Sessions
+
+| Action | Command / keys |
+|---|---|
+| List sessions | `tmux ls` |
+| New / attach | `tmux new -s <name>` / `tmux attach -t <name>` |
+| Detach (keeps running) | `C-b` then `d` |
+| Rename current session | `C-b` then `$` |
+| Switch between sessions | `C-b` then `s` |
+
+### Windows
+
+| Action | Keys |
+|---|---|
+| New window | `C-b` then `c` |
+| Rename window | `C-b` then `,` |
+| Previous / next window | `C-b` then `p` / `n` |
+| Jump to window N | `C-b` then a digit |
+| Window list | `C-b` then `w` |
+
+### Panes (splits)
+
+| Action | Keys |
+|---|---|
+| Split vertical / horizontal | `C-b` then `%` / `"` |
+| Move between panes | `C-b` then `↑ ↓ ← →` |
+| Zoom (maximize / restore) | `C-b` then `z` |
+| Close pane | `C-b` then `x` |
+
+### Misc
+
+| Action | Keys |
+|---|---|
+| Show all key bindings | `C-b` then `?` |
+| tmux command prompt | `C-b` then `:` (e.g. type `set -g mouse on`) |
+| Kill a session | `tmux kill-session -t <name>` |
+
+> Tip: in tmuxes you can **create / select / rename / kill** sessions right in the UI — no need to memorize those. But **scrolling back, copying text, and splitting panes** are tmux's own features, so use the keys above.
 
 <div align="center">
 <sub>Built with React, TypeScript, node-pty &amp; xterm.js — and a lot of tmux. Happy supervising. 🤖</sub>

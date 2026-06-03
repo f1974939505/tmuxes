@@ -11,13 +11,12 @@ Usage:
   tmuxes [options]
 
 Options:
-  --port <n>     Port to listen on            (default 7420, env TMUXES_PORT)
-  --host <addr>  Bind address                 (default 127.0.0.1, env TMUXES_HOST)
+  --port <n>     Port to listen on   (default 7420, env TMUXES_PORT)
   --no-open      Do not open the browser
   -h, --help     Show this help
 
-Then open http://127.0.0.1:7420 (opens automatically unless --no-open).
-Requires tmux installed on the machine/host you connect to.`);
+Binds to 127.0.0.1 only (no-auth local UI). Then open http://127.0.0.1:7420
+(opens automatically unless --no-open). Requires tmux on the host you connect to.`);
   process.exit(0);
 }
 
@@ -28,8 +27,6 @@ function flag(name) {
 
 const port = flag('--port');
 if (port) process.env.TMUXES_PORT = port;
-const host = flag('--host');
-if (host) process.env.TMUXES_HOST = host;
 
 // Open the browser by default (the "one-click run" experience), unless the
 // user opted out or already set TMUXES_OPEN.
