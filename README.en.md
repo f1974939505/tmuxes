@@ -138,7 +138,7 @@ Note: the top-right buttons send a hooked `claude` / `codex` command into the cu
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  Key/agent auth must already work from a normal shell. For a brand-new host, accept its host key once in a regular terminal first.
+  Key/agent auth must already work from a normal shell. For a brand-new host, accept its host key once in a regular terminal first. To avoid repeated SSH handshakes for short management calls, Unix-like platforms keep reusing one long-lived OpenSSH connection with `ControlMaster` / `ControlPersist`; tmuxes no longer forces `ServerAliveInterval`, so add keepalives to your own `~/.ssh/config` only when your site allows them. If the shared connection is interrupted, tmuxes bypasses it and retries once; if that still fails, the frontend shows a warning and pauses automatic polling for that SSH target. Click `Reconnect` to try again manually.
 
 ## 💻 Requirements
 

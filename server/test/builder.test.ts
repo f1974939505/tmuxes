@@ -30,22 +30,16 @@ describe('localTmux', () => {
 });
 
 describe('remoteTmux management (tty:false)', () => {
-  it('uses BatchMode, ConnectTimeout, port, and quotes remote args', () => {
+  it('uses BatchMode, ConnectTimeout, connection sharing, port, and quotes remote args', () => {
     const argv = remoteTmux(sshFull, ['list-sessions', '-F', 'a b'], { tty: false });
-    expect(argv).toEqual([
-      'ssh',
-      '-o',
-      'BatchMode=yes',
-      '-o',
-      'ConnectTimeout=8',
-      '-p',
-      '2222',
-      'alice@web1',
-      'tmux',
-      `'list-sessions'`,
-      `'-F'`,
-      `'a b'`,
-    ]);
+    expect(argv.slice(0, 5)).toEqual(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8']);
+    expect(argv).toContain('ControlMaster=auto');
+    expect(argv).toContain('ControlPersist=yes');
+    expect(argv.some((arg) => arg.startsWith('ControlPath='))).toBe(true);
+    expect(argv).toContain('-p');
+    expect(argv).toContain('2222');
+    expect(argv).toContain('alice@web1');
+    expect(argv.slice(-4)).toEqual(['tmux', `'list-sessions'`, `'-F'`, `'a b'`]);
   });
   it('uses the bare alias when no user/port', () => {
     const argv = remoteTmux(sshAlias, ['kill-session', '-t', 'work'], { tty: false });
@@ -53,13 +47,22 @@ describe('remoteTmux management (tty:false)', () => {
     expect(argv).not.toContain('-p');
     expect(argv[argv.length - 1]).toBe(`'work'`);
   });
+  it('can disable connection sharing for a one-shot reconnect attempt', () => {
+    const argv = remoteTmux(sshAlias, ['list-sessions'], { tty: false, multiplex: false });
+    expect(argv).toContain('ControlMaster=no');
+    expect(argv).not.toContain('ControlMaster=auto');
+    expect(argv).not.toContain('ControlPersist=yes');
+    expect(argv.some((arg) => arg.startsWith('ControlPath='))).toBe(false);
+  });
 });
 
 describe('remoteTmux interactive (tty:true)', () => {
-  it('forces a PTY with -tt and does not quote args', () => {
+  it('forces a PTY with -tt, shares the ssh connection, and does not quote args', () => {
     const argv = remoteTmux(sshFull, ['new-session', '-A', '-s', 'work'], { tty: true });
     expect(argv).toContain('-tt');
-    expect(argv).toContain('ServerAliveInterval=30');
+    expect(argv).toContain('ControlMaster=auto');
+    expect(argv).toContain('ControlPersist=yes');
+    expect(argv.some((arg) => arg.startsWith('ServerAliveInterval='))).toBe(false);
     expect(argv.slice(-4)).toEqual(['new-session', '-A', '-s', 'work']);
   });
 });

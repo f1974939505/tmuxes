@@ -10,7 +10,8 @@ export const config = {
     connectTimeoutMgmt: 8,
     /** Interactive attach is allowed a little longer. */
     connectTimeoutTty: 10,
-    serverAliveInterval: 30,
+    /** Keep the OpenSSH control master alive for long-lived SSH reuse. */
+    controlPersist: 'yes',
   },
 
   /**

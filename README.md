@@ -138,7 +138,7 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  密钥 / agent 认证必须在普通 shell 里已经能用。全新主机请先在普通终端里接受一次它的 host key。
+  密钥 / agent 认证必须在普通 shell 里已经能用。全新主机请先在普通终端里接受一次它的 host key。为避免短命管理命令反复新建 SSH 连接，类 Unix 平台会通过 OpenSSH `ControlMaster` / `ControlPersist` 长期复用同一条 SSH 连接；tmuxes 不再强制设置 `ServerAliveInterval`，如需保活请按所在平台规则写进你自己的 `~/.ssh/config`。如果复用连接中断，tmuxes 会绕过旧连接重试一次；仍失败时会在前端页面提示并暂停该 SSH 目标的自动轮询，点击 `Reconnect` 可手动再试一次。
 
 ## 💻 环境要求
 

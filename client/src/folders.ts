@@ -82,10 +82,11 @@ export interface FoldersApi {
   moveFolder: (id: string, parentId: string | null) => void;
 }
 
-export function useFolders(targetId: string, enabled: boolean): FoldersApi {
+export function useFolders(targetId: string, enabled: boolean, pauseOnError = false): FoldersApi {
   const [slice, setSlice] = useState<TargetFolders>(() => loadCache(targetId));
   const sliceRef = useRef(slice);
   const pendingSave = useRef(false);
+  const pollingPaused = useRef(false);
   const saveTimer = useRef<number | undefined>(undefined);
 
   const applySlice = useCallback((next: TargetFolders) => {
@@ -98,21 +99,26 @@ export function useFolders(targetId: string, enabled: boolean): FoldersApi {
       pendingSave.current = true;
       return api
         .saveFolders(targetId, { folders: data.folders, assign: data.assign })
-        .then(() => saveCache(targetId, data))
+        .then(() => {
+          pollingPaused.current = false;
+          saveCache(targetId, data);
+        })
         .catch(() => {
+          if (pauseOnError) pollingPaused.current = true;
           /* offline / host down — cache keeps it; retried on next change */
         })
         .finally(() => {
           pendingSave.current = false;
         });
     },
-    [targetId],
+    [targetId, pauseOnError],
   );
 
   // Load from the target on open (with localStorage migration + cache fallback).
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
+    pollingPaused.current = false;
     const cached = loadCache(targetId);
     applySlice(cached);
     api
@@ -130,6 +136,8 @@ export function useFolders(targetId: string, enabled: boolean): FoldersApi {
         }
       })
       .catch(() => {
+        if (cancelled) return;
+        if (pauseOnError) pollingPaused.current = true;
         /* keep cache */
       });
     return () => {
@@ -141,6 +149,7 @@ export function useFolders(targetId: string, enabled: boolean): FoldersApi {
   useEffect(() => {
     if (!enabled) return;
     const id = window.setInterval(() => {
+      if (pollingPaused.current) return;
       if (pendingSave.current) return;
       api
         .getFolders(targetId)
@@ -153,11 +162,12 @@ export function useFolders(targetId: string, enabled: boolean): FoldersApi {
           }
         })
         .catch(() => {
+          if (pauseOnError) pollingPaused.current = true;
           /* transient — keep current */
         });
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [targetId, enabled, applySlice]);
+  }, [targetId, enabled, pauseOnError, applySlice]);
 
   const update = useCallback(
     (fn: (prev: TargetFolders) => TargetFolders) => {

@@ -1,6 +1,10 @@
-import { homedir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { config } from '../config.js';
 import { sshDestination, type Target } from '../targets.js';
+import { isWindows } from '../platform.js';
 
 /**
  * Single-quote a string for a POSIX shell. Needed ONLY for the remote ssh path:
@@ -17,47 +21,95 @@ export function localTmux(sub: string[]): string[] {
   return ['tmux', ...sub];
 }
 
+function sshControlDir(): string | null {
+  // OpenSSH connection sharing avoids repeated TCP/auth handshakes for sidebar
+  // polling and file operations. Windows OpenSSH does not reliably support Unix
+  // control sockets, so leave that platform on plain ssh.
+  if (isWindows) return null;
+
+  const uid = process.getuid?.() ?? 'user';
+  const dir = join(tmpdir(), `tmuxes-ssh-${uid}`);
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  } catch {
+    return null;
+  }
+  return dir;
+}
+
+export function sshControlPath(t: Target): string | null {
+  const dir = sshControlDir();
+  if (!dir) return null;
+  const key = `${sshDestination(t)}:${t.port ?? 22}:${t.id}`;
+  return join(dir, createHash('sha1').update(key).digest('hex'));
+}
+
+function sshMultiplexArgs(t: Target): string[] {
+  const path = sshControlPath(t);
+  if (!path) return [];
+
+  return [
+    '-o',
+    'ControlMaster=auto',
+    '-o',
+    `ControlPath=${path}`,
+    '-o',
+    `ControlPersist=${config.ssh.controlPersist}`,
+  ];
+}
+
+export function sshClientArgs(
+  t: Target,
+  opts: { tty?: boolean; batchMode?: boolean; connectTimeout: number; multiplex?: boolean },
+): string[] {
+  const portArgs = t.port ? ['-p', String(t.port)] : [];
+  return [
+    'ssh',
+    ...(opts.tty ? ['-tt'] : []),
+    ...(opts.batchMode ? ['-o', 'BatchMode=yes'] : []),
+    '-o',
+    `ConnectTimeout=${opts.connectTimeout}`,
+    ...(opts.multiplex === false ? ['-o', 'ControlMaster=no'] : sshMultiplexArgs(t)),
+    ...portArgs,
+    sshDestination(t),
+  ];
+}
+
 /**
  * Remote tmux argv via the system ssh binary.
  * - tty:false (management) → BatchMode + short ConnectTimeout so it fails fast
  *   and never hangs on a prompt. Remote args are sshQuote'd.
  * - tty:true (interactive attach) → -tt forces a remote PTY (and SIGWINCH
  *   propagation). BatchMode is left default so host-key/agent prompts surface
- *   in the terminal. Remote args are NOT quoted here: this argv is handed to a
- *   PTY where the remote command words go to ssh as separate argv elements and
- *   our inputs are already allowlist-validated.
+ *   in the terminal. tmuxes does not force ServerAliveInterval; users can set
+ *   keepalives in ~/.ssh/config if their site allows them. Remote args are NOT
+ *   quoted here: this argv is handed to a PTY where the remote command words go
+ *   to ssh as separate argv elements and our inputs are already allowlist-
+ *   validated.
  */
 export function remoteTmux(
   t: Target,
   sub: string[],
-  opts: { tty: boolean },
+  opts: { tty: boolean; multiplex?: boolean },
 ): string[] {
-  const dest = sshDestination(t);
-  const portArgs = t.port ? ['-p', String(t.port)] : [];
-
   if (opts.tty) {
     return [
-      'ssh',
-      '-tt',
-      '-o',
-      `ConnectTimeout=${config.ssh.connectTimeoutTty}`,
-      '-o',
-      `ServerAliveInterval=${config.ssh.serverAliveInterval}`,
-      ...portArgs,
-      dest,
+      ...sshClientArgs(t, {
+        tty: true,
+        connectTimeout: config.ssh.connectTimeoutTty,
+        multiplex: opts.multiplex,
+      }),
       'tmux',
       ...sub,
     ];
   }
 
   return [
-    'ssh',
-    '-o',
-    'BatchMode=yes',
-    '-o',
-    `ConnectTimeout=${config.ssh.connectTimeoutMgmt}`,
-    ...portArgs,
-    dest,
+    ...sshClientArgs(t, {
+      batchMode: true,
+      connectTimeout: config.ssh.connectTimeoutMgmt,
+      multiplex: opts.multiplex,
+    }),
     'tmux',
     ...sub.map(sshQuote),
   ];
@@ -81,22 +133,23 @@ export function wslTmux(distro: string, sub: string[], opts: { tty: boolean }): 
  * display-message, …). Same transport rules as management tmux: local runs the
  * argv directly, wsl uses `--exec` (no shell), ssh uses BatchMode + sshQuote.
  */
-export function commandArgv(t: Target, argv: string[]): { file: string; args: string[] } {
+export function commandArgv(
+  t: Target,
+  argv: string[],
+  opts: { multiplex?: boolean } = {},
+): { file: string; args: string[] } {
   let full: string[];
   if (t.kind === 'local') {
     full = argv;
   } else if (t.kind === 'wsl') {
     full = ['wsl.exe', '-d', t.distro ?? '', '--exec', ...argv];
   } else {
-    const portArgs = t.port ? ['-p', String(t.port)] : [];
     full = [
-      'ssh',
-      '-o',
-      'BatchMode=yes',
-      '-o',
-      `ConnectTimeout=${config.ssh.connectTimeoutMgmt}`,
-      ...portArgs,
-      sshDestination(t),
+      ...sshClientArgs(t, {
+        batchMode: true,
+        connectTimeout: config.ssh.connectTimeoutMgmt,
+        multiplex: opts.multiplex,
+      }),
       ...argv.map(sshQuote),
     ];
   }
@@ -104,8 +157,12 @@ export function commandArgv(t: Target, argv: string[]): { file: string; args: st
 }
 
 /** Build a management argv (no PTY) for a local / ssh / wsl target. */
-export function managementArgv(t: Target, sub: string[]): { file: string; args: string[] } {
-  return commandArgv(t, ['tmux', ...sub]);
+export function managementArgv(
+  t: Target,
+  sub: string[],
+  opts: { multiplex?: boolean } = {},
+): { file: string; args: string[] } {
+  return commandArgv(t, ['tmux', ...sub], opts);
 }
 
 /**
@@ -115,14 +172,18 @@ export function managementArgv(t: Target, sub: string[]): { file: string; args: 
  * - ssh   → the remote command already runs from the remote `$HOME`; tmux inherits.
  * `sub` is the new-session subcommand (named or auto-named `-P` form).
  */
-export function newSessionArgv(t: Target, sub: string[]): { file: string; args: string[] } {
+export function newSessionArgv(
+  t: Target,
+  sub: string[],
+  opts: { multiplex?: boolean } = {},
+): { file: string; args: string[] } {
   if (t.kind === 'local') {
     return { file: 'tmux', args: [...sub, '-c', homedir()] };
   }
   if (t.kind === 'wsl') {
     return { file: 'wsl.exe', args: ['-d', t.distro ?? '', '--cd', '~', '--exec', 'tmux', ...sub] };
   }
-  return commandArgv(t, ['tmux', ...sub]);
+  return commandArgv(t, ['tmux', ...sub], opts);
 }
 
 /** Build an interactive attach argv (run inside a PTY) for a local / ssh / wsl target. */

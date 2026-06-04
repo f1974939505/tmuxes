@@ -35,11 +35,14 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const folders = useFolders(target.id, expanded);
+  const folders = useFolders(target.id, expanded, target.kind === 'ssh');
   const attention = useAttention();
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
+  // Avoid repeated SSH login failures that can look like brute-force attempts.
+  // Collapse/re-expand the target to retry after fixing keys, VPN, or host access.
+  const pollingPaused = useRef(false);
   // Last-seen agent hook event key per session; first sight is a baseline.
   const lastAgentEvent = useRef<Map<string, string>>(new Map());
 
@@ -87,6 +90,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   );
 
   const refresh = useCallback(async () => {
+    if (pollingPaused.current) return;
     if (inFlight.current) return;
     inFlight.current = true;
     setLoading(true);
@@ -97,14 +101,22 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'failed to list sessions');
+      if (target.kind === 'ssh') pollingPaused.current = true;
     } finally {
       setLoading(false);
       inFlight.current = false;
     }
-  }, [target.id, detectAttention]);
+  }, [target.id, target.kind, detectAttention]);
+
+  const manualReconnect = useCallback(() => {
+    pollingPaused.current = false;
+    setError(null);
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     if (!expanded) return;
+    pollingPaused.current = false;
     void refresh();
     const id = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(id);
@@ -174,7 +186,16 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
 
       {expanded && (
         <div className="session-list">
-          {error && <div className="error-line">{error}</div>}
+          {error && (
+            <div className="error-line">
+              <span>{error}</span>
+              {target.kind === 'ssh' && (
+                <button onClick={manualReconnect} disabled={loading}>
+                  Reconnect
+                </button>
+              )}
+            </div>
+          )}
 
           <SessionTree
             targetId={target.id}

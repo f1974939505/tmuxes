@@ -1,6 +1,6 @@
-import { runCommand } from '../exec.js';
 import { managementArgv, newSessionArgv } from './builder.js';
 import type { Target } from '../targets.js';
+import { runTargetCommand } from '../targetCommand.js';
 import {
   AGENT_OPTION,
   agentValue,
@@ -42,8 +42,9 @@ function timeoutFor(target: Target): number | undefined {
 }
 
 async function run(target: Target, sub: string[]) {
-  const { file, args } = managementArgv(target, sub);
-  return runCommand(file, args, { timeoutMs: timeoutFor(target) });
+  return runTargetCommand(target, (opts) => managementArgv(target, sub, opts), {
+    timeoutMs: timeoutFor(target),
+  });
 }
 
 function firstStderrLine(stderr: string): string {
@@ -94,8 +95,12 @@ export async function createSession(
   // New sessions always start in the user's home directory (newSessionArgv).
   if (name) {
     if (!isValidSessionName(name)) throw new TmuxError(400, 'invalid session name');
-    const { file, args } = newSessionArgv(target, ['new-session', '-d', '-s', name]);
-    const r = await runCommand(file, args, { timeoutMs: timeoutFor(target) });
+    const sessionName = name;
+    const r = await runTargetCommand(
+      target,
+      (opts) => newSessionArgv(target, ['new-session', '-d', '-s', sessionName], opts),
+      { timeoutMs: timeoutFor(target) },
+    );
     if (r.code !== 0) {
       if (/duplicate session/i.test(r.stderr)) {
         throw new TmuxError(409, `session "${name}" already exists`);
@@ -104,8 +109,11 @@ export async function createSession(
     }
   } else {
     // Let tmux assign a numeric name and report it back.
-    const { file, args } = newSessionArgv(target, ['new-session', '-d', '-P', '-F', '#{session_name}']);
-    const r = await runCommand(file, args, { timeoutMs: timeoutFor(target) });
+    const r = await runTargetCommand(
+      target,
+      (opts) => newSessionArgv(target, ['new-session', '-d', '-P', '-F', '#{session_name}'], opts),
+      { timeoutMs: timeoutFor(target) },
+    );
     if (r.code !== 0) throw new TmuxError(502, firstStderrLine(r.stderr));
     name = r.stdout.trim();
   }

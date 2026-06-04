@@ -1,9 +1,9 @@
 import { promises as fsp } from 'node:fs';
 import { basename as posixBasename, dirname as posixDirname } from 'node:path/posix';
-import { runCommand } from './exec.js';
 import { commandArgv } from './tmux/builder.js';
 import { TmuxError } from './tmux/sessions.js';
 import type { Target } from './targets.js';
+import { runTargetCommand } from './targetCommand.js';
 
 const REMOTE_TIMEOUT_MS = 15_000;
 /** Max bytes returned for a file preview. */
@@ -104,21 +104,12 @@ export async function resolveScopedPath(
 }
 
 async function run(t: Target, argv: string[]) {
-  const { file, args } = commandArgv(t, argv);
-  return runCommand(file, args, { timeoutMs: timeout(t) });
+  return runTargetCommand(t, (opts) => commandArgv(t, argv, opts), { timeoutMs: timeout(t) });
 }
 
 /** The working directory of a session's active pane (tmux #{pane_current_path}). */
 export async function getSessionCwd(t: Target, session: string): Promise<string> {
-  const { file, args } = commandArgv(t, [
-    'tmux',
-    'display-message',
-    '-p',
-    '-t',
-    session,
-    '#{pane_current_path}',
-  ]);
-  const r = await runCommand(file, args, { timeoutMs: timeout(t) });
+  const r = await run(t, ['tmux', 'display-message', '-p', '-t', session, '#{pane_current_path}']);
   if (r.code !== 0) {
     if (/can't find|no server running|session not found/i.test(r.stderr)) {
       throw new TmuxError(404, `session "${session}" not found`);
@@ -237,8 +228,10 @@ export async function writeFile(t: Target, path: string, content: string): Promi
 
   // `tee` opens the file with O_TRUNC|O_CREAT, so shorter content can't leave a
   // stale tail. Its stdout echo of the content is ignored.
-  const { file, args } = commandArgv(t, ['tee', '--', path]);
-  const r = await runCommand(file, args, { timeoutMs: REMOTE_TIMEOUT_MS, input: content });
+  const r = await runTargetCommand(t, (opts) => commandArgv(t, ['tee', '--', path], opts), {
+    timeoutMs: REMOTE_TIMEOUT_MS,
+    input: content,
+  });
   if (r.code !== 0) {
     if (/No such file|not found/i.test(r.stderr)) throw new TmuxError(404, 'directory not found');
     if (/Is a directory/i.test(r.stderr)) throw new TmuxError(400, 'path is a directory');

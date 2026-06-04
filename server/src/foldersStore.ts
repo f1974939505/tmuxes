@@ -1,11 +1,11 @@
 import { promises as fsp } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { runCommand } from './exec.js';
 import { config } from './config.js';
-import { sshQuote } from './tmux/builder.js';
-import { sshDestination, type Target } from './targets.js';
+import { sshClientArgs, sshQuote } from './tmux/builder.js';
+import type { Target } from './targets.js';
 import { TmuxError } from './tmux/sessions.js';
+import { runTargetCommand } from './targetCommand.js';
 
 /**
  * Sidebar folder organization, stored ON THE TARGET so it follows the cluster:
@@ -33,7 +33,11 @@ function localPath(): string {
   return join(homedir(), '.config', 'tmuxes', 'folders.json');
 }
 
-function remoteArgv(t: Target, script: string): { file: string; args: string[] } {
+function remoteArgv(
+  t: Target,
+  script: string,
+  opts: { multiplex?: boolean } = {},
+): { file: string; args: string[] } {
   if (t.kind === 'wsl') {
     // --cd ~ → run from the distro home; sh -c handles the redirections.
     return { file: 'wsl.exe', args: ['-d', t.distro ?? '', '--cd', '~', '--exec', 'sh', '-c', script] };
@@ -43,17 +47,23 @@ function remoteArgv(t: Target, script: string): { file: string; args: string[] }
   return {
     file: 'ssh',
     args: [
-      '-o',
-      'BatchMode=yes',
-      '-o',
-      `ConnectTimeout=${config.ssh.connectTimeoutMgmt}`,
-      ...(t.port ? ['-p', String(t.port)] : []),
-      sshDestination(t),
+      ...sshClientArgs(t, {
+        batchMode: true,
+        connectTimeout: config.ssh.connectTimeoutMgmt,
+        multiplex: opts.multiplex,
+      }).slice(1),
       'sh',
       '-c',
       sshQuote(script),
     ],
   };
+}
+
+function runRemote(t: Target, script: string, input?: string) {
+  return runTargetCommand(t, (opts) => remoteArgv(t, script, opts), {
+    timeoutMs: REMOTE_TIMEOUT_MS,
+    input,
+  });
 }
 
 async function readRaw(t: Target): Promise<string> {
@@ -67,8 +77,7 @@ async function readRaw(t: Target): Promise<string> {
   }
   // `2>/dev/null` so a missing file produces empty stdout + no stderr; a real
   // transport failure (ssh down) prints to stderr → surfaced as 502.
-  const { file, args } = remoteArgv(t, `cat ${REL} 2>/dev/null`);
-  const r = await runCommand(file, args, { timeoutMs: REMOTE_TIMEOUT_MS });
+  const r = await runRemote(t, `cat ${REL} 2>/dev/null`);
   if (r.code === 0) return r.stdout;
   if (r.stderr.trim()) throw new TmuxError(502, r.stderr.trim().split('\n')[0]);
   return ''; // missing file
@@ -80,8 +89,7 @@ async function writeRaw(t: Target, raw: string): Promise<void> {
     await fsp.writeFile(localPath(), raw, 'utf8');
     return;
   }
-  const { file, args } = remoteArgv(t, `mkdir -p .config/tmuxes && cat > ${REL}`);
-  const r = await runCommand(file, args, { timeoutMs: REMOTE_TIMEOUT_MS, input: raw });
+  const r = await runRemote(t, `mkdir -p .config/tmuxes && cat > ${REL}`, raw);
   if (r.code !== 0) throw new TmuxError(502, r.stderr.trim().split('\n')[0] || 'cannot write folders');
 }
 

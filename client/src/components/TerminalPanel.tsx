@@ -25,6 +25,11 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
   const [generation, setGeneration] = useState(0);
   const [startingAgent, setStartingAgent] = useState<LaunchAgent | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
+  const terminalRetryUsed = useRef(false);
+
+  useEffect(() => {
+    terminalRetryUsed.current = false;
+  }, [targetId, session]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -38,6 +43,14 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
     let lastCols = initial.cols;
     let lastRows = initial.rows;
     let exited = false;
+
+    const retryOnce = (): boolean => {
+      if (targetKind !== 'ssh' || terminalRetryUsed.current) return false;
+      terminalRetryUsed.current = true;
+      setStatus({ kind: 'connecting' });
+      setGeneration((g) => g + 1);
+      return true;
+    };
 
     const socket = createTmuxSocket(
       terminalSocketUrl(targetId, session, initial.cols, initial.rows),
@@ -59,6 +72,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
             setStatus({ kind: 'error', message: msg.message });
           } else if (msg.type === 'exit') {
             exited = true;
+            if (msg.code !== 0 && retryOnce()) return;
             setStatus({
               kind: 'disconnected',
               message: msg.code === 0 || msg.code === null ? 'Session ended.' : `Session ended (exit ${msg.code}).`,
@@ -66,7 +80,16 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           }
         },
         onClose: () => {
-          if (!exited) setStatus({ kind: 'disconnected', message: 'Disconnected.' });
+          if (!exited) {
+            if (retryOnce()) return;
+            setStatus({
+              kind: targetKind === 'ssh' ? 'ssh' : 'disconnected',
+              message:
+                targetKind === 'ssh'
+                  ? 'SSH connection interrupted. One reconnect attempt failed.'
+                  : 'Disconnected.',
+            });
+          }
         },
       },
     );
@@ -99,7 +122,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
       handleRef.current = null;
       socketRef.current = null;
     };
-  }, [targetId, session, generation]);
+  }, [targetId, targetKind, session, generation]);
 
   // Live-apply terminal font size without remounting (preserves scrollback).
   useEffect(() => {
