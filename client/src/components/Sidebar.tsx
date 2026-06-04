@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { OpenFile, Selection, Target } from '../types';
 import { useSettings } from '../settings';
+import { useI18n } from '../i18n';
 import { TargetGroup } from './TargetGroup';
 import { FileExplorer } from './FileExplorer';
 import { SettingsButton } from './SettingsButton';
@@ -29,6 +30,7 @@ export function Sidebar({
   onOpenFile,
 }: Props) {
   const { settings } = useSettings();
+  const { t } = useI18n();
   const [bottomHeight, setBottomHeight] = useState(260);
   const dragState = useRef<{ startY: number; startH: number } | null>(null);
 
@@ -60,7 +62,7 @@ export function Sidebar({
     <div className="sidebar" style={{ fontSize: settings.sidebarFontSize }}>
       <div className="sidebar-header">
         <h1>tmuxes</h1>
-        <button onClick={onRefreshTargets} title="Reload targets">
+        <button onClick={onRefreshTargets} title={t.reloadTargets}>
           ⟳
         </button>
       </div>
@@ -70,17 +72,18 @@ export function Sidebar({
         {targets.map((t) => (
           <TargetGroup key={t.id} target={t} selection={selection} nowMs={nowMs} select={select} />
         ))}
-        {!loadError && targets.length === 0 && <div className="empty">No targets.</div>}
+        {!loadError && targets.length === 0 && <div className="empty">{t.noTargets}</div>}
       </div>
 
-      <div className="sidebar-vdivider" onMouseDown={onDividerDown} title="Drag to resize" />
+      <div className="sidebar-vdivider" onMouseDown={onDividerDown} title={t.dragResize} />
 
       <div className="sidebar-bottom" style={{ height: bottomHeight }}>
-        <div className="section-label">Working directory</div>
+        <div className="section-label">{t.workingDirectory}</div>
         <FileExplorer
           selection={selection}
           openFile={openFile}
           enabled={fileBrowsingEnabled}
+          pauseOnError={selectedTarget?.kind === 'ssh'}
           onOpenFile={onOpenFile}
         />
       </div>

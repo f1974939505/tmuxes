@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FileEntry, OpenFile, Selection } from '../types';
 import { api, ApiError } from '../api';
 import { basename, isTextFile, joinPath, parentPath } from '../util';
+import { useI18n } from '../i18n';
 
 interface Props {
   selection: Selection | null;
   openFile: OpenFile | null;
   /** Native shell sessions have no tmux cwd — disables the file browser. */
   enabled: boolean;
+  /** Pause automatic polling after SSH errors to avoid repeated failed attempts. */
+  pauseOnError: boolean;
   onOpenFile: (file: OpenFile) => void;
 }
 
@@ -21,11 +24,13 @@ function samePath(a: string | null, b: string | null): boolean {
 
 /** Bottom of the sidebar: the files/folders of the selected session's current
  *  working directory. Follows the session's cwd until you navigate away. */
-export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props) {
+export function FileExplorer({ selection, openFile, enabled, pauseOnError, onOpenFile }: Props) {
+  const { t } = useI18n();
   const [cwd, setCwd] = useState<string | null>(null);
   const [manualPath, setManualPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const pollingPaused = useRef(false);
 
   const path = manualPath ?? cwd;
   const following = manualPath === null;
@@ -38,9 +43,11 @@ export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props
     setCwd(null);
     setEntries([]);
     setError(null);
+    pollingPaused.current = false;
   }, [targetId, session]);
 
   const tick = useCallback(async () => {
+    if (pollingPaused.current) return;
     if (!targetId || !session) return;
     try {
       const { cwd: latest } = await api.getCwd(targetId, session);
@@ -50,9 +57,16 @@ export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props
       setEntries(entries);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'cannot list directory');
+      setError(e instanceof ApiError ? e.message : t.cannotListDirectory);
+      if (pauseOnError) pollingPaused.current = true;
     }
-  }, [targetId, session, manualPath]);
+  }, [targetId, session, manualPath, pauseOnError, t.cannotListDirectory]);
+
+  const manualReconnect = useCallback(() => {
+    pollingPaused.current = false;
+    setError(null);
+    void tick();
+  }, [tick]);
 
   useEffect(() => {
     if (!targetId || !session || !enabled) return;
@@ -64,7 +78,7 @@ export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props
   if (!selection) {
     return (
       <div className="explorer">
-        <div className="explorer-empty">Select a session to browse its working directory.</div>
+        <div className="explorer-empty">{t.selectSessionForFiles}</div>
       </div>
     );
   }
@@ -72,7 +86,7 @@ export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props
   if (!enabled) {
     return (
       <div className="explorer">
-        <div className="explorer-empty">File browser isn't available for native shell sessions.</div>
+        <div className="explorer-empty">{t.fileBrowserUnavailable}</div>
       </div>
     );
   }
@@ -97,16 +111,25 @@ export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props
         </span>
         <span className="explorer-actions">
           {!following && (
-            <button title="Back to session directory" onClick={() => setManualPath(null)}>
+            <button title={t.backToSessionDirectory} onClick={() => setManualPath(null)}>
               ⌂
             </button>
           )}
-          <button title="Up one level" disabled={!path || path === '/' || atRoot} onClick={() => path && setManualPath(parentPath(path))}>
+          <button title={t.upOneLevel} disabled={!path || path === '/' || atRoot} onClick={() => path && setManualPath(parentPath(path))}>
             ↑
           </button>
         </span>
       </div>
-      {error && <div className="error-line">{error}</div>}
+      {error && (
+        <div className="error-line">
+          <span>{error}</span>
+          {pauseOnError && (
+            <button onClick={manualReconnect}>
+              {t.reconnect}
+            </button>
+          )}
+        </div>
+      )}
       <div className="explorer-list">
         {entries.map((e) => {
           const openable = e.type === 'dir' || isTextFile(e.name);
@@ -124,7 +147,7 @@ export function FileExplorer({ selection, openFile, enabled, onOpenFile }: Props
             </div>
           );
         })}
-        {entries.length === 0 && !error && <div className="explorer-empty">empty directory</div>}
+        {entries.length === 0 && !error && <div className="explorer-empty">{t.emptyDirectory}</div>}
       </div>
     </div>
   );

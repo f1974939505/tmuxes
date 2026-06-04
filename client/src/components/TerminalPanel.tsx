@@ -3,6 +3,7 @@ import { createTerminal, type TerminalHandle } from '../hooks/useTerminal';
 import { createTmuxSocket, type TmuxSocket } from '../hooks/useTmuxSocket';
 import { api, ApiError, terminalSocketUrl } from '../api';
 import type { ConnStatus, LaunchAgent, Target } from '../types';
+import { useI18n } from '../i18n';
 import { StatusBanner } from './StatusBanner';
 
 interface Props {
@@ -18,6 +19,8 @@ const RESIZE_DEBOUNCE_MS = 80;
 /** Mounted with key={targetId/session}, so a selection change is a full
  *  remount — no stale terminal/socket state. */
 export function TerminalPanel({ targetId, targetKind, targetLabel, session, fontSize }: Props) {
+  const { t } = useI18n();
+  const tRef = useRef(t);
   const hostRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<TerminalHandle | null>(null);
   const socketRef = useRef<TmuxSocket | null>(null);
@@ -30,6 +33,10 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
   useEffect(() => {
     terminalRetryUsed.current = false;
   }, [targetId, session]);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -75,7 +82,10 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
             if (msg.code !== 0 && retryOnce()) return;
             setStatus({
               kind: 'disconnected',
-              message: msg.code === 0 || msg.code === null ? 'Session ended.' : `Session ended (exit ${msg.code}).`,
+              message:
+                msg.code === 0 || msg.code === null
+                  ? tRef.current.sessionEnded
+                  : tRef.current.sessionEndedExit(msg.code),
             });
           }
         },
@@ -86,8 +96,8 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
               kind: targetKind === 'ssh' ? 'ssh' : 'disconnected',
               message:
                 targetKind === 'ssh'
-                  ? 'SSH connection interrupted. One reconnect attempt failed.'
-                  : 'Disconnected.',
+                  ? tRef.current.sshInterrupted
+                  : tRef.current.disconnected,
             });
           }
         },
@@ -141,7 +151,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
       await api.launchAgent(targetId, session, agent);
       handleRef.current?.term.focus();
     } catch (e) {
-      setAgentError(e instanceof ApiError ? e.message : 'failed to launch agent');
+      setAgentError(e instanceof ApiError ? e.message : t.failedLaunchAgent);
     } finally {
       setStartingAgent(null);
     }
@@ -154,14 +164,14 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           <button
             disabled={startingAgent !== null}
             onClick={() => void launchAgent('claude')}
-            title="Run hooked Claude Code in this tmux session"
+            title={t.runClaude}
           >
             claude
           </button>
           <button
             disabled={startingAgent !== null}
             onClick={() => void launchAgent('codex')}
-            title="Run hooked codex in this tmux session"
+            title={t.runCodex}
           >
             codex
           </button>

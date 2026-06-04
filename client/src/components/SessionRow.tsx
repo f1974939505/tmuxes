@@ -2,7 +2,8 @@ import { useState } from 'react';
 import type { SessionInfo } from '../types';
 import { ago, isValidSessionName } from '../util';
 import { useAttention } from '../attention';
-import { agentStatusLabel, attentionLabel, isSessionActive } from '../activity';
+import { isSessionActive } from '../activity';
+import { agentStatusLabel, attentionText, attentionTitle, useI18n } from '../i18n';
 
 interface Props {
   targetId: string;
@@ -28,6 +29,7 @@ export function SessionRow({
   onDragStart,
 }: Props) {
   const attention = useAttention();
+  const { language, t } = useI18n();
   const reason = attention.reasonFor(targetId, session.name);
   const active = isSessionActive(session);
   const [renaming, setRenaming] = useState(false);
@@ -41,7 +43,7 @@ export function SessionRow({
     setRenaming(false);
   };
 
-  const badgeText = reason === 'decision' ? '决策' : reason === 'error' ? '错误' : '结束';
+  const status = agentStatusLabel(session, t);
 
   if (renaming) {
     return (
@@ -67,17 +69,17 @@ export function SessionRow({
       draggable={!!onDragStart}
       onDragStart={onDragStart}
       onClick={onSelect}
-      title={`${session.name} — ${agentStatusLabel(session)} — ${session.windows} window(s)`}
+      title={`${session.name} - ${status} - ${session.windows} ${t.windowsShort}`}
     >
-      <span className={`dot ${active ? 'active' : 'inactive'}`} title={agentStatusLabel(session)} />
+      <span className={`dot ${active ? 'active' : 'inactive'}`} title={status} />
       <span className="name">{session.name}</span>
       {reason && (
-        <span className={`attn-badge ${reason}`} title={attentionLabel(reason)}>
-          {badgeText}
+        <span className={`attn-badge ${reason}`} title={attentionTitle(reason, t)}>
+          {attentionText(reason, t)}
         </span>
       )}
       <span className="meta">
-        {session.windows} win{session.created ? ` · ${ago(session.created, nowMs)}` : ''}
+        {session.windows} {t.windowsShort}{session.created ? ` · ${ago(session.created, nowMs, language)}` : ''}
       </span>
       <span className="row-actions">
         <button
@@ -86,7 +88,7 @@ export function SessionRow({
             setDraft(session.name);
             setRenaming(true);
           }}
-          title="Rename"
+          title={t.rename}
         >
           ✎
         </button>
@@ -94,9 +96,9 @@ export function SessionRow({
           className="danger"
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm(`Kill session "${session.name}"? This terminates its processes.`)) onKill();
+            if (confirm(t.killConfirm(session.name))) onKill();
           }}
-          title="Kill"
+          title={t.kill}
         >
           ✕
         </button>

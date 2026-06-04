@@ -75,7 +75,7 @@ function isAncestor(folders: FolderNode[], maybeAncestor: string, node: string |
 export interface FoldersApi {
   folders: FolderNode[];
   folderOf: (sessionName: string) => string | null;
-  addFolder: (parentId: string | null) => void;
+  addFolder: (parentId: string | null, name?: string) => void;
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
   moveSession: (sessionName: string, folderId: string | null) => void;
@@ -191,8 +191,8 @@ export function useFolders(targetId: string, enabled: boolean, pauseOnError = fa
   );
 
   const addFolder = useCallback(
-    (parentId: string | null) =>
-      update((p) => ({ ...p, folders: [...p.folders, { id: newId(), name: 'New folder', parentId }] })),
+    (parentId: string | null, name = '新建文件夹') =>
+      update((p) => ({ ...p, folders: [...p.folders, { id: newId(), name, parentId }] })),
     [update],
   );
 

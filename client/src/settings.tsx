@@ -1,6 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+export type Language = 'zh' | 'en';
+
 export interface Settings {
+  /** UI language. */
+  language: Language;
   /** Sidebar (tmux tree + file explorer) font size, px. */
   sidebarFontSize: number;
   /** xterm terminal font size, px. */
@@ -14,6 +18,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  language: 'zh',
   sidebarFontSize: 13,
   terminalFontSize: 13,
   viewerFontSize: 13,
@@ -33,10 +38,19 @@ interface SettingsContextValue {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
+function coerceSettings(value: Partial<Settings>): Settings {
+  const language = value.language === 'en' ? 'en' : 'zh';
+  return {
+    ...DEFAULT_SETTINGS,
+    ...value,
+    language,
+  };
+}
+
 function load(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) return coerceSettings(JSON.parse(raw) as Partial<Settings>);
   } catch {
     /* ignore */
   }

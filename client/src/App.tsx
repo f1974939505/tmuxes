@@ -3,12 +3,14 @@ import { api, ApiError } from './api';
 import type { OpenFile, Selection, Target } from './types';
 import { useSettings } from './settings';
 import { useAttention } from './attention';
+import { useI18n } from './i18n';
 import { Sidebar } from './components/Sidebar';
 import { TerminalPanel } from './components/TerminalPanel';
 import { FileViewer } from './components/FileViewer';
 
 export function App() {
   const { settings } = useSettings();
+  const { t } = useI18n();
   const attention = useAttention();
   const [targets, setTargets] = useState<Target[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -25,9 +27,9 @@ export function App() {
       setTargets(targets);
       setLoadError(null);
     } catch (e) {
-      setLoadError(e instanceof ApiError ? e.message : 'failed to load targets');
+      setLoadError(e instanceof ApiError ? e.message : t.failedLoadTargets);
     }
-  }, []);
+  }, [t.failedLoadTargets]);
 
   useEffect(() => {
     void loadTargets();
@@ -100,8 +102,8 @@ export function App() {
           ) : (
             <div className="panel">
               <div className="panel-placeholder">
-                <div style={{ fontSize: 18 }}>Select or create a tmux session</div>
-                <div>Pick a session in the sidebar to open a live terminal.</div>
+                <div style={{ fontSize: 18 }}>{t.selectOrCreateSession}</div>
+                <div>{t.pickSession}</div>
               </div>
             </div>
           )}
@@ -109,7 +111,7 @@ export function App() {
 
         {openFile && (
           <>
-            <div className="hdivider" onMouseDown={onViewerDividerDown} title="Drag to resize" />
+            <div className="hdivider" onMouseDown={onViewerDividerDown} title={t.dragResize} />
             <div className="viewer-region" style={{ height: viewerHeight }}>
               <FileViewer file={openFile} onClose={() => setOpenFile(null)} />
             </div>

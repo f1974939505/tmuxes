@@ -1,6 +1,7 @@
 import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import type { SessionInfo, Selection } from '../types';
 import type { FoldersApi } from '../folders';
+import { useI18n } from '../i18n';
 import { SessionRow } from './SessionRow';
 
 const DND_TYPE = 'application/x-tmuxes';
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function SessionTree({ targetId, sessions, folders, selection, nowMs, select, onRename, onKill }: Props) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -118,10 +120,10 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
                   </span>
                   <span className="folder-actions">
                     <button
-                      title="New subfolder"
+                      title={t.newSubfolder}
                       onClick={(e) => {
                         e.stopPropagation();
-                        folders.addFolder(f.id);
+                        folders.addFolder(f.id, t.folderDefaultName);
                         setCollapsed((p) => {
                           const n = new Set(p);
                           n.delete(f.id);
@@ -132,7 +134,7 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
                       ＋
                     </button>
                     <button
-                      title="Rename folder"
+                      title={t.renameFolder}
                       onClick={(e) => {
                         e.stopPropagation();
                         setRenameDraft(f.name);
@@ -143,7 +145,7 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
                     </button>
                     <button
                       className="danger"
-                      title="Delete folder (keeps sessions)"
+                      title={t.deleteFolder}
                       onClick={(e) => {
                         e.stopPropagation();
                         folders.deleteFolder(f.id);
@@ -188,7 +190,7 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
       onDragLeave={() => setDragOver((p) => (p === '__root__' ? null : p))}
       onDrop={dropInto(null)}
     >
-      {empty && <div className="empty">No sessions. Create one below.</div>}
+      {empty && <div className="empty">{t.noSessions}</div>}
       {renderLevel(null, 0)}
     </div>
   );

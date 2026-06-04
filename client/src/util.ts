@@ -51,11 +51,11 @@ export function isTextFile(name: string): boolean {
   return TEXT_EXTENSIONS.has(lower.slice(dot + 1));
 }
 
-/** Compact relative time, e.g. "just now", "5m", "3h", "2d". */
-export function ago(epochSeconds: number, nowMs: number): string {
+/** Compact relative time, e.g. "刚刚", "5m", "3h", "2d". */
+export function ago(epochSeconds: number, nowMs: number, language: 'zh' | 'en' = 'zh'): string {
   if (!epochSeconds) return '';
   const sec = Math.max(0, Math.floor(nowMs / 1000 - epochSeconds));
-  if (sec < 10) return 'just now';
+  if (sec < 10) return language === 'zh' ? '刚刚' : 'just now';
   if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m`;

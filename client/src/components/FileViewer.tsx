@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FilePreview, OpenFile } from '../types';
 import { api, ApiError } from '../api';
 import { useSettings } from '../settings';
+import { useI18n } from '../i18n';
 
 interface Props {
   file: OpenFile;
@@ -16,6 +17,7 @@ const COALESCE_MS = 500;
  *  text and was not truncated (saving a truncated preview would lose data). */
 export function FileViewer({ file, onClose }: Props) {
   const { settings } = useSettings();
+  const { t } = useI18n();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const lastEditRef = useRef(0);
 
@@ -52,7 +54,7 @@ export function FileViewer({ file, onClose }: Props) {
         setBaseline(p.content);
       })
       .catch((e) => {
-        if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'failed to read file');
+        if (!cancelled) setLoadError(e instanceof ApiError ? e.message : t.failedReadFile);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -60,7 +62,7 @@ export function FileViewer({ file, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [file.targetId, file.session, file.path]);
+  }, [file.targetId, file.session, file.path, t.failedReadFile]);
 
   const onType = (next: string) => {
     const now = Date.now();
@@ -100,7 +102,7 @@ export function FileViewer({ file, onClose }: Props) {
       await api.saveFile(file.targetId, file.session, file.path, text);
       setBaseline(text);
     } catch (e) {
-      setSaveError(e instanceof ApiError ? e.message : 'save failed');
+      setSaveError(e instanceof ApiError ? e.message : t.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -132,7 +134,7 @@ export function FileViewer({ file, onClose }: Props) {
   };
 
   const requestClose = () => {
-    if (dirty && !confirm('Discard unsaved changes?')) return;
+    if (dirty && !confirm(t.discardUnsaved)) return;
     onClose();
   };
 
@@ -140,26 +142,26 @@ export function FileViewer({ file, onClose }: Props) {
     <div className="viewer">
       <div className="viewer-head">
         <span className="viewer-name" title={file.path}>
-          {dirty && <span className="dirty-dot" title="Unsaved changes">●</span>}
+          {dirty && <span className="dirty-dot" title={t.unsavedChanges}>●</span>}
           {file.name}
         </span>
         <span className="viewer-path">{file.path}</span>
         <div className="viewer-head-spacer" />
         {editable && (
           <>
-            <button onClick={undo} disabled={past.length === 0} title="Undo (Ctrl/Cmd+Z)">
+            <button onClick={undo} disabled={past.length === 0} title={t.undo}>
               ↶
             </button>
-            <button onClick={redo} disabled={future.length === 0} title="Redo (Ctrl/Cmd+Shift+Z)">
+            <button onClick={redo} disabled={future.length === 0} title={t.redo}>
               ↷
             </button>
-            <button className="primary" onClick={() => void save()} disabled={!dirty || saving} title="Save (Ctrl/Cmd+S)">
-              {saving ? 'Saving…' : 'Save'}
+            <button className="primary" onClick={() => void save()} disabled={!dirty || saving} title={t.saveShortcut}>
+              {saving ? t.saving : t.save}
             </button>
           </>
         )}
-        {preview?.truncated && <span className="viewer-note">truncated — read only</span>}
-        <button onClick={requestClose} title="Close file">
+        {preview?.truncated && <span className="viewer-note">{t.truncatedReadOnly}</span>}
+        <button onClick={requestClose} title={t.closeFile}>
           ✕
         </button>
       </div>
@@ -167,9 +169,9 @@ export function FileViewer({ file, onClose }: Props) {
       {saveError && <div className="viewer-msg error">{saveError}</div>}
 
       <div className="viewer-body">
-        {loading && <div className="viewer-msg">Loading…</div>}
+        {loading && <div className="viewer-msg">{t.loading}</div>}
         {loadError && <div className="viewer-msg error">{loadError}</div>}
-        {preview && preview.binary && <div className="viewer-msg">Binary file — not shown.</div>}
+        {preview && preview.binary && <div className="viewer-msg">{t.binaryNotShown}</div>}
         {preview && !preview.binary && editable && (
           <textarea
             ref={taRef}

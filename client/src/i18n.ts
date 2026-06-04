@@ -1,0 +1,213 @@
+import { useMemo } from 'react';
+import { useSettings, type Language } from './settings';
+import type { AttentionReason, SessionInfo } from './types';
+
+export const TEXT = {
+  zh: {
+    settings: '设置',
+    fontSizes: '字体大小',
+    sidebar: '侧边栏',
+    terminal: '终端',
+    fileViewer: '文件查看器',
+    notifications: '提醒',
+    language: '语言',
+    chinese: '中文',
+    english: 'English',
+    alertWhenAgent: 'agent 结束或需要决策时提醒',
+    playSound: '播放提示音',
+    reset: '重置',
+    done: '完成',
+    smaller: '减小',
+    larger: '增大',
+    reconnect: '重连',
+    connecting: '正在连接...',
+    sessionEnded: '会话已结束。',
+    sessionEndedExit: (code: number) => `会话已结束，退出码 ${code}。`,
+    sshInterrupted: 'SSH 连接已中断。一次自动重连失败。',
+    disconnected: '连接已断开。',
+    failedLaunchAgent: '启动 agent 失败',
+    runClaude: '在当前 tmux 会话中启动已接入 hook 的 Claude Code',
+    runCodex: '在当前 tmux 会话中启动已接入 hook 的 Codex',
+    selectOrCreateSession: '选择或创建一个 tmux 会话',
+    pickSession: '在侧边栏选择会话以打开实时终端。',
+    dragResize: '拖动调整大小',
+    reloadTargets: '重新加载目标',
+    workingDirectory: '工作目录',
+    noTargets: '没有目标。',
+    noSessions: '没有会话。可在下方创建。',
+    failedLoadTargets: '加载目标失败',
+    failedListSessions: '列出会话失败',
+    invalidSessionName: '请使用字母、数字、_ 或 -，最多 64 个字符；不能包含 "." 或 ":"。',
+    failedCreateSession: '创建会话失败',
+    renameFailed: '重命名失败',
+    killFailed: '结束会话失败',
+    newFolder: '+ 文件夹',
+    newSession: '+ 会话',
+    newFolderTitle: '新建文件夹',
+    newSubfolder: '新建子文件夹',
+    renameFolder: '重命名文件夹',
+    deleteFolder: '删除文件夹（保留会话）',
+    folderDefaultName: '新建文件夹',
+    nameOptional: '名称（可选）',
+    commandOptional: '初始命令（可选）',
+    create: '创建',
+    cancel: '取消',
+    rename: '重命名',
+    kill: '结束',
+    killConfirm: (name: string) => `结束会话 "${name}"？这会终止其中的进程。`,
+    windowsShort: '窗',
+    selectSessionForFiles: '选择一个会话以浏览它的工作目录。',
+    fileBrowserUnavailable: '原生 shell 会话不支持文件浏览器。',
+    backToSessionDirectory: '返回会话目录',
+    upOneLevel: '上一级',
+    cannotListDirectory: '无法列出目录',
+    emptyDirectory: '空目录',
+    failedReadFile: '读取文件失败',
+    saveFailed: '保存失败',
+    discardUnsaved: '放弃未保存的更改？',
+    unsavedChanges: '未保存的更改',
+    undo: '撤销 (Ctrl/Cmd+Z)',
+    redo: '重做 (Ctrl/Cmd+Shift+Z)',
+    save: '保存',
+    saveShortcut: '保存 (Ctrl/Cmd+S)',
+    saving: '保存中...',
+    truncatedReadOnly: '内容已截断，只读',
+    closeFile: '关闭文件',
+    loading: '加载中...',
+    binaryNotShown: '二进制文件，未显示。',
+    attentionDecision: '决策',
+    attentionError: '错误',
+    attentionDone: '结束',
+    attentionDecisionTitle: '需要决策',
+    attentionErrorTitle: '异常停止',
+    attentionDoneTitle: '结束运行',
+    agentNotHooked: '未接入 agent hook',
+    agentRunning: (kind: string) => `${kind} 正在运行`,
+    agentWaiting: (kind: string) => `${kind} 需要决策`,
+    agentDone: (kind: string) => `${kind} 已结束运行`,
+    agentError: (kind: string) => `${kind} 异常停止`,
+    agentIdle: (kind: string) => `${kind} 空闲`,
+    justNow: '刚刚',
+  },
+  en: {
+    settings: 'Settings',
+    fontSizes: 'Font sizes',
+    sidebar: 'Sidebar',
+    terminal: 'Terminal',
+    fileViewer: 'File viewer',
+    notifications: 'Notifications',
+    language: 'Language',
+    chinese: '中文',
+    english: 'English',
+    alertWhenAgent: 'Alert when an agent finishes / asks',
+    playSound: 'Play a sound',
+    reset: 'Reset',
+    done: 'Done',
+    smaller: 'smaller',
+    larger: 'larger',
+    reconnect: 'Reconnect',
+    connecting: 'Connecting...',
+    sessionEnded: 'Session ended.',
+    sessionEndedExit: (code: number) => `Session ended (exit ${code}).`,
+    sshInterrupted: 'SSH connection interrupted. One reconnect attempt failed.',
+    disconnected: 'Disconnected.',
+    failedLaunchAgent: 'failed to launch agent',
+    runClaude: 'Run hooked Claude Code in this tmux session',
+    runCodex: 'Run hooked Codex in this tmux session',
+    selectOrCreateSession: 'Select or create a tmux session',
+    pickSession: 'Pick a session in the sidebar to open a live terminal.',
+    dragResize: 'Drag to resize',
+    reloadTargets: 'Reload targets',
+    workingDirectory: 'Working directory',
+    noTargets: 'No targets.',
+    noSessions: 'No sessions. Create one below.',
+    failedLoadTargets: 'failed to load targets',
+    failedListSessions: 'failed to list sessions',
+    invalidSessionName: 'Use letters, digits, _ or - (max 64). No "." or ":".',
+    failedCreateSession: 'failed to create session',
+    renameFailed: 'rename failed',
+    killFailed: 'kill failed',
+    newFolder: '+ folder',
+    newSession: '+ session',
+    newFolderTitle: 'New folder',
+    newSubfolder: 'New subfolder',
+    renameFolder: 'Rename folder',
+    deleteFolder: 'Delete folder (keeps sessions)',
+    folderDefaultName: 'New folder',
+    nameOptional: 'name (optional)',
+    commandOptional: 'initial command (optional)',
+    create: 'Create',
+    cancel: 'Cancel',
+    rename: 'Rename',
+    kill: 'Kill',
+    killConfirm: (name: string) => `Kill session "${name}"? This terminates its processes.`,
+    windowsShort: 'win',
+    selectSessionForFiles: 'Select a session to browse its working directory.',
+    fileBrowserUnavailable: "File browser isn't available for native shell sessions.",
+    backToSessionDirectory: 'Back to session directory',
+    upOneLevel: 'Up one level',
+    cannotListDirectory: 'cannot list directory',
+    emptyDirectory: 'empty directory',
+    failedReadFile: 'failed to read file',
+    saveFailed: 'save failed',
+    discardUnsaved: 'Discard unsaved changes?',
+    unsavedChanges: 'Unsaved changes',
+    undo: 'Undo (Ctrl/Cmd+Z)',
+    redo: 'Redo (Ctrl/Cmd+Shift+Z)',
+    save: 'Save',
+    saveShortcut: 'Save (Ctrl/Cmd+S)',
+    saving: 'Saving...',
+    truncatedReadOnly: 'truncated - read only',
+    closeFile: 'Close file',
+    loading: 'Loading...',
+    binaryNotShown: 'Binary file - not shown.',
+    attentionDecision: 'decision',
+    attentionError: 'error',
+    attentionDone: 'done',
+    attentionDecisionTitle: 'Needs decision',
+    attentionErrorTitle: 'Stopped abnormally',
+    attentionDoneTitle: 'Done',
+    agentNotHooked: 'agent hook not attached',
+    agentRunning: (kind: string) => `${kind} running`,
+    agentWaiting: (kind: string) => `${kind} needs decision`,
+    agentDone: (kind: string) => `${kind} done`,
+    agentError: (kind: string) => `${kind} stopped abnormally`,
+    agentIdle: (kind: string) => `${kind} idle`,
+    justNow: 'just now',
+  },
+};
+
+export type I18n = typeof TEXT.zh;
+
+export function textFor(language: Language): I18n {
+  return TEXT[language];
+}
+
+export function useI18n(): { language: Language; t: I18n } {
+  const { settings } = useSettings();
+  return useMemo(
+    () => ({ language: settings.language, t: textFor(settings.language) }),
+    [settings.language],
+  );
+}
+
+export function attentionText(reason: AttentionReason, t: I18n): string {
+  if (reason === 'decision') return t.attentionDecision;
+  if (reason === 'error') return t.attentionError;
+  return t.attentionDone;
+}
+
+export function attentionTitle(reason: AttentionReason, t: I18n): string {
+  if (reason === 'decision') return t.attentionDecisionTitle;
+  if (reason === 'error') return t.attentionErrorTitle;
+  return t.attentionDoneTitle;
+}
+
+export function agentStatusLabel(session: SessionInfo, t: I18n): string {
+  if (!session.agentKind || !session.agentState) return t.agentNotHooked;
+  if (session.agentState === 'running') return t.agentRunning(session.agentKind);
+  if (session.agentState === 'waiting') return t.agentWaiting(session.agentKind);
+  if (session.attentionReason === 'done') return t.agentDone(session.agentKind);
+  if (session.attentionReason === 'error') return t.agentError(session.agentKind);
+  return t.agentIdle(session.agentKind);
+}

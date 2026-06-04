@@ -4,6 +4,7 @@ import { api, ApiError } from '../api';
 import { isValidSessionName } from '../util';
 import { useFolders } from '../folders';
 import { useAttention } from '../attention';
+import { useI18n } from '../i18n';
 import { SessionTree } from './SessionTree';
 
 interface Props {
@@ -37,6 +38,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
 
   const folders = useFolders(target.id, expanded, target.kind === 'ssh');
   const attention = useAttention();
+  const { t } = useI18n();
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
@@ -45,6 +47,9 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const pollingPaused = useRef(false);
   // Last-seen agent hook event key per session; first sight is a baseline.
   const lastAgentEvent = useRef<Map<string, string>>(new Map());
+  // PermissionRequest can be auto-reviewed by the agent and disappear quickly.
+  // Only notify if the same waiting/decision event survives one more refresh.
+  const decisionCandidates = useRef<Map<string, { key: string; notified: boolean }>>(new Map());
 
   const eventKey = (s: SessionInfo): string => {
     if (!s.agentKind || !s.agentState || !s.agentNonce) return '';
@@ -68,20 +73,35 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
         lastAgentEvent.current.set(s.name, key);
 
         if (s.agentState === 'running') {
+          decisionCandidates.current.delete(s.name);
           attention.clearAlert(target.id, s.name);
+        } else if (s.agentState === 'waiting' && s.attentionReason === 'decision' && key) {
+          const candidate = decisionCandidates.current.get(s.name);
+          if (candidate?.key === key) {
+            if (seen && !candidate.notified) {
+              attention.fire(target.id, s.name, 'decision');
+              decisionCandidates.current.set(s.name, { key, notified: true });
+            }
+          } else {
+            decisionCandidates.current.set(s.name, { key, notified: false });
+          }
         } else if (
           seen &&
           key &&
           key !== prev &&
           isAttentionReason(s.attentionReason)
         ) {
+          decisionCandidates.current.delete(s.name);
           attention.fire(target.id, s.name, s.attentionReason);
+        } else {
+          decisionCandidates.current.delete(s.name);
         }
       }
       // Forget sessions that vanished.
       for (const name of [...lastAgentEvent.current.keys()]) {
         if (!present.has(name)) {
           lastAgentEvent.current.delete(name);
+          decisionCandidates.current.delete(name);
           attention.clearAlert(target.id, name);
         }
       }
@@ -100,13 +120,13 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       detectAttention(sessions);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'failed to list sessions');
+      setError(e instanceof ApiError ? e.message : t.failedListSessions);
       if (target.kind === 'ssh') pollingPaused.current = true;
     } finally {
       setLoading(false);
       inFlight.current = false;
     }
-  }, [target.id, target.kind, detectAttention]);
+  }, [target.id, target.kind, detectAttention, t.failedListSessions]);
 
   const manualReconnect = useCallback(() => {
     pollingPaused.current = false;
@@ -125,7 +145,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const submitCreate = async () => {
     const name = newName.trim();
     if (name && !isValidSessionName(name)) {
-      setFormError('Use letters, digits, _ or - (max 64). No "." or ":".');
+      setFormError(t.invalidSessionName);
       return;
     }
     setCreating(true);
@@ -142,7 +162,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       await refresh();
       select({ targetId: target.id, session: created });
     } catch (e) {
-      setFormError(e instanceof ApiError ? e.message : 'failed to create session');
+      setFormError(e instanceof ApiError ? e.message : t.failedCreateSession);
     } finally {
       setCreating(false);
     }
@@ -156,7 +176,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
         select({ targetId: target.id, session: next });
       }
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'rename failed');
+      setError(e instanceof ApiError ? e.message : t.renameFailed);
     }
   };
 
@@ -166,7 +186,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       if (selection?.targetId === target.id && selection.session === name) select(null);
       await refresh();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'kill failed');
+      setError(e instanceof ApiError ? e.message : t.killFailed);
     }
   };
 
@@ -191,7 +211,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
               <span>{error}</span>
               {target.kind === 'ssh' && (
                 <button onClick={manualReconnect} disabled={loading}>
-                  Reconnect
+                  {t.reconnect}
                 </button>
               )}
             </div>
@@ -209,10 +229,10 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
           />
 
           <div className="list-toolbar">
-            <button onClick={() => folders.addFolder(null)} title="New folder">
-              + folder
+            <button onClick={() => folders.addFolder(null, t.folderDefaultName)} title={t.newFolderTitle}>
+              {t.newFolder}
             </button>
-            <button onClick={() => setShowForm((v) => !v)}>+ session</button>
+            <button onClick={() => setShowForm((v) => !v)}>{t.newSession}</button>
           </div>
 
           {showForm && (
@@ -228,13 +248,13 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
               )}
               <input
                 autoFocus
-                placeholder="name (optional)"
+                placeholder={t.nameOptional}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void submitCreate()}
               />
               <input
-                placeholder="initial command (optional)"
+                placeholder={t.commandOptional}
                 value={newCommand}
                 onChange={(e) => setNewCommand(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void submitCreate()}
@@ -242,9 +262,9 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
               {formError && <div className="field-error">{formError}</div>}
               <div className="row">
                 <button className="primary" disabled={creating} onClick={() => void submitCreate()}>
-                  Create
+                  {t.create}
                 </button>
-                <button onClick={() => setShowForm(false)}>Cancel</button>
+                <button onClick={() => setShowForm(false)}>{t.cancel}</button>
               </div>
             </div>
           )}
