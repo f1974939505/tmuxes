@@ -69,9 +69,11 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 
 ## 📦 Install from npm
 
+This little thing is still fresh and growing fast, so there may be a few bugs and fixes may ship quickly; use `@latest` to pick up the newest build.
+
 ```bash
 # One-shot (no clone, opens the browser):
-npx tmuxes
+npx tmuxes@latest
 
 # Or install globally and use the `tmuxes` command:
 npm install -g tmuxes
