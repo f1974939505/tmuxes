@@ -69,9 +69,11 @@
 
 ## 📦 用 npm 安装
 
+刚刚开用的小家伙还在快速长身体,可能偶尔有 bug,修复更新也会比较快;建议用 `@latest` 总是拿到最新版本。
+
 ```bash
 # 一键运行(无需克隆,自动开浏览器):
-npx tmuxes
+npx tmuxes@latest
 
 # 或全局安装后用 tmuxes 命令:
 npm install -g tmuxes
