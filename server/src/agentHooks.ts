@@ -65,7 +65,7 @@ function claudeSettings(): string {
         },
       ],
       Stop: [{ hooks: [hook('claude', 'idle', 'done', 'Stop')] }],
-      StopFailure: [{ hooks: [hook('claude', 'idle', 'done', 'StopFailure')] }],
+      StopFailure: [{ hooks: [hook('claude', 'idle', 'error', 'StopFailure')] }],
       SessionEnd: [{ hooks: [hook('claude', 'idle', 'done', 'SessionEnd')] }],
     },
   });

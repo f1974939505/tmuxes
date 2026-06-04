@@ -20,7 +20,7 @@ describe('detectAgentKind', () => {
 });
 
 describe('augmentAgentCommand', () => {
-  it('adds running, decision, and done hooks to Claude Code', () => {
+  it('adds running, decision, done, and error hooks to Claude Code', () => {
     const out = augmentAgentCommand('claude --model opus "do x"');
     expect(out.kind).toBe('claude');
     expect(out.command).toMatch(/^claude --settings '.*' --model opus "do x"$/);
@@ -33,6 +33,7 @@ describe('augmentAgentCommand', () => {
     expect(out.command).toContain('@tmuxes_agent claude:running::UserPromptSubmit:$(date +%s).$$');
     expect(out.command).toContain('@tmuxes_agent claude:waiting:decision:PermissionRequest:$(date +%s).$$');
     expect(out.command).toContain('@tmuxes_agent claude:idle:done:Stop:$(date +%s).$$');
+    expect(out.command).toContain('@tmuxes_agent claude:idle:error:StopFailure:$(date +%s).$$');
   });
 
   it('produces valid JSON for Claude settings', () => {
@@ -42,6 +43,7 @@ describe('augmentAgentCommand', () => {
     const parsed = JSON.parse(json!);
     expect(parsed.hooks.PermissionRequest[0].hooks[0].command).toContain('decision');
     expect(parsed.hooks.Stop[0].hooks[0].command).toContain('done');
+    expect(parsed.hooks.StopFailure[0].hooks[0].command).toContain('error');
   });
 
   it('adds lifecycle hook config overrides to Codex', () => {

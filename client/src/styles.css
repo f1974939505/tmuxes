@@ -293,6 +293,10 @@ input:focus {
   border-color: var(--green);
   color: var(--green);
 }
+.attn-badge.error {
+  border-color: var(--red);
+  color: var(--red);
+}
 .meta {
   font-size: 11px;
   color: var(--fg-dim);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentInitialValue, parseAgentValue } from '../src/agentState.js';
+import { agentInitialValue, agentValue, parseAgentValue } from '../src/agentState.js';
 
 describe('agent state values', () => {
   it('initializes a launched agent without a notification reason', () => {
@@ -10,5 +10,15 @@ describe('agent state values', () => {
       agentEvent: 'launch',
     });
     expect(parsed?.attentionReason).toBeUndefined();
+  });
+
+  it('parses abnormal stop notifications', () => {
+    expect(parseAgentValue(agentValue('codex', 'idle', 'error', 'CodexStreamDisconnected', '42'))).toMatchObject({
+      agentKind: 'codex',
+      agentState: 'idle',
+      attentionReason: 'error',
+      agentEvent: 'CodexStreamDisconnected',
+      agentNonce: '42',
+    });
   });
 });

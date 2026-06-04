@@ -41,6 +41,8 @@ export function SessionRow({
     setRenaming(false);
   };
 
+  const badgeText = reason === 'decision' ? '决策' : reason === 'error' ? '错误' : '结束';
+
   if (renaming) {
     return (
       <div className="session-row" style={{ paddingLeft: 8 + depth * 14 }}>
@@ -71,7 +73,7 @@ export function SessionRow({
       <span className="name">{session.name}</span>
       {reason && (
         <span className={`attn-badge ${reason}`} title={attentionLabel(reason)}>
-          {reason === 'decision' ? '决策' : '结束'}
+          {badgeText}
         </span>
       )}
       <span className="meta">

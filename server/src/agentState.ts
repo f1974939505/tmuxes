@@ -1,6 +1,6 @@
 export type AgentKind = 'claude' | 'codex';
 export type AgentState = 'running' | 'waiting' | 'idle';
-export type AttentionReason = 'decision' | 'done';
+export type AttentionReason = 'decision' | 'done' | 'error';
 
 export interface AgentSnapshot {
   agentKind: AgentKind;
@@ -21,7 +21,7 @@ function isAgentState(v: string): v is AgentState {
 }
 
 function isAttentionReason(v: string): v is AttentionReason {
-  return v === 'decision' || v === 'done';
+  return v === 'decision' || v === 'done' || v === 'error';
 }
 
 function cleanToken(v: string): string {

@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
 横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器。
 
-🔔 **Claude Code / Codex 结束运行或需要决策时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 决策」提示 + 提示音 + 后台标签页标题闪烁。再也不用挨个窗格去盯「它还在跑吗」。
+🔔 **Claude Code / Codex 结束运行、异常停止或需要决策时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 决策 / 错误」提示 + 提示音 + 后台标签页标题闪烁。再也不用挨个窗格去盯「它还在跑吗」。
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -37,7 +37,7 @@
 | | |
 |---|---|
 | 🧠 **为 agent 而生** | 每个 agent 独占一个 tmux 会话。新建时可带初始命令（比如 `claude` 或 `codex`），选中后右侧就是一个**完全可交互的实时终端**。 |
-| 🔔 **结束 / 决策提醒** | 新建会话时初始命令是 `claude` 或 `codex` 会自动接入官方 lifecycle hooks。也可以先进入空 session `cd` 到目标目录,再点终端右上角的 `claude` / `codex` 按钮启动带 hook 的 agent。已展开目标每 5 秒同步一次:红点表示 agent 正在运行,绿点表示已结束或正在等你决策;结束运行和需要决策会显示不同提示。 |
+| 🔔 **结束 / 决策 / 错误提醒** | 新建会话时初始命令是 `claude` 或 `codex` 会自动接入官方 lifecycle hooks。也可以先进入空 session `cd` 到目标目录,再点终端右上角的 `claude` / `codex` 按钮启动带 hook 的 agent。已展开目标每 5 秒同步一次:红点表示 agent 正在运行,绿点表示已结束、异常停止或正在等你决策;结束运行、需要决策和异常停止会显示不同提示。 |
 | 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧边栏同时列出你的本机、`~/.ssh/config` 里的主机、（Windows 上）你的 WSL 发行版，以及（Windows）原生 PowerShell / cmd 会话 —— 全部并排排开。 |
 | 🗂️ **文件夹树** | 像资源管理器一样，把会话拖进**可拖拽的文件夹**里整理。按目标分别持久化到本地。 |
 | 📂 **实时文件浏览 + 编辑** | 侧边栏底部跟随每个会话的**工作目录** —— 点一个代码文件就能把终端一分为二，在下面**直接读和改**（可保存、撤销/重做）。 |
@@ -107,7 +107,7 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 ## 🔔 启动带 hook 的 Claude Code / Codex
 
-tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接入官方 lifecycle hooks，用来判断 agent 是正在运行、已经结束，还是正在等你做决策。
+tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接入官方 lifecycle hooks，用来判断 agent 是正在运行、已经结束、异常停止，还是正在等你做决策。
 
 两种用法：
 
@@ -117,9 +117,10 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
 状态含义：
 
 - 红点：agent 正在运行。
-- 绿点：agent 已结束、正在等你决策，或这个 session 没接入 agent hook。
+- 绿点：agent 已结束、异常停止、正在等你决策，或这个 session 没接入 agent hook。
 - `结束` badge：本轮运行结束。
 - `决策` badge：agent 正在等待权限确认或用户输入。
+- `错误` badge：agent 异常停止，例如 Codex 断流但没有触发 stop hook。tmuxes 会在已展开目标的 5 秒同步里扫描 running agent 的 pane 尾部并把这类错误纠正为提醒状态。
 
 注意：右上角按钮本质上是向当前 tmux pane 发送一条带 hook 的 `claude` / `codex` 命令。不要在当前 pane 里已有程序正在接收输入时点击它。裸 `cc` 常常是系统 C 编译器，tmuxes 不会默认把它当作 Claude Code。原生 Windows shell 没有 tmux session option，因此不支持这套 hook 状态。
 
@@ -245,6 +246,10 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.6
+- **修复:Codex 断流后红灯不恢复**。当 Codex 输出 `stream disconnected before completion` 但没有触发 stop hook 时,已展开目标的 5 秒同步会扫描 running agent 的 pane 尾部,写回 `错误` 提醒并把红点恢复为绿点。
+- **改进:Claude Code `StopFailure` 归类为异常停止**。正常 `Stop` / `SessionEnd` 仍显示 `结束`,失败停止显示 `错误`。
 
 ### 0.1.5
 - **修复:Claude Code 启动改用 `claude` 命令**。裸 `cc` 在很多 Linux/SSH 环境里是系统 C 编译器,不再默认识别为 Claude Code,右上角按钮也改为 `claude` / `codex`。

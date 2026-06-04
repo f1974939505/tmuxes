@@ -61,6 +61,23 @@ describe('parseSessions', () => {
       },
     ]);
   });
+  it('parses hook-derived error state', () => {
+    const out = ['1', '0', '1700000200', '1700000250', 'codex:idle:error:CodexStreamDisconnected:1', 'agent'].join(SEP);
+    expect(parseSessions(out)).toEqual([
+      {
+        name: 'agent',
+        windows: 1,
+        attached: false,
+        created: 1700000200,
+        lastActivity: 1700000250,
+        agentKind: 'codex',
+        agentState: 'idle',
+        attentionReason: 'error',
+        agentEvent: 'CodexStreamDisconnected',
+        agentNonce: '1',
+      },
+    ]);
+  });
   it('returns [] for empty output', () => {
     expect(parseSessions('')).toEqual([]);
     expect(parseSessions('\n')).toEqual([]);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { SessionInfo, Selection, Target } from '../types';
+import type { AttentionReason, SessionInfo, Selection, Target } from '../types';
 import { api, ApiError } from '../api';
 import { isValidSessionName } from '../util';
 import { useFolders } from '../folders';
@@ -14,6 +14,10 @@ interface Props {
 }
 
 const POLL_MS = 5000;
+
+function isAttentionReason(v: string | undefined): v is AttentionReason {
+  return v === 'done' || v === 'decision' || v === 'error';
+}
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
   // Expand the "local-ish" targets by default (local tmux, WSL, native shells).
@@ -66,7 +70,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
           seen &&
           key &&
           key !== prev &&
-          (s.attentionReason === 'done' || s.attentionReason === 'decision')
+          isAttentionReason(s.attentionReason)
         ) {
           attention.fire(target.id, s.name, s.attentionReason);
         }

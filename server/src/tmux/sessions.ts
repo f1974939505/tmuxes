@@ -3,9 +3,12 @@ import { managementArgv, newSessionArgv } from './builder.js';
 import type { Target } from '../targets.js';
 import {
   AGENT_OPTION,
+  agentValue,
   agentInitialValue,
+  parseAgentValue,
 } from '../agentState.js';
 import { augmentAgentCommand } from '../agentHooks.js';
+import { classifyAgentTerminalError } from '../agentOutput.js';
 import {
   SESSION_FORMAT,
   WINDOW_FORMAT,
@@ -49,10 +52,37 @@ function firstStderrLine(stderr: string): string {
 
 export async function listSessions(target: Target): Promise<SessionInfo[]> {
   const r = await run(target, ['list-sessions', '-F', SESSION_FORMAT]);
-  if (r.code === 0) return parseSessions(r.stdout);
+  if (r.code === 0) return reconcileAgentTerminalErrors(target, parseSessions(r.stdout));
   // "no server running" / "no sessions" is the normal empty case.
   if (isEmptySessionsError(r.stderr)) return [];
   throw new TmuxError(502, firstStderrLine(r.stderr));
+}
+
+async function reconcileAgentTerminalErrors(
+  target: Target,
+  sessions: SessionInfo[],
+): Promise<SessionInfo[]> {
+  return Promise.all(sessions.map((session) => reconcileAgentTerminalError(target, session)));
+}
+
+async function reconcileAgentTerminalError(
+  target: Target,
+  session: SessionInfo,
+): Promise<SessionInfo> {
+  if (!session.agentKind || session.agentState !== 'running') return session;
+
+  const pane = await run(target, ['capture-pane', '-t', session.name, '-p', '-S', '-20']);
+  if (pane.code !== 0) return session;
+
+  const event = classifyAgentTerminalError(pane.stdout, session.agentKind);
+  if (!event) return session;
+
+  const value = agentValue(session.agentKind, 'idle', 'error', event, String(Date.now()));
+  const set = await run(target, ['set-option', '-t', session.name, '-q', AGENT_OPTION, value]);
+  if (set.code !== 0) return session;
+
+  const snapshot = parseAgentValue(value);
+  return snapshot ? { ...session, ...snapshot } : session;
 }
 
 export async function createSession(

@@ -1,6 +1,6 @@
 {
   "name": "tmuxes",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Web UI to run and supervise many CLI coding agents in tmux — local, SSH, and WSL.",
   "keywords": [
     "tmux",
