@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
 live across **Local · SSH · WSL**, with a file browser of every agent's working directory.
 
-🔔 **When Claude Code / Codex finishes or needs a decision, your browser pings you**: red/green sidebar status dots, done/decision badges, a sound, and a flashing tab title when you're away. No more babysitting panes to see whether it is still running.
+🔔 **When Claude Code / Codex finishes, stops abnormally, or needs a decision, your browser pings you**: red/green sidebar status dots, done/decision/error badges, a sound, and a flashing tab title when you're away. No more babysitting panes to see whether it is still running.
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -37,7 +37,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 | | |
 |---|---|
 | 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
-| 🔔 **Done / decision notifications** | Sessions created with an initial `claude` or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `claude` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished or waiting for your decision, and badges tell those cases apart. |
+| 🔔 **Done / decision / error notifications** | Sessions created with an initial `claude` or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `claude` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished, stopped abnormally, or waiting for your decision, and badges tell those cases apart. |
 | 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
 | 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
 | 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
@@ -109,7 +109,7 @@ npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-
 
 ## 🔔 Launch Hooked Claude Code / Codex
 
-tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`claude`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, or waiting for your decision.
+tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`claude`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, stopped abnormally, or waiting for your decision.
 
 Two launch paths:
 
@@ -119,9 +119,10 @@ Two launch paths:
 Status meanings:
 
 - Red dot: the agent is running.
-- Green dot: the agent finished, is waiting for your decision, or this session has no agent hook.
+- Green dot: the agent finished, stopped abnormally, is waiting for your decision, or this session has no agent hook.
 - `done` badge: the current turn finished.
 - `decision` badge: the agent is waiting for permission or user input.
+- `error` badge: the agent stopped abnormally, for example when Codex disconnects without firing a stop hook. During the 5-second sync for expanded targets, tmuxes scans the tail of running agent panes and corrects these cases into an alert state.
 
 Note: the top-right buttons send a hooked `claude` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Bare `cc` is often the system C compiler, so tmuxes does not treat it as Claude Code by default. Native Windows shells have no tmux session option, so this hook status is not supported there.
 
@@ -221,6 +222,8 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 | **Hold Shift for the mouse** (bypass tmux mouse mode) | Hold `Shift`, drag to select → browser right-click "Copy"; right-click "Paste" |
 
 > Tip: once `mouse on` is set, the mouse belongs to tmux; to use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking.
+>
+> Tip: in tmuxes, you can **create / select / rename / kill sessions** directly from the UI; no tmux commands needed for those. Scrolling through history, copying text, and splitting panes are tmux features, so use the shortcuts above for them.
 
 
 ## ❓ FAQ
@@ -247,6 +250,10 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.6
+- **fix: Codex stream disconnects no longer leave the red dot stuck.** When Codex prints `stream disconnected before completion` but does not fire a stop hook, the 5-second sync for expanded targets scans the tail of running agent panes, writes back an `error` alert, and restores the dot to green.
+- **improve: Claude Code `StopFailure` is now classified as an abnormal stop.** Normal `Stop` / `SessionEnd` events still show `done`; failed stops show `error`.
+
 ### 0.1.5
 - **fix: Claude Code launch now uses the `claude` command.** Bare `cc` is the system C compiler in many Linux/SSH environments, so tmuxes no longer treats it as Claude Code by default; the top-right buttons are now `claude` / `codex`.
 - **change: project Node version is standardized on 22.** Added `.nvmrc` / `.node-version`, and package engines now require Node `>=22.12.0 <23`.
@@ -267,6 +274,10 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ### 0.1.0
 - Initial release.
+
+<div align="center">
+<sub>Built with React, TypeScript, node-pty &amp; xterm.js — plus a lot of tmux. Happy babysitting. 🤖</sub>
+</div>
 
 ## 🧑‍🔬 About the author
 
