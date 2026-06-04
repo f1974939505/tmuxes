@@ -250,6 +250,14 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.8
+- **docs: add the missing 0.1.7 changelog and republish npm package.** Ensures the npm page and repository README both document the SSH long-connection / reconnect behavior.
+
+### 0.1.7
+- **improve: SSH targets now reuse a long-lived connection.** Unix-like platforms use OpenSSH `ControlMaster` / `ControlPersist` so short management commands do not repeatedly create new SSH connections.
+- **change: tmuxes no longer forces `ServerAliveInterval=30`.** Add keepalives to your own `~/.ssh/config` only when your site allows them.
+- **fix: SSH interruptions retry once and then notify the user.** If the shared connection breaks, tmuxes removes the stale control socket and retries once directly; if that still fails, automatic polling pauses and the frontend shows a `Reconnect` button.
+
 ### 0.1.6
 - **fix: Codex stream disconnects no longer leave the red dot stuck.** When Codex prints `stream disconnected before completion` but does not fire a stop hook, the 5-second sync for expanded targets scans the tail of running agent panes, writes back an `error` alert, and restores the dot to green.
 - **improve: Claude Code `StopFailure` is now classified as an abnormal stop.** Normal `Stop` / `SessionEnd` events still show `done`; failed stops show `error`.

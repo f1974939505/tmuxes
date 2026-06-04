@@ -249,6 +249,14 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 ## 📋 更新日志
 
+### 0.1.8
+- **文档:补齐 0.1.7 更新日志并重新发布 npm 包**。确保 npm 页面和仓库 README 都包含 SSH 长连接 / 重连策略说明。
+
+### 0.1.7
+- **改进:SSH 目标改为长期复用连接**。类 Unix 平台通过 OpenSSH `ControlMaster` / `ControlPersist` 复用同一条 SSH 连接,避免短命管理命令反复新建连接。
+- **变更:不再强制 `ServerAliveInterval=30`**。tmuxes 不再主动设置 30 秒 SSH 保活;如需保活,请按所在平台规则写进自己的 `~/.ssh/config`。
+- **修复:SSH 中断只重试一次并提示用户**。复用连接中断时会清理旧 control socket 并直连重试一次;仍失败则暂停自动轮询,在前端显示错误并提供 `Reconnect` 手动重连按钮。
+
 ### 0.1.6
 - **修复:Codex 断流后红灯不恢复**。当 Codex 输出 `stream disconnected before completion` 但没有触发 stop hook 时,已展开目标的 5 秒同步会扫描 running agent 的 pane 尾部,写回 `错误` 提醒并把红点恢复为绿点。
 - **改进:Claude Code `StopFailure` 归类为异常停止**。正常 `Stop` / `SessionEnd` 仍显示 `结束`,失败停止显示 `错误`。
