@@ -15,6 +15,20 @@ const local: Target = { id: 'local', kind: 'local', label: 'Local' };
 const sshFull: Target = { id: 'env-x', kind: 'ssh', label: 'alice@web1:2222', host: 'web1', user: 'alice', port: 2222 };
 const sshAlias: Target = { id: 'cfg-devbox', kind: 'ssh', label: 'devbox', host: 'devbox' };
 const wsl: Target = { id: 'wsl-Ubuntu', kind: 'wsl', label: 'Ubuntu', distro: 'Ubuntu' };
+const isWindows = process.platform === 'win32';
+
+function expectConnectionSharing(argv: string[]): void {
+  if (isWindows) {
+    expect(argv).not.toContain('ControlMaster=auto');
+    expect(argv).not.toContain('ControlPersist=yes');
+    expect(argv.some((arg) => arg.startsWith('ControlPath='))).toBe(false);
+    return;
+  }
+
+  expect(argv).toContain('ControlMaster=auto');
+  expect(argv).toContain('ControlPersist=yes');
+  expect(argv.some((arg) => arg.startsWith('ControlPath='))).toBe(true);
+}
 
 describe('sshQuote', () => {
   it('single-quotes and escapes embedded quotes', () => {
@@ -33,9 +47,7 @@ describe('remoteTmux management (tty:false)', () => {
   it('uses BatchMode, ConnectTimeout, connection sharing, port, and quotes remote args', () => {
     const argv = remoteTmux(sshFull, ['list-sessions', '-F', 'a b'], { tty: false });
     expect(argv.slice(0, 5)).toEqual(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8']);
-    expect(argv).toContain('ControlMaster=auto');
-    expect(argv).toContain('ControlPersist=yes');
-    expect(argv.some((arg) => arg.startsWith('ControlPath='))).toBe(true);
+    expectConnectionSharing(argv);
     expect(argv).toContain('-p');
     expect(argv).toContain('2222');
     expect(argv).toContain('alice@web1');
@@ -60,8 +72,7 @@ describe('remoteTmux interactive (tty:true)', () => {
   it('forces a PTY with -tt, shares the ssh connection, and does not quote args', () => {
     const argv = remoteTmux(sshFull, ['new-session', '-A', '-s', 'work'], { tty: true });
     expect(argv).toContain('-tt');
-    expect(argv).toContain('ControlMaster=auto');
-    expect(argv).toContain('ControlPersist=yes');
+    expectConnectionSharing(argv);
     expect(argv.some((arg) => arg.startsWith('ServerAliveInterval='))).toBe(false);
     expect(argv.slice(-4)).toEqual(['new-session', '-A', '-s', 'work']);
   });

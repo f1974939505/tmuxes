@@ -23,8 +23,9 @@ export function localTmux(sub: string[]): string[] {
 
 function sshControlDir(): string | null {
   // OpenSSH connection sharing avoids repeated TCP/auth handshakes for sidebar
-  // polling and file operations. Windows OpenSSH does not reliably support Unix
-  // control sockets, so leave that platform on plain ssh.
+  // polling and file operations. Windows OpenSSH accepts the config but fails
+  // at runtime on mux sockets, so Windows management uses an app-owned SSH
+  // session instead of ControlMaster.
   if (isWindows) return null;
 
   const uid = process.getuid?.() ?? 'user';

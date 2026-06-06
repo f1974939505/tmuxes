@@ -56,6 +56,12 @@ export interface FilePreview {
   binary: boolean;
 }
 
+export interface SessionDirectory {
+  cwd: string;
+  path: string;
+  entries: FileEntry[];
+}
+
 /** A file opened in the right-hand viewer. */
 export interface OpenFile {
   targetId: string;

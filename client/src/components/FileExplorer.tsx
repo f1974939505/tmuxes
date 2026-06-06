@@ -50,10 +50,12 @@ export function FileExplorer({ selection, openFile, enabled, pauseOnError, onOpe
     if (pollingPaused.current) return;
     if (!targetId || !session) return;
     try {
-      const { cwd: latest } = await api.getCwd(targetId, session);
+      const { cwd: latest, entries } = await api.getSessionFiles(
+        targetId,
+        session,
+        manualPath ?? undefined,
+      );
       setCwd(latest);
-      const listPath = manualPath ?? latest;
-      const { entries } = await api.listFiles(targetId, session, listPath);
       setEntries(entries);
       setError(null);
     } catch (e) {

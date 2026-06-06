@@ -12,7 +12,14 @@ import {
   type LaunchAgent,
 } from '../tmux/sessions.js';
 import { annotate } from '../monitor.js';
-import { getSessionCwd, listDirectory, readFilePreview, resolveScopedPath, writeFile } from '../files.js';
+import {
+  getSessionCwd,
+  listDirectory,
+  listSessionDirectory,
+  readFilePreview,
+  resolveScopedPath,
+  writeFile,
+} from '../files.js';
 import { readFolders, writeFolders } from '../foldersStore.js';
 import { winShell, ManagerError } from '../winshell/manager.js';
 
@@ -198,6 +205,18 @@ apiRouter.get(
     rejectIfWinlocal(target);
     const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
     res.json({ path, entries: await listDirectory(target, path) });
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/files',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target);
+    const name = requireSessionName(req.params.name);
+    const rawPath = req.query.path;
+    const path = rawPath === undefined ? undefined : requirePath(rawPath);
+    res.json(await listSessionDirectory(target, name, path));
   }),
 );
 

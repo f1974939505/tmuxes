@@ -138,7 +138,7 @@ Note: the top-right buttons send a hooked `claude` / `codex` command into the cu
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  Key/agent auth must already work from a normal shell. For a brand-new host, accept its host key once in a regular terminal first. To avoid repeated SSH handshakes for short management calls, Unix-like platforms keep reusing one long-lived OpenSSH connection with `ControlMaster` / `ControlPersist`; tmuxes no longer forces `ServerAliveInterval`, so add keepalives to your own `~/.ssh/config` only when your site allows them. If the shared connection is interrupted, tmuxes bypasses it and retries once; if that still fails, the frontend shows a warning and pauses automatic polling for that SSH target. Click `Reconnect` to try again manually.
+  Key/agent auth must already work from a normal shell. For a brand-new host, accept its host key once in a regular terminal first. To avoid repeated SSH handshakes for short management calls, Unix-like platforms keep reusing one long-lived OpenSSH connection with `ControlMaster` / `ControlPersist`; native Windows keeps an app-owned long-lived SSH management connection instead of using Windows OpenSSH mux sockets, avoiding `getsockname failed: Not a socket`. tmuxes no longer forces `ServerAliveInterval`, so add keepalives to your own `~/.ssh/config` only when your site allows them. If the shared/management connection is interrupted, tmuxes rebuilds it and retries once; if that still fails, the frontend shows a warning and pauses automatic polling for that SSH target. Click `Reconnect` to try again manually.
 
 ## 💻 Requirements
 
@@ -249,6 +249,10 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.9
+- **fix: native Windows SSH management commands now use an app-owned long-lived connection.** Avoids Windows OpenSSH `ControlMaster` mux socket failures (`getsockname failed: Not a socket`) while preventing short management calls from repeatedly opening SSH connections.
+- **improve: file browser remote directory refresh is now coalesced.** One remote call reads the pane cwd, validates scope, and lists the directory, reducing SSH management traffic.
 
 ### 0.1.8
 - **docs: add the missing 0.1.7 changelog and republish npm package.** Ensures the npm page and repository README both document the SSH long-connection / reconnect behavior.

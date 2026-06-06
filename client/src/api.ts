@@ -1,4 +1,12 @@
-import type { FileEntry, FilePreview, LaunchAgent, SessionInfo, Target, WindowInfo } from './types';
+import type {
+  FileEntry,
+  FilePreview,
+  LaunchAgent,
+  SessionDirectory,
+  SessionInfo,
+  Target,
+  WindowInfo,
+} from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -76,6 +84,12 @@ export const api = {
   listFiles(targetId: string, session: string, path: string): Promise<{ path: string; entries: FileEntry[] }> {
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/files?session=${encodeURIComponent(session)}&path=${encodeURIComponent(path)}`,
+    );
+  },
+  getSessionFiles(targetId: string, session: string, path?: string): Promise<SessionDirectory> {
+    const qs = path === undefined ? '' : `?path=${encodeURIComponent(path)}`;
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/files${qs}`,
     );
   },
   getFile(targetId: string, session: string, path: string): Promise<FilePreview> {

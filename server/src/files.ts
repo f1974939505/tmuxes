@@ -23,6 +23,28 @@ export interface FilePreview {
   binary: boolean;
 }
 
+export interface SessionDirectory {
+  cwd: string;
+  path: string;
+  entries: FileEntry[];
+}
+
+const SESSION_DIRECTORY_SCRIPT = [
+  'session=$1',
+  'requested=$2',
+  'cwd=$(tmux display-message -p -t "$session" \'#{pane_current_path}\') || exit $?',
+  'if [ -z "$cwd" ]; then echo "empty session cwd" >&2; exit 70; fi',
+  'root=$(realpath -- "$cwd") || exit $?',
+  'if [ -z "$requested" ]; then requested=$cwd; fi',
+  'case "$requested" in /*) ;; *) echo "path must be absolute" >&2; exit 64;; esac',
+  'candidate=$(realpath -- "$requested") || exit $?',
+  'if [ "$root" = "/" ]; then inside=1; else case "$candidate" in "$root"|"$root"/*) inside=1 ;; *) inside=0 ;; esac; fi',
+  'if [ "$inside" != 1 ]; then echo "path is outside the session working directory" >&2; exit 77; fi',
+  'if [ ! -d "$candidate" ]; then echo "not a directory" >&2; exit 66; fi',
+  'printf "%s\\0%s\\0" "$cwd" "$candidate"',
+  'ls -Ap1 -- "$candidate"',
+].join('\n');
+
 function timeout(t: Target): number | undefined {
   return t.kind === 'local' ? undefined : REMOTE_TIMEOUT_MS;
 }
@@ -128,6 +150,73 @@ function sortEntries(entries: FileEntry[]): FileEntry[] {
   });
 }
 
+function parseRemoteEntries(stdout: string): FileEntry[] {
+  return stdout
+    .split('\n')
+    .filter((l) => l.length > 0)
+    .map((line) => {
+      const isDir = line.endsWith('/');
+      const name = isDir ? line.slice(0, -1) : line;
+      return { name, type: isDir ? ('dir' as const) : ('file' as const) };
+    })
+    .filter((e) => e.name && e.name !== '.' && e.name !== '..');
+}
+
+function sessionDirectoryError(session: string, stderr: string): TmuxError {
+  const first = stderr.trim().split('\n')[0] || 'cannot list directory';
+  if (/can't find|no server running|session not found/i.test(stderr)) {
+    return new TmuxError(404, `session "${session}" not found`);
+  }
+  if (/path must be absolute/i.test(stderr)) return new TmuxError(400, 'path must be absolute');
+  if (/not a directory/i.test(stderr)) return new TmuxError(400, 'not a directory');
+  if (/Permission denied/i.test(stderr)) return new TmuxError(403, 'permission denied');
+  if (/outside the session working directory/i.test(stderr)) {
+    return new TmuxError(403, 'path is outside the session working directory');
+  }
+  if (/No such file|not found|realpath:/i.test(stderr)) return new TmuxError(404, 'path not found');
+  return new TmuxError(502, first);
+}
+
+async function remoteSessionDirectory(
+  t: Target,
+  session: string,
+  requestedPath?: string,
+): Promise<SessionDirectory> {
+  if (requestedPath !== undefined && !requestedPath.startsWith('/')) {
+    throw new TmuxError(400, 'path must be absolute');
+  }
+  const r = await run(t, [
+    'sh',
+    '-c',
+    SESSION_DIRECTORY_SCRIPT,
+    'tmuxes-session-directory',
+    session,
+    requestedPath ?? '',
+  ]);
+  if (r.code !== 0) throw sessionDirectoryError(session, r.stderr);
+
+  const firstSep = r.stdout.indexOf(NUL);
+  const secondSep = firstSep < 0 ? -1 : r.stdout.indexOf(NUL, firstSep + 1);
+  if (firstSep < 0 || secondSep < 0) throw new TmuxError(502, 'cannot parse directory listing');
+
+  const cwd = r.stdout.slice(0, firstSep);
+  const path = r.stdout.slice(firstSep + 1, secondSep);
+  const entries = parseRemoteEntries(r.stdout.slice(secondSep + 1));
+  return { cwd, path, entries: sortEntries(entries) };
+}
+
+export async function listSessionDirectory(
+  t: Target,
+  session: string,
+  requestedPath?: string,
+): Promise<SessionDirectory> {
+  if (t.kind !== 'local') return remoteSessionDirectory(t, session, requestedPath);
+
+  const cwd = await getSessionCwd(t, session);
+  const path = await resolveScopedPath(t, cwd, requestedPath ?? cwd);
+  return { cwd, path, entries: await listDirectory(t, path) };
+}
+
 /** List a directory ON THE TARGET. Local uses fs; wsl/ssh shell out to `ls`. */
 export async function listDirectory(t: Target, path: string): Promise<FileEntry[]> {
   if (t.kind === 'local') {
@@ -162,16 +251,7 @@ export async function listDirectory(t: Target, path: string): Promise<FileEntry[
     if (/Permission denied/i.test(r.stderr)) throw new TmuxError(403, 'permission denied');
     throw new TmuxError(502, r.stderr.trim().split('\n')[0] || 'cannot list directory');
   }
-  const entries: FileEntry[] = r.stdout
-    .split('\n')
-    .filter((l) => l.length > 0)
-    .map((line) => {
-      const isDir = line.endsWith('/');
-      const name = isDir ? line.slice(0, -1) : line;
-      return { name, type: isDir ? ('dir' as const) : ('file' as const) };
-    })
-    .filter((e) => e.name && e.name !== '.' && e.name !== '..');
-  return sortEntries(entries);
+  return sortEntries(parseRemoteEntries(r.stdout));
 }
 
 /** Read a (capped) file preview ON THE TARGET. */

@@ -2,6 +2,8 @@ import { unlinkSync } from 'node:fs';
 import { runCommand, type CommandResult, type RunOptions } from './exec.js';
 import type { Target } from './targets.js';
 import { sshControlPath } from './tmux/builder.js';
+import { isWindows } from './platform.js';
+import { dropWindowsSshSession, runWindowsSshCommand } from './windowsSsh.js';
 
 type BuildArgv = (opts: { multiplex?: boolean }) => { file: string; args: string[] };
 
@@ -31,6 +33,8 @@ export async function runTargetCommand(
   buildArgv: BuildArgv,
   opts: RunOptions = {},
 ): Promise<CommandResult> {
+  if (target.kind === 'ssh' && isWindows) return runWindowsTargetCommand(target, buildArgv, opts);
+
   const firstArgv = buildArgv({ multiplex: true });
   const first = await runCommand(firstArgv.file, firstArgv.args, opts);
   if (target.kind !== 'ssh' || !isInterruptedSsh(first)) return first;
@@ -46,6 +50,26 @@ export async function runTargetCommand(
 
   const retryArgv = buildArgv({ multiplex: false });
   const retry = await runCommand(retryArgv.file, retryArgv.args, opts);
+  if (retry.code === 0 || !isSshClientFailure(retry)) return retry;
+
+  return {
+    ...retry,
+    stderr: `SSH connection interrupted; one reconnect attempt failed: ${firstLine(retry.stderr)}\n${retry.stderr}`,
+  };
+}
+
+async function runWindowsTargetCommand(
+  target: Target,
+  buildArgv: BuildArgv,
+  opts: RunOptions,
+): Promise<CommandResult> {
+  const firstArgv = buildArgv({ multiplex: false });
+  const first = await runWindowsSshCommand(target, firstArgv.file, firstArgv.args, opts);
+  if (!isInterruptedSsh(first)) return first;
+
+  dropWindowsSshSession(target);
+  const retryArgv = buildArgv({ multiplex: false });
+  const retry = await runWindowsSshCommand(target, retryArgv.file, retryArgv.args, opts);
   if (retry.code === 0 || !isSshClientFailure(retry)) return retry;
 
   return {

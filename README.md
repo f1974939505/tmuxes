@@ -138,7 +138,7 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  密钥 / agent 认证必须在普通 shell 里已经能用。全新主机请先在普通终端里接受一次它的 host key。为避免短命管理命令反复新建 SSH 连接，类 Unix 平台会通过 OpenSSH `ControlMaster` / `ControlPersist` 长期复用同一条 SSH 连接；tmuxes 不再强制设置 `ServerAliveInterval`，如需保活请按所在平台规则写进你自己的 `~/.ssh/config`。如果复用连接中断，tmuxes 会绕过旧连接重试一次；仍失败时会在前端页面提示并暂停该 SSH 目标的自动轮询，点击 `Reconnect` 可手动再试一次。
+  密钥 / agent 认证必须在普通 shell 里已经能用。全新主机请先在普通终端里接受一次它的 host key。为避免短命管理命令反复新建 SSH 连接，类 Unix 平台会通过 OpenSSH `ControlMaster` / `ControlPersist` 长期复用同一条 SSH 连接；原生 Windows 则由 tmuxes 维护一条应用层 SSH 管理长连接，不使用 Windows OpenSSH mux socket，避免 `getsockname failed: Not a socket`。tmuxes 不再强制设置 `ServerAliveInterval`，如需保活请按所在平台规则写进你自己的 `~/.ssh/config`。如果复用 / 管理连接中断，tmuxes 会自动重建并重试一次；仍失败时会在前端页面提示并暂停该 SSH 目标的自动轮询，点击 `Reconnect` 可手动再试一次。
 
 ## 💻 环境要求
 
@@ -248,6 +248,10 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.9
+- **修复: Windows SSH 原生管理命令改用应用层长连接**。避免 Windows OpenSSH `ControlMaster` mux socket 的 `getsockname failed: Not a socket`，同时避免短命管理命令反复新建 SSH 连接。
+- **改进: 文件浏览器合并远端目录刷新**。一次远端调用同时读取 pane 工作目录、校验路径并列目录，减少 SSH 管理流量。
 
 ### 0.1.8
 - **文档:补齐 0.1.7 更新日志并重新发布 npm 包**。确保 npm 页面和仓库 README 都包含 SSH 长连接 / 重连策略说明。

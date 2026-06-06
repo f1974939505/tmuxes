@@ -6,6 +6,7 @@ import { isInsideRoot, resolveScopedPath } from '../src/files.js';
 import type { Target } from '../src/targets.js';
 
 const local: Target = { id: 'local', kind: 'local', label: 'Local' };
+const describePosixLocal = process.platform === 'win32' ? describe.skip : describe;
 
 async function withTemp<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), 'tmuxes-files-'));
@@ -25,7 +26,7 @@ describe('isInsideRoot', () => {
   });
 });
 
-describe('resolveScopedPath', () => {
+describePosixLocal('resolveScopedPath', () => {
   it('allows existing files inside the session root', async () => {
     await withTemp(async (dir) => {
       const root = join(dir, 'root');
