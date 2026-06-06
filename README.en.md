@@ -69,11 +69,14 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 
 ## 📦 Install from npm
 
-This little thing is still fresh and growing fast, so there may be a few bugs and fixes may ship quickly; use `@latest` to pick up the newest build.
+Use `@latest` so you get the newest fixes. `tmuxes` is a single-user local tool and only listens on `127.0.0.1`.
 
 ```bash
-# One-shot (no clone, opens the browser):
-npx tmuxes@latest
+# Verify the npm package entrypoint:
+npx --yes tmuxes@latest --help
+
+# One-shot (no clone, opens the browser by default):
+npx --yes tmuxes@latest
 
 # Or install globally and use the `tmuxes` command:
 npm install -g tmuxes
@@ -83,7 +86,11 @@ tmuxes                       # → http://127.0.0.1:7420
 tmuxes --port 8080 --no-open
 ```
 
-> Needs **tmux** on the machine/host you connect to. On **Linux**, `node-pty` compiles from source (`build-essential` + `python3`); **Windows / macOS** ship prebuilt binaries — truly one-click. See Requirements below.
+If `npx` fails on Windows, check:
+
+- `node -v` is **22.12+ and <23**, and `npm -v` is **10+**.
+- You are using the official npm registry and do not have a stale/broken npm cache; run `npm cache verify` before retrying if needed.
+- **tmux** is installed on the machine/host you connect to. On Linux, `node-pty` compiles from source, so install `build-essential` + `python3` first; Windows / macOS use prebuilt binaries.
 
 ## 🚀 One-click from source (for development)
 
@@ -250,42 +257,22 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.11
+- **docs / publishing rules:** added the npm publishing checklist, clarified that only the `server` workspace is published, and requires `npx` / `npm exec` plus local startup smoke tests before and after release.
+- **security constraints:** publishing must not commit or paste `.npmrc` tokens, `NPM_TOKEN`, SSH private keys, one-time passwords, or any personal credentials.
+- **README refresh:** added `npx --help` verification, Windows troubleshooting notes, and condensed early release history.
+
+### 0.1.10
+- **publish fix:** republished the npm `latest` package and verified the online `tmuxes` bin, bundled `public` assets, and `npx tmuxes@latest` entrypoint.
+
 ### 0.1.9
 - **fix: native Windows SSH management commands now use an app-owned long-lived connection.** Avoids Windows OpenSSH `ControlMaster` mux socket failures (`getsockname failed: Not a socket`) while preventing short management calls from repeatedly opening SSH connections.
 - **improve: file browser remote directory refresh is now coalesced.** One remote call reads the pane cwd, validates scope, and lists the directory, reducing SSH management traffic.
 
-### 0.1.8
-- **docs: add the missing 0.1.7 changelog and republish npm package.** Ensures the npm page and repository README both document the SSH long-connection / reconnect behavior.
-
-### 0.1.7
-- **improve: SSH targets now reuse a long-lived connection.** Unix-like platforms use OpenSSH `ControlMaster` / `ControlPersist` so short management commands do not repeatedly create new SSH connections.
-- **change: tmuxes no longer forces `ServerAliveInterval=30`.** Add keepalives to your own `~/.ssh/config` only when your site allows them.
-- **fix: SSH interruptions retry once and then notify the user.** If the shared connection breaks, tmuxes removes the stale control socket and retries once directly; if that still fails, automatic polling pauses and the frontend shows a `Reconnect` button.
-
-### 0.1.6
-- **fix: Codex stream disconnects no longer leave the red dot stuck.** When Codex prints `stream disconnected before completion` but does not fire a stop hook, the 5-second sync for expanded targets scans the tail of running agent panes, writes back an `error` alert, and restores the dot to green.
-- **improve: Claude Code `StopFailure` is now classified as an abnormal stop.** Normal `Stop` / `SessionEnd` events still show `done`; failed stops show `error`.
-
-### 0.1.5
-- **fix: Claude Code launch now uses the `claude` command.** Bare `cc` is the system C compiler in many Linux/SSH environments, so tmuxes no longer treats it as Claude Code by default; the top-right buttons are now `claude` / `codex`.
-- **change: project Node version is standardized on 22.** Added `.nvmrc` / `.node-version`, and package engines now require Node `>=22.12.0 <23`.
-
-### 0.1.4
-- **improve: notifications now use official Claude Code / Codex lifecycle hooks.** Sessions created with an initial `claude` or `codex` command get hooks injected automatically; you can also open an empty session, `cd` to the target directory, then click the top-right `claude` / `codex` button to launch a hooked agent there. tmuxes syncs their tmux session option every 5 seconds. A red dot means running, a green dot means finished or waiting for a decision, and badges distinguish done vs. decision alerts.
-
-### 0.1.3
-- **fix (Windows)**: `Ctrl+C` actually stops the server now. The previous fix was buggy (the readline bridge never entered terminal mode, so it was a no-op), and node-pty's ConPTY backend breaks the host's `CTRL_C_EVENT → SIGINT` path. We now **read the raw Ctrl+C byte (0x03) straight from the console**, bypassing the broken signal machinery. `Ctrl+Break` still works too.
-- **change: native browser right-click restored.** The terminal no longer suppresses the context menu. To use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking (bypasses tmux mouse mode).
-
-### 0.1.2
-- **New: active-to-quiet notifications.** Zero-config monitoring of every session: when a session's terminal screen stops changing, you get a **sidebar status dot + sound + background tab-title flash**. Toggle notifications and sound in Settings.
-
-### 0.1.1
-- **fix (Windows)**: `Ctrl+C` now correctly stops the server. ConPTY child processes (node-pty) were consuming the `CTRL_C_EVENT` before it reached the host node process; fixed by bridging SIGINT via `readline` directly from the console input layer.
-- **fix (terminal)**: Right-click now works in tmux mouse mode. The browser's native context menu is suppressed inside the terminal area so right-click events flow through xterm → tmux. Requires `set -g mouse on` in tmux.
-
-### 0.1.0
-- Initial release.
+### 0.1.0 - 0.1.8
+- **early feature set:** built local / SSH / WSL / native Windows shell targets, tmux attach multi-client sync, draggable folders, and the working-directory file browser/editor.
+- **agent alerts:** evolved from active-to-quiet notifications to official Claude Code / Codex lifecycle hooks with done, decision, and abnormal-stop states.
+- **Windows / SSH stability:** fixed ConPTY `Ctrl+C` shutdown, restored native browser right-click, and moved SSH management calls to long-lived reusable connections with only one automatic reconnect.
 
 <div align="center">
 <sub>Built with React, TypeScript, node-pty &amp; xterm.js — plus a lot of tmux. Happy babysitting. 🤖</sub>

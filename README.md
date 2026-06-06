@@ -69,11 +69,14 @@
 
 ## 📦 用 npm 安装
 
-刚刚开用的小家伙还在快速长身体,可能偶尔有 bug,修复更新也会比较快;建议用 `@latest` 总是拿到最新版本。
+建议直接用 `@latest`，这样能拿到最新的修复包。`tmuxes` 是单用户本机工具，启动后只监听 `127.0.0.1`。
 
 ```bash
-# 一键运行(无需克隆,自动开浏览器):
-npx tmuxes@latest
+# 先验证 npm 包入口:
+npx --yes tmuxes@latest --help
+
+# 一键运行(无需克隆,默认自动开浏览器):
+npx --yes tmuxes@latest
 
 # 或全局安装后用 tmuxes 命令:
 npm install -g tmuxes
@@ -83,7 +86,11 @@ tmuxes                       # → http://127.0.0.1:7420
 tmuxes --port 8080 --no-open
 ```
 
-> 前提:你要连的机器/主机上装了 **tmux**。**Linux** 上 `node-pty` 需现场编译(装 `build-essential` + `python3`);**Windows / macOS** 有预编译二进制,真·一键。详见下方「环境要求」。
+如果 Windows 上 `npx` 失败，先确认：
+
+- `node -v` 是 **22.12+ 且 <23**，`npm -v` 是 **10+**。
+- 使用的是官方 npm registry，且没有旧缓存污染；必要时先跑 `npm cache verify` 再重试。
+- 你要连接的机器/主机上已经装好 **tmux**。Linux 上 `node-pty` 需要现场编译，先装 `build-essential` + `python3`；Windows / macOS 使用预编译二进制。
 
 ## 🚀 从源码一键启动(开发用)
 
@@ -249,42 +256,22 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 ## 📋 更新日志
 
+### 0.1.11
+- **文档 / 发布规范**：补齐 npm 发布检查流程，明确只发布 `server` workspace，发布前后都要验证 `npx` / `npm exec` 入口和本机启动 smoke test。
+- **安全约束**：发布流程不得提交或粘贴 `.npmrc` token、`NPM_TOKEN`、SSH 私钥、一次性验证码或任何个人凭据。
+- **README 重整**：安装说明加入 `npx --help` 验证、Windows 排错提示，并压缩早期版本更新。
+
+### 0.1.10
+- **发布修正**：重新发布 npm `latest` 包，确认线上 `tmuxes` bin、前端 `public` 资源和 `npx tmuxes@latest` 入口可用。
+
 ### 0.1.9
 - **修复: Windows SSH 原生管理命令改用应用层长连接**。避免 Windows OpenSSH `ControlMaster` mux socket 的 `getsockname failed: Not a socket`，同时避免短命管理命令反复新建 SSH 连接。
 - **改进: 文件浏览器合并远端目录刷新**。一次远端调用同时读取 pane 工作目录、校验路径并列目录，减少 SSH 管理流量。
 
-### 0.1.8
-- **文档:补齐 0.1.7 更新日志并重新发布 npm 包**。确保 npm 页面和仓库 README 都包含 SSH 长连接 / 重连策略说明。
-
-### 0.1.7
-- **改进:SSH 目标改为长期复用连接**。类 Unix 平台通过 OpenSSH `ControlMaster` / `ControlPersist` 复用同一条 SSH 连接,避免短命管理命令反复新建连接。
-- **变更:不再强制 `ServerAliveInterval=30`**。tmuxes 不再主动设置 30 秒 SSH 保活;如需保活,请按所在平台规则写进自己的 `~/.ssh/config`。
-- **修复:SSH 中断只重试一次并提示用户**。复用连接中断时会清理旧 control socket 并直连重试一次;仍失败则暂停自动轮询,在前端显示错误并提供 `Reconnect` 手动重连按钮。
-
-### 0.1.6
-- **修复:Codex 断流后红灯不恢复**。当 Codex 输出 `stream disconnected before completion` 但没有触发 stop hook 时,已展开目标的 5 秒同步会扫描 running agent 的 pane 尾部,写回 `错误` 提醒并把红点恢复为绿点。
-- **改进:Claude Code `StopFailure` 归类为异常停止**。正常 `Stop` / `SessionEnd` 仍显示 `结束`,失败停止显示 `错误`。
-
-### 0.1.5
-- **修复:Claude Code 启动改用 `claude` 命令**。裸 `cc` 在很多 Linux/SSH 环境里是系统 C 编译器,不再默认识别为 Claude Code,右上角按钮也改为 `claude` / `codex`。
-- **变更:项目 Node 版本统一到 22**。新增 `.nvmrc` / `.node-version`,并将 package engines 统一为 Node `>=22.12.0 <23`。
-
-### 0.1.4
-- **改进:提醒改为 Claude Code / Codex 官方 lifecycle hooks**。新建会话时初始命令是 `claude` 或 `codex` 会自动注入 hooks;也可以先进入空 session `cd` 到目标目录,再点右上角 `claude` / `codex` 按钮启动带 hook 的 agent。tmuxes 每 5 秒读取 tmux session option 同步状态。红点表示正在运行,绿点表示已结束或需要决策,并分别显示「结束 / 决策」提示。
-
-### 0.1.3
-- **修复 (Windows)**:`Ctrl+C` 现在真的能停掉服务了。之前的修复有 bug(readline 没进入终端模式,信号桥接形同虚设),而且 node-pty 的 ConPTY 会破坏宿主进程的 `CTRL_C_EVENT → SIGINT` 通路。改为**直接从控制台读取 `Ctrl+C` 原始字节(0x03)**,绕开被破坏的信号机制。`Ctrl+Break` 同样可用。
-- **变更:恢复浏览器原生右键**。终端区域不再拦截右键菜单。想用浏览器原生**框选 + 右键复制粘贴**,**按住 `Shift`** 拖动 / 右键即可(绕过 tmux 鼠标模式)。
-
-### 0.1.2
-- **新增:活动转静止提醒**。零配置监测每个会话——session 终端画面从持续变化转为静止后,通过**侧边栏状态点 + 提示音 + 后台标签页标题闪烁**提醒你。设置面板可开关提醒与提示音。
-
-### 0.1.1
-- **修复 (Windows)**：`Ctrl+C` 现在可以正常终止服务端进程。node-pty 的 ConPTY 子进程会拦截 `CTRL_C_EVENT` 导致 SIGINT 无法到达宿主 node；通过 `readline` 从控制台输入层直接桥接 SIGINT 修复此问题。
-- **修复 (终端)**：鼠标右键现在可以在 tmux 鼠标模式里正常使用。浏览器原生右键菜单在终端区域被禁用，右键事件直接传入 xterm → tmux。需要在 tmux 里开启 `set -g mouse on`。
-
-### 0.1.0
-- 初次发布。
+### 0.1.0 - 0.1.8
+- **早期功能成型**：完成本地 / SSH / WSL / Windows shell 目标、tmux attach 多端同步、拖拽文件夹树、工作目录文件浏览与编辑。
+- **agent 提醒演进**：从活动转静止提醒升级到 Claude Code / Codex 官方 lifecycle hooks，支持结束、决策和异常停止状态。
+- **Windows / SSH 稳定性**：修复 ConPTY 下 `Ctrl+C` 退出、恢复浏览器原生右键，并将 SSH 管理命令改为长期复用连接且中断后只自动重试一次。
 
 <div align="center">
 <sub>用 React、TypeScript、node-pty &amp; xterm.js 打造 —— 外加大量 tmux。盯娃愉快。🤖</sub>
