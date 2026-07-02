@@ -7,9 +7,9 @@
 ### 一个浏览器标签页，掌控一整群 CLI coding agent。
 
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
-横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器。
+横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器和 Git 面板。
 
-🔔 **Claude Code / Codex 结束运行、异常停止或需要决策时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 决策 / 错误」提示 + 提示音 + 后台标签页标题闪烁。再也不用挨个窗格去盯「它还在跑吗」。
+🔔 **Claude Code / Codex 结束运行或异常停止时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 错误」提示 + 提示音 + 后台标签页标题闪烁。审批 / 决策请求不再触发提醒，避免 Codex 自动审批时误报。
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -37,10 +37,11 @@
 | | |
 |---|---|
 | 🧠 **为 agent 而生** | 每个 agent 独占一个 tmux 会话。新建时可带初始命令（比如 `claude` 或 `codex`），选中后右侧就是一个**完全可交互的实时终端**。 |
-| 🔔 **结束 / 决策 / 错误提醒** | 新建会话时初始命令是 `claude` 或 `codex` 会自动接入官方 lifecycle hooks。也可以先进入空 session `cd` 到目标目录,再点终端右上角的 `claude` / `codex` 按钮启动带 hook 的 agent。已展开目标每 5 秒同步一次:红点表示 agent 正在运行,绿点表示已结束、异常停止或正在等你决策;结束运行、需要决策和异常停止会显示不同提示。 |
+| 🔔 **结束 / 错误提醒** | 新建会话时初始命令是 `claude` 或 `codex` 会自动接入官方 lifecycle hooks。也可以先进入空 session `cd` 到目标目录,再点终端右上角的 `claude` / `codex` 按钮启动带 hook 的 agent。已展开目标每 5 秒同步一次:红点表示 agent 正在运行,绿点表示已结束或异常停止;结束运行和异常停止会显示不同提示。 |
 | 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧边栏同时列出你的本机、`~/.ssh/config` 里的主机、（Windows 上）你的 WSL 发行版，以及（Windows）原生 PowerShell / cmd 会话 —— 全部并排排开。 |
 | 🗂️ **文件夹树** | 像资源管理器一样，把会话拖进**可拖拽的文件夹**里整理。按目标分别持久化到本地。 |
 | 📂 **实时文件浏览 + 编辑** | 侧边栏底部跟随每个会话的**工作目录** —— 点一个代码文件就能把终端一分为二，在下面**直接读和改**（可保存、撤销/重做）。 |
+| 🔀 **Git 面板** | 侧边栏底部可切到 Git 视图，基于当前会话工作目录查看仓库状态、未提交更改、提交历史和远端未合入提交；点击待提交文件会在右侧大区域底部打开类似 VS Code 的左右红绿 diff，点击 commit 会在同一区域显示完整 patch；支持切换分支、fetch、pull、push、sync 和一键提交全部工作区更改。Git 认证沿用目标机器已有配置，tmuxes 不保存凭据。 |
 | 🔁 **真·多端同步** | 基于原生 `tmux attach`：同一个会话开两个标签页，逐键同步、互为镜像。 |
 | ⚙️ **可调** | 侧边栏、终端、文件查看器的字号都能调，**实时生效**、刷新后仍保留。 |
 | 🚀 **一键启动** | 双击 `start.cmd` / `start.command` / `start.sh` → 自动构建、启动、打开浏览器。 |
@@ -54,7 +55,7 @@
 ## 🏗️ 架构
 
 ```text
-                          REST  (create · list · rename · kill · cwd · files)
+                          REST  (create · list · rename · kill · cwd · files · git)
   ┌────────────┐   ┌──────────────────────┐        ┌──────────────────────────────────┐
   │  Browser   │──▶│  Node · Express · ws │──pty──▶│ tmux                  (Linux/macOS)│
   │  xterm.js  │◀──│        node-pty      │──pty──▶│ ssh -tt user@host → tmux   (remote)│
@@ -116,7 +117,7 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 ## 🔔 启动带 hook 的 Claude Code / Codex
 
-tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接入官方 lifecycle hooks，用来判断 agent 是正在运行、已经结束、异常停止，还是正在等你做决策。
+tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接入官方 lifecycle hooks，用来判断 agent 是正在运行、已经结束或异常停止。
 
 两种用法：
 
@@ -126,12 +127,23 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
 状态含义：
 
 - 红点：agent 正在运行。
-- 绿点：agent 已结束、异常停止、正在等你决策，或这个 session 没接入 agent hook。
+- 绿点：agent 已结束、异常停止，或这个 session 没接入 agent hook。
 - `结束` badge：本轮运行结束。
-- `决策` badge：agent 正在等待权限确认或用户输入。Codex 开启 `approvals_reviewer = "auto_review"` / Approve for me 时，普通审批请求会交给 Codex 自动 reviewer，不会被误判成需要你手动决策。
 - `错误` badge：agent 异常停止，例如 Codex 断流但没有触发 stop hook。tmuxes 会在已展开目标的 5 秒同步里扫描 running agent 的 pane 尾部并把这类错误纠正为提醒状态。
 
+审批 / 决策请求不会触发浏览器提醒。也就是说，Codex 开启自动审批 / Approve for me 时不会因为 `PermissionRequest` 把 tmuxes 切成“需要决策”提醒；人工审批模式也同样不再响铃。
+
 注意：右上角按钮本质上是向当前 tmux pane 发送一条带 hook 的 `claude` / `codex` 命令。不要在当前 pane 里已有程序正在接收输入时点击它。裸 `cc` 常常是系统 C 编译器，tmuxes 不会默认把它当作 Claude Code。原生 Windows shell 没有 tmux session option，因此不支持这套 hook 状态。
+
+## 🔀 Git 面板
+
+侧边栏底部可以从 `文件` 切到 `Git`。Git 面板绑定当前选中 tmux session 的工作目录，不做后台 Git 轮询；进入面板、切换会话、点击刷新或执行 Git 操作后才读取状态。
+
+- **工作区更改**：单独列出未提交文件。点击待提交文件会在右侧大区域底部打开类似 VS Code 的左右红绿 diff；未跟踪文件也会按新增文件显示。
+- **提交**：输入 commit message 后点 `Commit`，tmuxes 会执行 `git add -A` 再创建 commit；有冲突时不会提交。
+- **提交历史 / 远端提交**：显示当前分支最近提交，以及 upstream 上尚未合入本地的远端提交。点击任一 commit 会在同一个底部查看区显示完整 patch。
+- **同步操作**：支持 fetch、`pull --ff-only`、push、sync（`fetch --prune` → `pull --ff-only` → 必要时 push）和分支切换。不会执行 force push、reset、discard、clean 或删除分支。
+- **凭据**：Git 认证沿用目标机器已有 Git / SSH 配置，tmuxes 不保存凭据。若目标环境配置了缺失的 `credential-manager` helper，fetch / pull / push 会临时禁用 credential helper 自动重试一次，避免 public / SSH 仓库被坏 helper 阻断。
 
 ## 🧩 目标（Targets）
 
@@ -256,6 +268,12 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 ## 📋 更新日志
 
+### 0.1.13
+- **移除决策提醒**：Claude Code / Codex 的审批、权限确认和用户决策请求不再触发浏览器提醒；tmuxes 只提醒 agent 结束和异常停止，避免 Codex 自动审批流程误报。
+- **Git 面板**：侧边栏底部新增 Git 视图，支持当前会话工作目录的状态查看、未提交更改列表、文件 diff、分支切换、fetch、pull、push、sync，以及 stage 全部更改后创建 commit。
+- **提交历史 / 远端提交**：Git 面板会显示当前分支最近提交和 upstream 上尚未合入的远端提交，点击提交会在右侧大区域底部打开完整 patch；点击待提交文件会打开左右红绿 diff。
+- **credential-manager fallback**：fetch / pull / push 遇到目标环境配置了缺失的 `credential-manager` helper 时，会自动用临时禁用 credential helper 的方式重试一次，避免 public/SSH 仓库被错误 helper 阻断。
+
 ### 0.1.12
 - **Codex auto-review 提醒修复**：Codex 开启 `approvals_reviewer = "auto_review"` / Approve for me 时，审批请求会保持 running 状态，不再误触发 `决策` badge、提示音或后台标签页闪烁；人工审批配置仍会正常提醒。
 
@@ -273,7 +291,7 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 ### 0.1.0 - 0.1.8
 - **早期功能成型**：完成本地 / SSH / WSL / Windows shell 目标、tmux attach 多端同步、拖拽文件夹树、工作目录文件浏览与编辑。
-- **agent 提醒演进**：从活动转静止提醒升级到 Claude Code / Codex 官方 lifecycle hooks，支持结束、决策和异常停止状态。
+- **agent 提醒演进**：从活动转静止提醒升级到 Claude Code / Codex 官方 lifecycle hooks，支持结束和异常停止状态。
 - **Windows / SSH 稳定性**：修复 ConPTY 下 `Ctrl+C` 退出、恢复浏览器原生右键，并将 SSH 管理命令改为长期复用连接且中断后只自动重试一次。
 
 <div align="center">

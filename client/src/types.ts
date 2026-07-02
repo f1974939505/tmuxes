@@ -34,7 +34,7 @@ export interface SessionInfo {
 
 export type AgentKind = 'claude' | 'codex';
 export type AgentState = 'running' | 'waiting' | 'idle';
-export type AttentionReason = 'decision' | 'done' | 'error';
+export type AttentionReason = 'done' | 'error';
 export type LaunchAgent = 'claude' | 'codex';
 
 export interface WindowInfo {
@@ -62,12 +62,110 @@ export interface SessionDirectory {
   entries: FileEntry[];
 }
 
+export interface GitBranch {
+  name: string;
+  current: boolean;
+  remote: boolean;
+  upstream?: string;
+  ahead?: number;
+  behind?: number;
+}
+
+export interface GitCounts {
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  conflicted: number;
+}
+
+export type GitChangeKind =
+  | 'added'
+  | 'modified'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'typechange'
+  | 'untracked'
+  | 'conflicted';
+
+export interface GitFileChange {
+  path: string;
+  originalPath?: string;
+  index: string;
+  worktree: string;
+  kind: GitChangeKind;
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+  conflicted: boolean;
+}
+
+export interface GitCommit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: string;
+  subject: string;
+  remote: boolean;
+}
+
+export interface GitState {
+  available: boolean;
+  cwd: string;
+  root?: string;
+  branch?: string;
+  detached?: boolean;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  dirty: boolean;
+  counts: GitCounts;
+  files: GitFileChange[];
+  branches: GitBranch[];
+  remotes: string[];
+  commits: GitCommit[];
+  remoteCommits: GitCommit[];
+  error?: string;
+}
+
+export interface GitOperationStep {
+  name: 'fetch' | 'pull' | 'push' | 'add' | 'commit';
+  output: string;
+  skipped?: boolean;
+}
+
+export interface GitOperationResult {
+  ok: true;
+  output?: string;
+  steps?: GitOperationStep[];
+  state: GitState;
+}
+
+export interface GitCommitDetail {
+  hash: string;
+  output: string;
+}
+
+export interface GitDiffResult {
+  path: string;
+  staged: boolean;
+  diff: string;
+}
+
 /** A file opened in the right-hand viewer. */
 export interface OpenFile {
   targetId: string;
   session: string;
   path: string;
   name: string;
+}
+
+/** Read-only text shown in the same viewer region as file previews. */
+export interface OpenTextPreview {
+  title: string;
+  subtitle?: string;
+  content: string;
+  mode?: 'text' | 'diff';
 }
 
 export interface Selection {

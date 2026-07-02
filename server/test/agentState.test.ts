@@ -21,4 +21,14 @@ describe('agent state values', () => {
       agentNonce: '42',
     });
   });
+
+  it('does not treat legacy decision values as notification reasons', () => {
+    expect(parseAgentValue('codex:waiting:decision:PermissionRequest:42')).toMatchObject({
+      agentKind: 'codex',
+      agentState: 'waiting',
+      agentEvent: 'PermissionRequest',
+      agentNonce: '42',
+    });
+    expect(parseAgentValue('codex:waiting:decision:PermissionRequest:42')?.attentionReason).toBeUndefined();
+  });
 });

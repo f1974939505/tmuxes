@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
-import type { OpenFile, Selection, Target } from '../types';
+import type { OpenFile, OpenTextPreview, Selection, Target } from '../types';
 import { useSettings } from '../settings';
 import { useI18n } from '../i18n';
 import { TargetGroup } from './TargetGroup';
 import { FileExplorer } from './FileExplorer';
+import { GitPanel } from './GitPanel';
 import { SettingsButton } from './SettingsButton';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
   select: (sel: Selection | null) => void;
   onRefreshTargets: () => void;
   onOpenFile: (file: OpenFile) => void;
+  onOpenText: (preview: OpenTextPreview) => void;
 }
 
 const MIN_BOTTOM = 120;
@@ -28,10 +30,12 @@ export function Sidebar({
   select,
   onRefreshTargets,
   onOpenFile,
+  onOpenText,
 }: Props) {
   const { settings } = useSettings();
   const { t } = useI18n();
   const [bottomHeight, setBottomHeight] = useState(260);
+  const [bottomTab, setBottomTab] = useState<'files' | 'git'>('files');
   const dragState = useRef<{ startY: number; startH: number } | null>(null);
 
   const onDividerDown = useCallback(
@@ -78,14 +82,35 @@ export function Sidebar({
       <div className="sidebar-vdivider" onMouseDown={onDividerDown} title={t.dragResize} />
 
       <div className="sidebar-bottom" style={{ height: bottomHeight }}>
-        <div className="section-label">{t.workingDirectory}</div>
-        <FileExplorer
-          selection={selection}
-          openFile={openFile}
-          enabled={fileBrowsingEnabled}
-          pauseOnError={selectedTarget?.kind === 'ssh'}
-          onOpenFile={onOpenFile}
-        />
+        <div className="sidebar-tabs" role="tablist" aria-label={t.workingDirectory}>
+          <button
+            className={bottomTab === 'files' ? 'active' : ''}
+            role="tab"
+            aria-selected={bottomTab === 'files'}
+            onClick={() => setBottomTab('files')}
+          >
+            {t.filesTab}
+          </button>
+          <button
+            className={bottomTab === 'git' ? 'active' : ''}
+            role="tab"
+            aria-selected={bottomTab === 'git'}
+            onClick={() => setBottomTab('git')}
+          >
+            {t.gitTab}
+          </button>
+        </div>
+        {bottomTab === 'files' ? (
+          <FileExplorer
+            selection={selection}
+            openFile={openFile}
+            enabled={fileBrowsingEnabled}
+            pauseOnError={selectedTarget?.kind === 'ssh'}
+            onOpenFile={onOpenFile}
+          />
+        ) : (
+          <GitPanel selection={selection} enabled={fileBrowsingEnabled} onOpenText={onOpenText} />
+        )}
       </div>
 
       <div className="sidebar-footer">

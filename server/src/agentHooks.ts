@@ -51,19 +51,6 @@ function claudeSettings(): string {
       UserPromptSubmit: [{ hooks: [hook('claude', 'running', '', 'UserPromptSubmit')] }],
       PreToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PreToolUse')] }],
       PostToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PostToolUse')] }],
-      PermissionRequest: [
-        { matcher: '', hooks: [hook('claude', 'waiting', 'decision', 'PermissionRequest')] },
-      ],
-      Notification: [
-        {
-          matcher: 'permission_prompt',
-          hooks: [hook('claude', 'waiting', 'decision', 'Notification.permission_prompt')],
-        },
-        {
-          matcher: 'elicitation_dialog',
-          hooks: [hook('claude', 'waiting', 'decision', 'Notification.elicitation_dialog')],
-        },
-      ],
       Stop: [{ hooks: [hook('claude', 'idle', 'done', 'Stop')] }],
       StopFailure: [{ hooks: [hook('claude', 'idle', 'error', 'StopFailure')] }],
       SessionEnd: [{ hooks: [hook('claude', 'idle', 'done', 'SessionEnd')] }],
@@ -73,53 +60,6 @@ function claudeSettings(): string {
 
 function tomlString(v: string): string {
   return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
-
-export function codexPermissionRequestHookCommand(): string {
-  const autoReviewCommand = agentHookCommand(
-    'codex',
-    'running',
-    '',
-    'PermissionRequest.auto_review',
-  );
-  const userReviewCommand = agentHookCommand(
-    'codex',
-    'waiting',
-    'decision',
-    'PermissionRequest.user',
-  );
-
-  return [
-    'tmuxes_codex_reviewer=;',
-    'tmuxes_codex_cfg() {',
-    '[ -r "$1" ] || return;',
-    'tmuxes_codex_line=$(grep -E "^[[:space:]]*approvals_reviewer[[:space:]]*=" "$1" 2>/dev/null | tail -n 1);',
-    'case "$tmuxes_codex_line" in',
-    '*\\"*)',
-    'tmuxes_codex_val=${tmuxes_codex_line#*\\"};',
-    'tmuxes_codex_val=${tmuxes_codex_val%%\\"*};',
-    '[ -n "$tmuxes_codex_val" ] && tmuxes_codex_reviewer=$tmuxes_codex_val;',
-    ';;',
-    'esac;',
-    '};',
-    'tmuxes_codex_walk() {',
-    '[ -n "$1" ] || return;',
-    'if [ "$1" != "/" ]; then',
-    'tmuxes_codex_parent=${1%/*};',
-    '[ -n "$tmuxes_codex_parent" ] || tmuxes_codex_parent=/;',
-    'tmuxes_codex_walk "$tmuxes_codex_parent";',
-    'fi;',
-    'tmuxes_codex_cfg "$1/.codex/config.toml";',
-    '};',
-    'tmuxes_codex_home=${CODEX_HOME:-${HOME:-}/.codex};',
-    'tmuxes_codex_cfg "$tmuxes_codex_home/config.toml";',
-    'tmuxes_codex_walk "$PWD";',
-    'if [ "$tmuxes_codex_reviewer" = auto_review ]; then',
-    `${autoReviewCommand};`,
-    'else',
-    `${userReviewCommand};`,
-    'fi',
-  ].join(' ');
 }
 
 function codexHookConfig(
@@ -140,11 +80,6 @@ function codexConfigArgs(): string {
     codexHookConfig('PostToolUse', agentHookCommand('codex', 'running', '', 'PostToolUse'), {
       matcher: '',
     }),
-    codexHookConfig(
-      'PermissionRequest',
-      codexPermissionRequestHookCommand(),
-      { matcher: '' },
-    ),
     codexHookConfig('Stop', agentHookCommand('codex', 'idle', 'done', 'Stop')),
   ];
   return configs.map((c) => `-c '${c}'`).join(' ');

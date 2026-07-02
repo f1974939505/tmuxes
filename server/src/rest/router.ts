@@ -20,6 +20,17 @@ import {
   resolveScopedPath,
   writeFile,
 } from '../files.js';
+import {
+  checkoutSessionGit,
+  commitSessionGit,
+  fetchSessionGit,
+  getSessionGitCommit,
+  getSessionGitDiff,
+  getSessionGitState,
+  pullSessionGit,
+  pushSessionGit,
+  syncSessionGit,
+} from '../git.js';
 import { readFolders, writeFolders } from '../foldersStore.js';
 import { winShell, ManagerError } from '../winshell/manager.js';
 
@@ -179,10 +190,10 @@ apiRouter.get(
   }),
 );
 
-/** The file browser relies on tmux's pane cwd; native Windows shells have none. */
-function rejectIfWinlocal(target: Target): void {
+/** Cwd-scoped features rely on tmux's pane cwd; native Windows shells have none. */
+function rejectIfWinlocal(target: Target, feature = 'file browsing'): void {
   if (target.kind === 'winlocal') {
-    throw new TmuxError(400, 'file browsing is not available for native shell sessions');
+    throw new TmuxError(400, `${feature} is not available for native shell sessions`);
   }
 }
 
@@ -243,6 +254,104 @@ apiRouter.put(
     }
     await writeFile(target, path, body.content);
     res.json({ ok: true });
+  }),
+);
+
+// --- Git panel (current pane cwd + repository status/actions) ---
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/git',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    res.json(await getSessionGitState(target, name));
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/git/fetch',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    res.json(await fetchSessionGit(target, name));
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/git/pull',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    res.json(await pullSessionGit(target, name));
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/git/push',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    res.json(await pushSessionGit(target, name));
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/git/sync',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    res.json(await syncSessionGit(target, name));
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/git/checkout',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    const branch = (req.body ?? {}).branch;
+    if (typeof branch !== 'string') throw new TmuxError(400, 'branch must be a string');
+    res.json(await checkoutSessionGit(target, name, branch));
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/git/diff',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    const path = typeof req.query.path === 'string' ? req.query.path : '';
+    const staged = req.query.staged === '1' || req.query.staged === 'true';
+    res.json(await getSessionGitDiff(target, name, path, staged));
+  }),
+);
+
+apiRouter.get(
+  '/targets/:id/sessions/:name/git/commit/:hash',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    const hash = typeof req.params.hash === 'string' ? req.params.hash : '';
+    res.json(await getSessionGitCommit(target, name, hash));
+  }),
+);
+
+apiRouter.post(
+  '/targets/:id/sessions/:name/git/commit',
+  wrap(async (req, res) => {
+    const target = requireTarget(req);
+    rejectIfWinlocal(target, 'Git');
+    const name = requireSessionName(req.params.name);
+    const message = (req.body ?? {}).message;
+    res.json(await commitSessionGit(target, name, message));
   }),
 );
 

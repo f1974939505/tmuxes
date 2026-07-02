@@ -1,6 +1,10 @@
 import type {
   FileEntry,
   FilePreview,
+  GitCommitDetail,
+  GitDiffResult,
+  GitOperationResult,
+  GitState,
   LaunchAgent,
   SessionDirectory,
   SessionInfo,
@@ -90,6 +94,58 @@ export const api = {
     const qs = path === undefined ? '' : `?path=${encodeURIComponent(path)}`;
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/files${qs}`,
+    );
+  },
+  getGitState(targetId: string, session: string): Promise<GitState> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git`,
+    );
+  },
+  gitFetch(targetId: string, session: string): Promise<GitOperationResult> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/fetch`,
+      { method: 'POST' },
+    );
+  },
+  gitPull(targetId: string, session: string): Promise<GitOperationResult> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/pull`,
+      { method: 'POST' },
+    );
+  },
+  gitPush(targetId: string, session: string): Promise<GitOperationResult> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/push`,
+      { method: 'POST' },
+    );
+  },
+  gitSync(targetId: string, session: string): Promise<GitOperationResult> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/sync`,
+      { method: 'POST' },
+    );
+  },
+  gitCheckout(targetId: string, session: string, branch: string): Promise<GitOperationResult> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/checkout`,
+      { method: 'POST', body: JSON.stringify({ branch }) },
+    );
+  },
+  getGitDiff(targetId: string, session: string, path: string, staged = false): Promise<GitDiffResult> {
+    const qs = new URLSearchParams({ path, staged: staged ? '1' : '0' });
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/diff?${qs.toString()}`,
+    );
+  },
+  getGitCommit(targetId: string, session: string, hash: string): Promise<GitCommitDetail> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/commit/${encodeURIComponent(hash)}`,
+    );
+  },
+  gitCommit(targetId: string, session: string, message: string): Promise<GitOperationResult> {
+    return request(
+      `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/git/commit`,
+      { method: 'POST', body: JSON.stringify({ message }) },
     );
   },
   getFile(targetId: string, session: string, path: string): Promise<FilePreview> {

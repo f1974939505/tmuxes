@@ -20,7 +20,7 @@ app.use('/api', apiRouter);
 // Serve the built client. Published npm package bundles it at <pkg>/public;
 // in the dev monorepo it lives at server/../../client/dist.
 const here = dirname(fileURLToPath(import.meta.url));
-const clientDist = [join(here, '..', 'public'), join(here, '..', '..', 'client', 'dist')].find(existsSync);
+const clientDist = [join(here, '..', '..', 'client', 'dist'), join(here, '..', 'public')].find(existsSync);
 if (clientDist) {
   app.use(express.static(clientDist));
   // SPA fallback for non-API GET routes (avoids path-to-regexp '*' quirks in Express 5).

@@ -20,7 +20,7 @@ describe('parseSessions', () => {
       { name: 'my proj', windows: 1, attached: false, created: 1700000100, lastActivity: 1700000150 },
     ]);
   });
-  it('parses hook-derived agent state', () => {
+  it('ignores legacy decision reasons from old hook-derived agent state', () => {
     const out = [
       '1',
       '0',
@@ -38,7 +38,6 @@ describe('parseSessions', () => {
         lastActivity: 1700000150,
         agentKind: 'codex',
         agentState: 'waiting',
-        attentionReason: 'decision',
         agentEvent: 'PermissionRequest',
         agentNonce: '1700000200.42',
       },

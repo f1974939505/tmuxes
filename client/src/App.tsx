@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './api';
-import type { OpenFile, Selection, Target } from './types';
+import type { OpenFile, OpenTextPreview, Selection, Target } from './types';
 import { useSettings } from './settings';
 import { useAttention } from './attention';
 import { useI18n } from './i18n';
 import { Sidebar } from './components/Sidebar';
 import { TerminalPanel } from './components/TerminalPanel';
 import { FileViewer } from './components/FileViewer';
+import { TextViewer } from './components/TextViewer';
 
 export function App() {
   const { settings } = useSettings();
@@ -16,6 +17,7 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
+  const [openText, setOpenText] = useState<OpenTextPreview | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [viewerHeight, setViewerHeight] = useState(300);
@@ -38,6 +40,7 @@ export function App() {
   // Switching sessions changes the file context — close any open file.
   useEffect(() => {
     setOpenFile(null);
+    setOpenText(null);
   }, [selection?.targetId, selection?.session]);
 
   // Tell the attention tracker which session is in view, so it acknowledges
@@ -74,6 +77,17 @@ export function App() {
   );
 
   const selectedTarget = selection ? targets.find((t) => t.id === selection.targetId) : undefined;
+  const openViewer = !!openFile || !!openText;
+
+  const handleOpenFile = (file: OpenFile) => {
+    setOpenText(null);
+    setOpenFile(file);
+  };
+
+  const handleOpenText = (preview: OpenTextPreview) => {
+    setOpenFile(null);
+    setOpenText(preview);
+  };
 
   return (
     <div className="app">
@@ -85,7 +99,8 @@ export function App() {
         openFile={openFile}
         select={setSelection}
         onRefreshTargets={() => void loadTargets()}
-        onOpenFile={setOpenFile}
+        onOpenFile={handleOpenFile}
+        onOpenText={handleOpenText}
       />
 
       <div className="workspace">
@@ -109,11 +124,12 @@ export function App() {
           )}
         </div>
 
-        {openFile && (
+        {openViewer && (
           <>
             <div className="hdivider" onMouseDown={onViewerDividerDown} title={t.dragResize} />
             <div className="viewer-region" style={{ height: viewerHeight }}>
-              <FileViewer file={openFile} onClose={() => setOpenFile(null)} />
+              {openFile && <FileViewer file={openFile} onClose={() => setOpenFile(null)} />}
+              {openText && <TextViewer preview={openText} onClose={() => setOpenText(null)} />}
             </div>
           </>
         )}

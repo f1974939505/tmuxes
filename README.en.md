@@ -7,9 +7,9 @@
 ### One browser tab to run, watch, and wrangle a whole swarm of CLI coding agents.
 
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
-live across **Local · SSH · WSL**, with a file browser of every agent's working directory.
+live across **Local · SSH · WSL**, with a file browser and Git panel for every agent's working directory.
 
-🔔 **When Claude Code / Codex finishes, stops abnormally, or needs a decision, your browser pings you**: red/green sidebar status dots, done/decision/error badges, a sound, and a flashing tab title when you're away. No more babysitting panes to see whether it is still running.
+🔔 **When Claude Code / Codex finishes or stops abnormally, your browser pings you**: red/green sidebar status dots, done/error badges, a sound, and a flashing tab title when you're away. Approval / decision requests no longer alert, so Codex auto-approval does not get misreported.
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -37,10 +37,11 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 | | |
 |---|---|
 | 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
-| 🔔 **Done / decision / error notifications** | Sessions created with an initial `claude` or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `claude` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished, stopped abnormally, or waiting for your decision, and badges tell those cases apart. |
+| 🔔 **Done / error notifications** | Sessions created with an initial `claude` or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `claude` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished or stopped abnormally, and badges tell those cases apart. |
 | 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
 | 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
 | 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
+| 🔀 **Git panel** | Switch the sidebar bottom to Git view to inspect the current session's repository status, uncommitted changes, commit history, and incoming remote commits; click a pending file to open a VS Code-like side-by-side red/green diff in the bottom viewer region, and click a commit to show its full patch there; check out branches, fetch, pull, push, sync, and commit all working-tree changes. Git auth comes from the target machine's existing setup; tmuxes stores no credentials. |
 | 🔁 **True multi-client sync** | Powered by native `tmux attach`: open the same session in two tabs and they mirror each other, keystroke for keystroke. |
 | ⚙️ **Tweakable** | Adjustable font sizes for the sidebar, terminal, and file viewer — applied live, saved across reloads. |
 | 🚀 **One click** | Double-click `start.cmd` / `start.command` / `start.sh` → it builds, launches, and opens your browser. |
@@ -54,7 +55,7 @@ live across **Local · SSH · WSL**, with a file browser of every agent's workin
 ## 🏗️ Architecture
 
 ```text
-                          REST  (create · list · rename · kill · cwd · files)
+                          REST  (create · list · rename · kill · cwd · files · git)
   ┌────────────┐   ┌──────────────────────┐        ┌──────────────────────────────────┐
   │  Browser   │──▶│  Node · Express · ws │──pty──▶│ tmux                  (Linux/macOS)│
   │  xterm.js  │◀──│        node-pty      │──pty──▶│ ssh -tt user@host → tmux   (remote)│
@@ -116,7 +117,7 @@ npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-
 
 ## 🔔 Launch Hooked Claude Code / Codex
 
-tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`claude`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, stopped abnormally, or waiting for your decision.
+tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`claude`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, or stopped abnormally.
 
 Two launch paths:
 
@@ -126,12 +127,23 @@ Two launch paths:
 Status meanings:
 
 - Red dot: the agent is running.
-- Green dot: the agent finished, stopped abnormally, is waiting for your decision, or this session has no agent hook.
+- Green dot: the agent finished, stopped abnormally, or this session has no agent hook.
 - `done` badge: the current turn finished.
-- `decision` badge: the agent is waiting for permission or user input. When Codex uses `approvals_reviewer = "auto_review"` / Approve for me, ordinary approval requests are reviewed by Codex's automatic reviewer and are not misreported as manual decisions.
 - `error` badge: the agent stopped abnormally, for example when Codex disconnects without firing a stop hook. During the 5-second sync for expanded targets, tmuxes scans the tail of running agent panes and corrects these cases into an alert state.
 
+Approval / decision requests do not trigger browser alerts. That means Codex automatic approval / Approve for me will not turn `PermissionRequest` into a tmuxes "needs decision" notification, and manual approval mode no longer rings either.
+
 Note: the top-right buttons send a hooked `claude` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Bare `cc` is often the system C compiler, so tmuxes does not treat it as Claude Code by default. Native Windows shells have no tmux session option, so this hook status is not supported there.
+
+## 🔀 Git Panel
+
+Switch the sidebar bottom from `Files` to `Git`. The Git panel is scoped to the currently selected tmux session's working directory. It does not run background Git polling; it reads status when you open the panel, switch sessions, refresh, or run a Git action.
+
+- **Working tree changes:** pending files are listed separately. Click a changed file to open a VS Code-like side-by-side red/green diff in the bottom viewer region; untracked files are shown as newly added files.
+- **Commit:** type a commit message and click `Commit`; tmuxes runs `git add -A` and then creates the commit. It refuses to commit while conflicts are present.
+- **Commit history / remote commits:** the panel shows recent commits on the current branch and incoming commits from the upstream branch. Click any commit to show its full patch in the same bottom viewer.
+- **Sync actions:** fetch, `pull --ff-only`, push, sync (`fetch --prune` → `pull --ff-only` → push when needed), and branch checkout are supported. tmuxes does not run force push, reset, discard, clean, or branch deletion.
+- **Credentials:** Git authentication comes from the target machine's existing Git / SSH setup; tmuxes stores no credentials. If the target Git config references a missing `credential-manager` helper, fetch / pull / push automatically retry once with credential helpers temporarily disabled, so public / SSH repositories are not blocked by a broken helper.
 
 ## 🧩 Targets
 
@@ -257,6 +269,12 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.13
+- **decision alerts removed:** Claude Code / Codex approval, permission, and user-decision requests no longer trigger browser alerts; tmuxes only alerts when an agent finishes or stops abnormally, avoiding Codex auto-approval false positives.
+- **Git panel:** added a Git view in the sidebar bottom for the current session's working directory, with status, uncommitted changes, file diffs, branch checkout, fetch, pull, push, sync, and commit-all.
+- **commit history / remote commits:** the Git panel shows recent commits on the current branch and incoming upstream commits; click any commit to inspect its full patch in the bottom viewer region, and click any pending file to open a side-by-side red/green diff.
+- **credential-manager fallback:** fetch / pull / push automatically retry once with credential helpers temporarily disabled when the target Git config references a missing `credential-manager` helper, so public/SSH repositories are not blocked by a broken helper.
+
 ### 0.1.12
 - **Codex auto-review alert fix:** when Codex uses `approvals_reviewer = "auto_review"` / Approve for me, approval requests stay in the running state instead of incorrectly firing the `decision` badge, sound, or flashing background tab; manual approval mode still alerts normally.
 
@@ -274,7 +292,7 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ### 0.1.0 - 0.1.8
 - **early feature set:** built local / SSH / WSL / native Windows shell targets, tmux attach multi-client sync, draggable folders, and the working-directory file browser/editor.
-- **agent alerts:** evolved from active-to-quiet notifications to official Claude Code / Codex lifecycle hooks with done, decision, and abnormal-stop states.
+- **agent alerts:** evolved from active-to-quiet notifications to official Claude Code / Codex lifecycle hooks with done and abnormal-stop states.
 - **Windows / SSH stability:** fixed ConPTY `Ctrl+C` shutdown, restored native browser right-click, and moved SSH management calls to long-lived reusable connections with only one automatic reconnect.
 
 <div align="center">
