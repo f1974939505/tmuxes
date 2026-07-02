@@ -128,7 +128,7 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
 - 红点：agent 正在运行。
 - 绿点：agent 已结束、异常停止、正在等你决策，或这个 session 没接入 agent hook。
 - `结束` badge：本轮运行结束。
-- `决策` badge：agent 正在等待权限确认或用户输入。
+- `决策` badge：agent 正在等待权限确认或用户输入。Codex 开启 `approvals_reviewer = "auto_review"` / Approve for me 时，普通审批请求会交给 Codex 自动 reviewer，不会被误判成需要你手动决策。
 - `错误` badge：agent 异常停止，例如 Codex 断流但没有触发 stop hook。tmuxes 会在已展开目标的 5 秒同步里扫描 running agent 的 pane 尾部并把这类错误纠正为提醒状态。
 
 注意：右上角按钮本质上是向当前 tmux pane 发送一条带 hook 的 `claude` / `codex` 命令。不要在当前 pane 里已有程序正在接收输入时点击它。裸 `cc` 常常是系统 C 编译器，tmuxes 不会默认把它当作 Claude Code。原生 Windows shell 没有 tmux session option，因此不支持这套 hook 状态。
@@ -255,6 +255,9 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.12
+- **Codex auto-review 提醒修复**：Codex 开启 `approvals_reviewer = "auto_review"` / Approve for me 时，审批请求会保持 running 状态，不再误触发 `决策` badge、提示音或后台标签页闪烁；人工审批配置仍会正常提醒。
 
 ### 0.1.11
 - **文档 / 发布规范**：补齐 npm 发布检查流程，明确只发布 `server` workspace，发布前后都要验证 `npx` / `npm exec` 入口和本机启动 smoke test。

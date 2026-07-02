@@ -1,6 +1,6 @@
 {
   "name": "tmuxes",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": false,
   "license": "MIT",
   "description": "Dev monorepo for tmuxes — the publishable package lives in server/ (name: tmuxes).",

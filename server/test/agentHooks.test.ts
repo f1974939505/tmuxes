@@ -1,9 +1,65 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { augmentAgentCommand, detectAgentKind } from '../src/agentHooks.js';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  augmentAgentCommand,
+  codexPermissionRequestHookCommand,
+  detectAgentKind,
+} from '../src/agentHooks.js';
 
 afterEach(() => {
   delete process.env.TMUXES_NO_AUTOHOOK;
 });
+
+function runCodexPermissionHook(opts: {
+  globalConfig?: string;
+  projectConfig?: string;
+}): string {
+  const root = mkdtempSync(join(tmpdir(), 'tmuxes-agent-hook-'));
+  const bin = join(root, 'bin');
+  const home = join(root, 'home');
+  const codexHome = join(home, '.codex');
+  const project = join(root, 'work', 'repo');
+  const log = join(root, 'tmux.log');
+
+  mkdirSync(bin, { recursive: true });
+  mkdirSync(codexHome, { recursive: true });
+  mkdirSync(project, { recursive: true });
+
+  writeFileSync(
+    join(bin, 'tmux'),
+    '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TMUXES_FAKE_TMUX_LOG"\n',
+  );
+  chmodSync(join(bin, 'tmux'), 0o755);
+
+  if (opts.globalConfig !== undefined) {
+    writeFileSync(join(codexHome, 'config.toml'), opts.globalConfig);
+  }
+  if (opts.projectConfig !== undefined) {
+    mkdirSync(join(project, '.codex'), { recursive: true });
+    writeFileSync(join(project, '.codex', 'config.toml'), opts.projectConfig);
+  }
+
+  const result = spawnSync(process.env.SHELL || '/bin/sh', [
+    '-lc',
+    codexPermissionRequestHookCommand(),
+  ], {
+    cwd: project,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      CODEX_HOME: codexHome,
+      HOME: home,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      TMUXES_FAKE_TMUX_LOG: log,
+    },
+  });
+
+  expect(result.status, result.stderr).toBe(0);
+  return existsSync(log) ? readFileSync(log, 'utf8') : '';
+}
 
 describe('detectAgentKind', () => {
   it('recognizes Claude Code and Codex commands', () => {
@@ -53,9 +109,41 @@ describe('augmentAgentCommand', () => {
     expect(out.command.endsWith(' "fix the bug"')).toBe(true);
     expect(out.command).toContain('hooks.PermissionRequest');
     expect(out.command).toContain('hooks.Stop');
+    expect(out.command).toContain('approvals_reviewer');
     expect(out.command).toContain('@tmuxes_agent codex:running::PreToolUse:$(date +%s).$$');
-    expect(out.command).toContain('@tmuxes_agent codex:waiting:decision:PermissionRequest:$(date +%s).$$');
+    expect(out.command).toContain(
+      '@tmuxes_agent codex:running::PermissionRequest.auto_review:$(date +%s).$$',
+    );
+    expect(out.command).toContain(
+      '@tmuxes_agent codex:waiting:decision:PermissionRequest.user:$(date +%s).$$',
+    );
     expect(out.command).toContain('@tmuxes_agent codex:idle:done:Stop:$(date +%s).$$');
+  });
+
+  it('keeps Codex permission requests running when approvals are auto-reviewed', () => {
+    const command = codexPermissionRequestHookCommand();
+    expect(command).not.toContain("'");
+
+    const log = runCodexPermissionHook({
+      globalConfig: 'approvals_reviewer = "auto_review"\n',
+    });
+
+    expect(log).toContain(
+      'set-option -q @tmuxes_agent codex:running::PermissionRequest.auto_review:',
+    );
+    expect(log).not.toContain('waiting:decision');
+  });
+
+  it('marks Codex permission requests as decisions when review is routed to the user', () => {
+    const log = runCodexPermissionHook({
+      globalConfig: 'approvals_reviewer = "auto_review"\n',
+      projectConfig: 'approvals_reviewer = "user"\n',
+    });
+
+    expect(log).toContain(
+      'set-option -q @tmuxes_agent codex:waiting:decision:PermissionRequest.user:',
+    );
+    expect(log).not.toContain('PermissionRequest.auto_review');
   });
 
   it('leaves non-agent or disabled commands untouched', () => {

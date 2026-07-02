@@ -128,7 +128,7 @@ Status meanings:
 - Red dot: the agent is running.
 - Green dot: the agent finished, stopped abnormally, is waiting for your decision, or this session has no agent hook.
 - `done` badge: the current turn finished.
-- `decision` badge: the agent is waiting for permission or user input.
+- `decision` badge: the agent is waiting for permission or user input. When Codex uses `approvals_reviewer = "auto_review"` / Approve for me, ordinary approval requests are reviewed by Codex's automatic reviewer and are not misreported as manual decisions.
 - `error` badge: the agent stopped abnormally, for example when Codex disconnects without firing a stop hook. During the 5-second sync for expanded targets, tmuxes scans the tail of running agent panes and corrects these cases into an alert state.
 
 Note: the top-right buttons send a hooked `claude` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Bare `cc` is often the system C compiler, so tmuxes does not treat it as Claude Code by default. Native Windows shells have no tmux session option, so this hook status is not supported there.
@@ -256,6 +256,9 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.12
+- **Codex auto-review alert fix:** when Codex uses `approvals_reviewer = "auto_review"` / Approve for me, approval requests stay in the running state instead of incorrectly firing the `decision` badge, sound, or flashing background tab; manual approval mode still alerts normally.
 
 ### 0.1.11
 - **docs / publishing rules:** added the npm publishing checklist, clarified that only the `server` workspace is published, and requires `npx` / `npm exec` plus local startup smoke tests before and after release.

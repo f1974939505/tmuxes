@@ -75,6 +75,53 @@ function tomlString(v: string): string {
   return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+export function codexPermissionRequestHookCommand(): string {
+  const autoReviewCommand = agentHookCommand(
+    'codex',
+    'running',
+    '',
+    'PermissionRequest.auto_review',
+  );
+  const userReviewCommand = agentHookCommand(
+    'codex',
+    'waiting',
+    'decision',
+    'PermissionRequest.user',
+  );
+
+  return [
+    'tmuxes_codex_reviewer=;',
+    'tmuxes_codex_cfg() {',
+    '[ -r "$1" ] || return;',
+    'tmuxes_codex_line=$(grep -E "^[[:space:]]*approvals_reviewer[[:space:]]*=" "$1" 2>/dev/null | tail -n 1);',
+    'case "$tmuxes_codex_line" in',
+    '*\\"*)',
+    'tmuxes_codex_val=${tmuxes_codex_line#*\\"};',
+    'tmuxes_codex_val=${tmuxes_codex_val%%\\"*};',
+    '[ -n "$tmuxes_codex_val" ] && tmuxes_codex_reviewer=$tmuxes_codex_val;',
+    ';;',
+    'esac;',
+    '};',
+    'tmuxes_codex_walk() {',
+    '[ -n "$1" ] || return;',
+    'if [ "$1" != "/" ]; then',
+    'tmuxes_codex_parent=${1%/*};',
+    '[ -n "$tmuxes_codex_parent" ] || tmuxes_codex_parent=/;',
+    'tmuxes_codex_walk "$tmuxes_codex_parent";',
+    'fi;',
+    'tmuxes_codex_cfg "$1/.codex/config.toml";',
+    '};',
+    'tmuxes_codex_home=${CODEX_HOME:-${HOME:-}/.codex};',
+    'tmuxes_codex_cfg "$tmuxes_codex_home/config.toml";',
+    'tmuxes_codex_walk "$PWD";',
+    'if [ "$tmuxes_codex_reviewer" = auto_review ]; then',
+    `${autoReviewCommand};`,
+    'else',
+    `${userReviewCommand};`,
+    'fi',
+  ].join(' ');
+}
+
 function codexHookConfig(
   event: string,
   cmd: string,
@@ -95,7 +142,7 @@ function codexConfigArgs(): string {
     }),
     codexHookConfig(
       'PermissionRequest',
-      agentHookCommand('codex', 'waiting', 'decision', 'PermissionRequest'),
+      codexPermissionRequestHookCommand(),
       { matcher: '' },
     ),
     codexHookConfig('Stop', agentHookCommand('codex', 'idle', 'done', 'Stop')),
