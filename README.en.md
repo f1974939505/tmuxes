@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
 live across **Local · SSH · WSL**, with a file browser and Git panel for every agent's working directory.
 
-🔔 **When Claude Code / Codex finishes or stops abnormally, your browser pings you**: red/green sidebar status dots, done/error badges, a sound, and a flashing tab title when you're away. Approval / decision requests no longer alert, so Codex auto-approval does not get misreported.
+🔔 **When Claude Code finishes, stops abnormally, or needs a decision, your browser pings you**: red/green sidebar status dots, done/error/decision badges, a sound, and a flashing tab title when you're away. Codex approval / decision requests no longer alert, so Codex auto-approval does not get misreported.
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -131,7 +131,7 @@ Status meanings:
 - `done` badge: the current turn finished.
 - `error` badge: the agent stopped abnormally, for example when Codex disconnects without firing a stop hook. During the 5-second sync for expanded targets, tmuxes scans the tail of running agent panes and corrects these cases into an alert state.
 
-Approval / decision requests do not trigger browser alerts. That means Codex automatic approval / Approve for me will not turn `PermissionRequest` into a tmuxes "needs decision" notification, and manual approval mode no longer rings either.
+Approval / decision handling differs by agent. Claude Code's `PermissionRequest`, `permission_prompt`, and `elicitation_dialog` events fire a "needs decision" alert. Codex approval / decision requests do not alert — that means Codex automatic approval / Approve for me will not turn `PermissionRequest` into a tmuxes "needs decision" notification, and manual approval mode no longer rings either.
 
 Note: the top-right buttons send a hooked `claude` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Bare `cc` is often the system C compiler, so tmuxes does not treat it as Claude Code by default. Native Windows shells have no tmux session option, so this hook status is not supported there.
 
@@ -269,8 +269,12 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.14
+- **Claude Code decision alerts restored:** 0.1.13 accidentally removed Claude Code's approval, permission, and user-decision alerts too. This version re-scopes the removal to Codex only; Claude Code's `PermissionRequest`, `permission_prompt`, and `elicitation_dialog` events once again fire the `decision` badge, sound, and flashing background tab.
+- **Codex decision alerts stay removed:** Codex approval / decision requests still do not trigger browser alerts, avoiding false positives from `approvals_reviewer = "auto_review"` / Approve for me.
+
 ### 0.1.13
-- **decision alerts removed:** Claude Code / Codex approval, permission, and user-decision requests no longer trigger browser alerts; tmuxes only alerts when an agent finishes or stops abnormally, avoiding Codex auto-approval false positives.
+- **decision alerts removed:** Codex approval, permission, and user-decision requests no longer trigger browser alerts; tmuxes only alerts when an agent finishes or stops abnormally, avoiding Codex auto-approval false positives. (Note: 0.1.13 also accidentally removed Claude Code's decision alerts, restored in 0.1.14.)
 - **Git panel:** added a Git view in the sidebar bottom for the current session's working directory, with status, uncommitted changes, file diffs, branch checkout, fetch, pull, push, sync, and commit-all.
 - **commit history / remote commits:** the Git panel shows recent commits on the current branch and incoming upstream commits; click any commit to inspect its full patch in the bottom viewer region, and click any pending file to open a side-by-side red/green diff.
 - **credential-manager fallback:** fetch / pull / push automatically retry once with credential helpers temporarily disabled when the target Git config references a missing `credential-manager` helper, so public/SSH repositories are not blocked by a broken helper.

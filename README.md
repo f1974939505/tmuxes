@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
 横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器和 Git 面板。
 
-🔔 **Claude Code / Codex 结束运行或异常停止时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 错误」提示 + 提示音 + 后台标签页标题闪烁。审批 / 决策请求不再触发提醒，避免 Codex 自动审批时误报。
+🔔 **Claude Code 结束运行、异常停止或需要决策时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 错误 / 决策」提示 + 提示音 + 后台标签页标题闪烁。Codex 的审批 / 决策请求不再触发提醒，避免 Codex 自动审批时误报。
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -131,7 +131,7 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
 - `结束` badge：本轮运行结束。
 - `错误` badge：agent 异常停止，例如 Codex 断流但没有触发 stop hook。tmuxes 会在已展开目标的 5 秒同步里扫描 running agent 的 pane 尾部并把这类错误纠正为提醒状态。
 
-审批 / 决策请求不会触发浏览器提醒。也就是说，Codex 开启自动审批 / Approve for me 时不会因为 `PermissionRequest` 把 tmuxes 切成“需要决策”提醒；人工审批模式也同样不再响铃。
+审批 / 决策请求的处理分两种：Claude Code 的 `PermissionRequest`、`permission_prompt` 和 `elicitation_dialog` 会触发「决策」提醒；Codex 的审批 / 决策请求不再触发提醒，也就是说 Codex 开启自动审批 / Approve for me 时不会因为 `PermissionRequest` 把 tmuxes 切成“需要决策”提醒，人工审批模式也同样不再响铃。
 
 注意：右上角按钮本质上是向当前 tmux pane 发送一条带 hook 的 `claude` / `codex` 命令。不要在当前 pane 里已有程序正在接收输入时点击它。裸 `cc` 常常是系统 C 编译器，tmuxes 不会默认把它当作 Claude Code。原生 Windows shell 没有 tmux session option，因此不支持这套 hook 状态。
 
@@ -268,8 +268,12 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 ## 📋 更新日志
 
+### 0.1.14
+- **恢复 Claude Code 决策提醒**：0.1.13 误把 Claude Code 的审批、权限确认和用户决策请求一起移除。本版只针对 Codex 移除决策提醒，Claude Code 的 `PermissionRequest`、`permission_prompt`、`elicitation_dialog` 重新触发「决策」badge、提示音和后台标签页闪烁。
+- **Codex 决策提醒保持移除**：Codex 的审批 / 决策请求仍不触发浏览器提醒，避免 `approvals_reviewer = "auto_review"` / Approve for me 自动审批流程误报。
+
 ### 0.1.13
-- **移除决策提醒**：Claude Code / Codex 的审批、权限确认和用户决策请求不再触发浏览器提醒；tmuxes 只提醒 agent 结束和异常停止，避免 Codex 自动审批流程误报。
+- **移除决策提醒**：Codex 的审批、权限确认和用户决策请求不再触发浏览器提醒；tmuxes 只提醒 agent 结束和异常停止，避免 Codex 自动审批流程误报。（注：0.1.13 同时误移除了 Claude Code 的决策提醒，已在 0.1.14 恢复。）
 - **Git 面板**：侧边栏底部新增 Git 视图，支持当前会话工作目录的状态查看、未提交更改列表、文件 diff、分支切换、fetch、pull、push、sync，以及 stage 全部更改后创建 commit。
 - **提交历史 / 远端提交**：Git 面板会显示当前分支最近提交和 upstream 上尚未合入的远端提交，点击提交会在右侧大区域底部打开完整 patch；点击待提交文件会打开左右红绿 diff。
 - **credential-manager fallback**：fetch / pull / push 遇到目标环境配置了缺失的 `credential-manager` helper 时，会自动用临时禁用 credential helper 的方式重试一次，避免 public/SSH 仓库被错误 helper 阻断。

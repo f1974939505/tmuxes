@@ -22,13 +22,13 @@ describe('agent state values', () => {
     });
   });
 
-  it('does not treat legacy decision values as notification reasons', () => {
-    expect(parseAgentValue('codex:waiting:decision:PermissionRequest:42')).toMatchObject({
-      agentKind: 'codex',
+  it('parses decision notifications from Claude Code permission hooks', () => {
+    expect(parseAgentValue('claude:waiting:decision:PermissionRequest:42')).toMatchObject({
+      agentKind: 'claude',
       agentState: 'waiting',
+      attentionReason: 'decision',
       agentEvent: 'PermissionRequest',
       agentNonce: '42',
     });
-    expect(parseAgentValue('codex:waiting:decision:PermissionRequest:42')?.attentionReason).toBeUndefined();
   });
 });

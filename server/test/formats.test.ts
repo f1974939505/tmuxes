@@ -20,13 +20,13 @@ describe('parseSessions', () => {
       { name: 'my proj', windows: 1, attached: false, created: 1700000100, lastActivity: 1700000150 },
     ]);
   });
-  it('ignores legacy decision reasons from old hook-derived agent state', () => {
+  it('parses hook-derived decision state from Claude Code permission hooks', () => {
     const out = [
       '1',
       '0',
       '1700000100',
       '1700000150',
-      'codex:waiting:decision:PermissionRequest:1700000200.42',
+      'claude:waiting:decision:PermissionRequest:1700000200.42',
       'agent',
     ].join(SEP);
     expect(parseSessions(out)).toEqual([
@@ -36,8 +36,9 @@ describe('parseSessions', () => {
         attached: false,
         created: 1700000100,
         lastActivity: 1700000150,
-        agentKind: 'codex',
+        agentKind: 'claude',
         agentState: 'waiting',
+        attentionReason: 'decision',
         agentEvent: 'PermissionRequest',
         agentNonce: '1700000200.42',
       },

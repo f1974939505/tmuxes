@@ -20,18 +20,18 @@ describe('detectAgentKind', () => {
 });
 
 describe('augmentAgentCommand', () => {
-  it('adds running, done, and error hooks to Claude Code', () => {
+  it('adds running, decision, done, and error hooks to Claude Code', () => {
     const out = augmentAgentCommand('claude --model opus "do x"');
     expect(out.kind).toBe('claude');
     expect(out.command).toMatch(/^claude --settings '.*' --model opus "do x"$/);
     expect(out.command).toContain('"UserPromptSubmit"');
     expect(out.command).toContain('"PreToolUse"');
     expect(out.command).toContain('"PostToolUse"');
+    expect(out.command).toContain('"PermissionRequest"');
+    expect(out.command).toContain('"Notification"');
     expect(out.command).toContain('"Stop"');
     expect(out.command).toContain('@tmuxes_agent claude:running::UserPromptSubmit:$(date +%s).$$');
-    expect(out.command).not.toContain('PermissionRequest');
-    expect(out.command).not.toContain('Notification');
-    expect(out.command).not.toContain('decision');
+    expect(out.command).toContain('@tmuxes_agent claude:waiting:decision:PermissionRequest:$(date +%s).$$');
     expect(out.command).toContain('@tmuxes_agent claude:idle:done:Stop:$(date +%s).$$');
     expect(out.command).toContain('@tmuxes_agent claude:idle:error:StopFailure:$(date +%s).$$');
   });
@@ -41,8 +41,9 @@ describe('augmentAgentCommand', () => {
     const json = out.command.match(/--settings '(.*)'$/)?.[1];
     expect(json).toBeTruthy();
     const parsed = JSON.parse(json!);
-    expect(parsed.hooks.PermissionRequest).toBeUndefined();
-    expect(parsed.hooks.Notification).toBeUndefined();
+    expect(parsed.hooks.PermissionRequest[0].hooks[0].command).toContain('decision');
+    expect(parsed.hooks.Notification[0].hooks[0].command).toContain('permission_prompt');
+    expect(parsed.hooks.Notification[1].hooks[0].command).toContain('elicitation_dialog');
     expect(parsed.hooks.Stop[0].hooks[0].command).toContain('done');
     expect(parsed.hooks.StopFailure[0].hooks[0].command).toContain('error');
   });

@@ -51,6 +51,19 @@ function claudeSettings(): string {
       UserPromptSubmit: [{ hooks: [hook('claude', 'running', '', 'UserPromptSubmit')] }],
       PreToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PreToolUse')] }],
       PostToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PostToolUse')] }],
+      PermissionRequest: [
+        { matcher: '', hooks: [hook('claude', 'waiting', 'decision', 'PermissionRequest')] },
+      ],
+      Notification: [
+        {
+          matcher: 'permission_prompt',
+          hooks: [hook('claude', 'waiting', 'decision', 'Notification.permission_prompt')],
+        },
+        {
+          matcher: 'elicitation_dialog',
+          hooks: [hook('claude', 'waiting', 'decision', 'Notification.elicitation_dialog')],
+        },
+      ],
       Stop: [{ hooks: [hook('claude', 'idle', 'done', 'Stop')] }],
       StopFailure: [{ hooks: [hook('claude', 'idle', 'error', 'StopFailure')] }],
       SessionEnd: [{ hooks: [hook('claude', 'idle', 'done', 'SessionEnd')] }],

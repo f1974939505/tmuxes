@@ -17,7 +17,7 @@ interface Props {
 const POLL_MS = 5000;
 
 function isAttentionReason(v: string | undefined): v is AttentionReason {
-  return v === 'done' || v === 'error';
+  return v === 'done' || v === 'decision' || v === 'error';
 }
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
@@ -47,6 +47,10 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const pollingPaused = useRef(false);
   // Last-seen agent hook event key per session; first sight is a baseline.
   const lastAgentEvent = useRef<Map<string, string>>(new Map());
+  // PermissionRequest can be auto-reviewed by the agent and disappear quickly.
+  // Only notify if the same waiting/decision event survives one more refresh.
+  const decisionCandidates = useRef<Map<string, { key: string; notified: boolean }>>(new Map());
+
   const eventKey = (s: SessionInfo): string => {
     if (!s.agentKind || !s.agentState || !s.agentNonce) return '';
     return [
@@ -69,20 +73,35 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
         lastAgentEvent.current.set(s.name, key);
 
         if (s.agentState === 'running') {
+          decisionCandidates.current.delete(s.name);
           attention.clearAlert(target.id, s.name);
+        } else if (s.agentState === 'waiting' && s.attentionReason === 'decision' && key) {
+          const candidate = decisionCandidates.current.get(s.name);
+          if (candidate?.key === key) {
+            if (seen && !candidate.notified) {
+              attention.fire(target.id, s.name, 'decision');
+              decisionCandidates.current.set(s.name, { key, notified: true });
+            }
+          } else {
+            decisionCandidates.current.set(s.name, { key, notified: false });
+          }
         } else if (
           seen &&
           key &&
           key !== prev &&
           isAttentionReason(s.attentionReason)
         ) {
+          decisionCandidates.current.delete(s.name);
           attention.fire(target.id, s.name, s.attentionReason);
+        } else {
+          decisionCandidates.current.delete(s.name);
         }
       }
       // Forget sessions that vanished.
       for (const name of [...lastAgentEvent.current.keys()]) {
         if (!present.has(name)) {
           lastAgentEvent.current.delete(name);
+          decisionCandidates.current.delete(name);
           attention.clearAlert(target.id, name);
         }
       }

@@ -13,7 +13,7 @@ export const TEXT = {
     language: '语言',
     chinese: '中文',
     english: 'English',
-    alertWhenAgent: 'agent 结束或异常停止时提醒',
+    alertWhenAgent: 'agent 结束或需要决策时提醒',
     playSound: '播放提示音',
     reset: '重置',
     done: '完成',
@@ -122,13 +122,15 @@ export const TEXT = {
     gitUnstaged: 'unstaged',
     gitUntracked: 'untracked',
     gitConflict: 'conflict',
+    attentionDecision: '决策',
     attentionError: '错误',
     attentionDone: '结束',
+    attentionDecisionTitle: '需要决策',
     attentionErrorTitle: '异常停止',
     attentionDoneTitle: '结束运行',
     agentNotHooked: '未接入 agent hook',
     agentRunning: (kind: string) => `${kind} 正在运行`,
-    agentWaiting: (kind: string) => `${kind} 等待中`,
+    agentWaiting: (kind: string) => `${kind} 需要决策`,
     agentDone: (kind: string) => `${kind} 已结束运行`,
     agentError: (kind: string) => `${kind} 异常停止`,
     agentIdle: (kind: string) => `${kind} 空闲`,
@@ -144,7 +146,7 @@ export const TEXT = {
     language: 'Language',
     chinese: '中文',
     english: 'English',
-    alertWhenAgent: 'Alert when an agent finishes / errors',
+    alertWhenAgent: 'Alert when an agent finishes / asks',
     playSound: 'Play a sound',
     reset: 'Reset',
     done: 'Done',
@@ -253,13 +255,15 @@ export const TEXT = {
     gitUnstaged: 'unstaged',
     gitUntracked: 'untracked',
     gitConflict: 'conflict',
+    attentionDecision: 'decision',
     attentionError: 'error',
     attentionDone: 'done',
+    attentionDecisionTitle: 'Needs decision',
     attentionErrorTitle: 'Stopped abnormally',
     attentionDoneTitle: 'Done',
     agentNotHooked: 'agent hook not attached',
     agentRunning: (kind: string) => `${kind} running`,
-    agentWaiting: (kind: string) => `${kind} waiting`,
+    agentWaiting: (kind: string) => `${kind} needs decision`,
     agentDone: (kind: string) => `${kind} done`,
     agentError: (kind: string) => `${kind} stopped abnormally`,
     agentIdle: (kind: string) => `${kind} idle`,
@@ -282,11 +286,13 @@ export function useI18n(): { language: Language; t: I18n } {
 }
 
 export function attentionText(reason: AttentionReason, t: I18n): string {
+  if (reason === 'decision') return t.attentionDecision;
   if (reason === 'error') return t.attentionError;
   return t.attentionDone;
 }
 
 export function attentionTitle(reason: AttentionReason, t: I18n): string {
+  if (reason === 'decision') return t.attentionDecisionTitle;
   if (reason === 'error') return t.attentionErrorTitle;
   return t.attentionDoneTitle;
 }
