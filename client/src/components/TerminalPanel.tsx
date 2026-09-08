@@ -5,6 +5,8 @@ import { api, ApiError, terminalSocketUrl } from '../api';
 import type { ConnStatus, LaunchAgent, Target } from '../types';
 import { useI18n } from '../i18n';
 import { StatusBanner } from './StatusBanner';
+import { TerminalClipboard } from './TerminalClipboard';
+import type { Terminal } from '@xterm/xterm';
 
 interface Props {
   targetId: string;
@@ -29,6 +31,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
   const [startingAgent, setStartingAgent] = useState<LaunchAgent | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const terminalRetryUsed = useRef(false);
+  const [terminal, setTerminal] = useState<Terminal | null>(null);
 
   useEffect(() => {
     terminalRetryUsed.current = false;
@@ -46,6 +49,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
     const handle = createTerminal(host, fontSize);
     handleRef.current = handle;
+    setTerminal(handle.term);
     const initial = handle.refit() ?? { cols: 80, rows: 24 };
     let lastCols = initial.cols;
     let lastRows = initial.rows;
@@ -159,8 +163,10 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
   return (
     <div className="panel">
-      {targetKind !== 'winlocal' && (
-        <div className="agent-toolbar">
+      <TerminalClipboard terminal={terminal} fontSize={fontSize}
+        overlay={<StatusBanner status={status} onReconnect={() => setGeneration((g) => g + 1)} />}
+        actions={targetKind !== 'winlocal' && (
+        <>
           <button
             disabled={startingAgent !== null}
             onClick={() => void launchAgent('claude')}
@@ -176,10 +182,10 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
             codex
           </button>
           {agentError && <span className="agent-error" title={agentError}>!</span>}
-        </div>
-      )}
-      <div className="term-host" ref={hostRef} />
-      <StatusBanner status={status} onReconnect={() => setGeneration((g) => g + 1)} />
+        </>
+      )}>
+        <div className="term-host" ref={hostRef} />
+      </TerminalClipboard>
       {status.kind !== 'connected' && status.kind !== 'connecting' && (
         <div className="panel-placeholder" style={{ pointerEvents: 'none' }}>
           <div style={{ opacity: 0.4 }}>

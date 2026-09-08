@@ -97,6 +97,12 @@ export function SettingsButton() {
               larger={t.larger}
               onChange={step('viewerFontSize')}
             />
+            <div className="settings-title">{t.copy}</div>
+            <Toggle
+              label={t.copyOnSelect}
+              checked={settings.copyOnSelect}
+              onChange={(v) => setSetting('copyOnSelect', v)}
+            />
             <div className="settings-title">{t.notifications}</div>
             <Toggle
               label={t.alertWhenAgent}

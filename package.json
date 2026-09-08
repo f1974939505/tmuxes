@@ -1,6 +1,6 @@
 {
   "name": "tmuxes",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": false,
   "license": "MIT",
   "description": "Dev monorepo for tmuxes — the publishable package lives in server/ (name: tmuxes).",
@@ -18,7 +18,7 @@
     "dev:client": "npm --workspace client run dev",
     "build": "npm --workspace client run build && npm --workspace server run build",
     "start": "npm --workspace server run start",
-    "test": "npm --workspace server run test",
+    "test": "npm --workspace server run test && npm --workspace client run test",
     "pack:check": "npm pack --workspace server --dry-run",
     "release": "npm publish --workspace server"
   },

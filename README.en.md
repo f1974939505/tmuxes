@@ -44,6 +44,7 @@ live across **Local · SSH · WSL**, with a file browser and Git panel for every
 | 🔀 **Git panel** | Switch the sidebar bottom to Git view to inspect the current session's repository status, uncommitted changes, commit history, and incoming remote commits; click a pending file to open a VS Code-like side-by-side red/green diff in the bottom viewer region, and click a commit to show its full patch there; check out branches, fetch, pull, push, sync, and commit all working-tree changes. Git auth comes from the target machine's existing setup; tmuxes stores no credentials. |
 | 🔁 **True multi-client sync** | Powered by native `tmux attach`: open the same session in two tabs and they mirror each other, keystroke for keystroke. |
 | ⚙️ **Tweakable** | Adjustable font sizes for the sidebar, terminal, and file viewer — applied live, saved across reloads. |
+| 📋 **Easy copying** | Click **Select text** to drag-select an output snapshot without Shift; includes a Copy button, `Ctrl+C` / `Ctrl+Shift+C`, and optional automatic copying of mouse selections. |
 | 🚀 **One click** | Double-click `start.cmd` / `start.command` / `start.sh` → it builds, launches, and opens your browser. |
 
 ## 🖼️ What it looks like
@@ -229,6 +230,10 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 
 ### Scroll & copy (most used)
 
+**Copy to your system clipboard:** click **Select text** above the terminal, drag to select, then click **Copy** or press `Ctrl+C` / `Ctrl+Shift+C` (`⌘C` on macOS). No Shift-drag is needed. This view is a snapshot of the current terminal buffer when opened; the task keeps running. Click **Return to terminal** or press `Esc` to return to the live terminal; reopen it for a fresh snapshot. It is not full session history: full-screen programs may expose only their current screen, and tmux history not loaded into the browser is not included.
+
+In interactive mode, `Ctrl+C` copies when text is selected and still interrupts the program otherwise; `Ctrl+Shift+C` is reserved for copying. Enable **Automatically copy mouse selections** in Settings if desired (off by default). A failed copy displays a message; the right-click menu remains available. For tmux's own scrolling and copy buffer, use the table below:
+
 | Action | Keys |
 |---|---|
 | Enter copy / scroll mode | `C-b` then `[` |
@@ -238,11 +243,11 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 | Search in that mode | `C-s` forward / `C-r` backward (emacs-style default) |
 | Quit copy / scroll mode | `q` |
 | **Enable mouse wheel** (scroll + select with the mouse) | run `tmux set -g mouse on`, or put it in `~/.tmux.conf` |
-| **Hold Shift for the mouse** (bypass tmux mouse mode) | Hold `Shift`, drag to select → browser right-click "Copy"; right-click "Paste" |
+| **Temporarily select in interactive mode** (bypass tmux mouse mode) | Hold `Shift`, drag to select → click **Copy** or press `Ctrl+C`; the right-click menu also works |
 
 > Tip: once `mouse on` is set, the mouse belongs to tmux; to use the browser's native **drag-select + right-click copy/paste**, hold `Shift` while dragging / right-clicking.
 >
-> Tip: in tmuxes, you can **create / select / rename / kill sessions** directly from the UI; no tmux commands needed for those. Scrolling through history, copying text, and splitting panes are tmux features, so use the shortcuts above for them.
+> Tip: tmuxes **Copy** writes to the current device's system clipboard; tmux copy mode writes to tmux's own buffer by default. These are separate. Use tmux controls for history beyond the browser buffer and for splitting panes.
 
 
 ## ❓ FAQ
@@ -268,6 +273,9 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.15
+- **Terminal copying**: added a Copy button, selection copy shortcuts, a text snapshot selection mode without Shift, and optional automatic copying of mouse selections; interactive `Ctrl+C` still interrupts when nothing is selected.
 
 ### 0.1.14
 - **Claude Code decision alerts restored:** 0.1.13 accidentally removed Claude Code's approval, permission, and user-decision alerts too. This version re-scopes the removal to Codex only; Claude Code's `PermissionRequest`, `permission_prompt`, and `elicitation_dialog` events once again fire the `decision` badge, sound, and flashing background tab.

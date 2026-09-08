@@ -15,6 +15,8 @@ export interface Settings {
   notifyAttention: boolean;
   /** Play a sound with the notification. */
   notifySound: boolean;
+  /** Copy completed mouse selections to the system clipboard. */
+  copyOnSelect: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   viewerFontSize: 13,
   notifyAttention: true,
   notifySound: true,
+  copyOnSelect: false,
 };
 
 export const FONT_LIMITS = { min: 8, max: 28 };
@@ -44,6 +47,7 @@ function coerceSettings(value: Partial<Settings>): Settings {
     ...DEFAULT_SETTINGS,
     ...value,
     language,
+    copyOnSelect: value.copyOnSelect === true,
   };
 }
 
