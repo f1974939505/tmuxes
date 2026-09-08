@@ -16,7 +16,7 @@
 <img alt="platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%2011-2b2b2b?style=flat-square">
 <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black">
 <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white">
-<img alt="Node.js" src="https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=nodedotjs&logoColor=white">
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?style=flat-square&logo=nodedotjs&logoColor=white">
 <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white">
 <img alt="tmux" src="https://img.shields.io/badge/tmux-3.x-1BB91F?style=flat-square&logo=tmux&logoColor=white">
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
@@ -90,7 +90,7 @@ tmuxes --port 8080 --no-open
 
 如果 Windows 上 `npx` 失败，先确认：
 
-- `node -v` 是 **22.12+ 且 <23**，`npm -v` 是 **10+**。
+- `node -v` 是 **22.x（22.12.0 起）或 24.x**，`npm -v` 是 **10+**。
 - 使用的是官方 npm registry，且没有旧缓存污染；必要时先跑 `npm cache verify` 再重试。
 - 你要连接的机器/主机上已经装好 **tmux**。Linux 上 `node-pty` 需要现场编译，先装 `build-essential` + `python3`；Windows / macOS 使用预编译二进制。
 
@@ -162,7 +162,7 @@ tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接
 
 ## 💻 环境要求
 
-所有平台都需要 **Node 22.12+**（项目版本文件固定为 22.22.2）和 **npm 10+**。其余：
+所有平台都需要 **Node 22.x（22.12.0 起）或 24.x** 和 **npm 10+**。项目版本文件保留 22.22.2 作为默认开发版本，不限制使用 Node 24。Windows 发布验证覆盖 Node 22.22.2 和 24.16.0（含原生终端创建及输入输出）。其余：
 
 <details>
 <summary><b>🪟 Windows 11</b></summary>
@@ -272,6 +272,9 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.16
+- **Node 24 支持**：修正 npm 包的 `engines.node` 声明为 `^22.12.0 || ^24.0.0`，消除 Node 24 上错误的 `EBADENGINE` 警告；同步所有 workspace、锁文件、安装说明及启动脚本提示。
 
 ### 0.1.15
 - **终端复制**：新增复制按钮、选区复制快捷键、无需 Shift 的文本快照选择模式，以及可选的鼠标选中自动复制；无选区时保留交互终端的 `Ctrl+C` 中断行为。

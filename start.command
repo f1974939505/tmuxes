@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")"
 
 if ! command -v npm >/dev/null 2>&1; then
-  echo "[tmuxes] Node.js / npm not found. Install Node 18+ (e.g. 'brew install node') and retry."
+  echo "[tmuxes] Node.js / npm not found. Install Node 22.12+ / 24.x (e.g. 'brew install node') and retry."
   exit 1
 fi
 if ! command -v tmux >/dev/null 2>&1; then

@@ -16,7 +16,7 @@ live across **Local · SSH · WSL**, with a file browser and Git panel for every
 <img alt="platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%2011-2b2b2b?style=flat-square">
 <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black">
 <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white">
-<img alt="Node.js" src="https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=nodedotjs&logoColor=white">
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?style=flat-square&logo=nodedotjs&logoColor=white">
 <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white">
 <img alt="tmux" src="https://img.shields.io/badge/tmux-3.x-1BB91F?style=flat-square&logo=tmux&logoColor=white">
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
@@ -90,7 +90,7 @@ tmuxes --port 8080 --no-open
 
 If `npx` fails on Windows, check:
 
-- `node -v` is **22.12+ and <23**, and `npm -v` is **10+**.
+- `node -v` is **22.x (22.12.0 or later) or 24.x**, and `npm -v` is **10+**.
 - You are using the official npm registry and do not have a stale/broken npm cache; run `npm cache verify` before retrying if needed.
 - **tmux** is installed on the machine/host you connect to. On Linux, `node-pty` compiles from source, so install `build-essential` + `python3` first; Windows / macOS use prebuilt binaries.
 
@@ -162,7 +162,7 @@ Switch the sidebar bottom from `Files` to `Git`. The Git panel is scoped to the 
 
 ## 💻 Requirements
 
-All platforms need **Node 22.12+** (the project version files pin 22.22.2) and **npm 10+**. The rest:
+All platforms need **Node 22.x (22.12.0 or later) or 24.x** and **npm 10+**. The project version files keep 22.22.2 as the default development version; Node 24 is also supported. Windows release checks cover Node 22.22.2 and 24.16.0, including native terminal creation and input/output. The rest:
 
 <details>
 <summary><b>🪟 Windows 11</b></summary>
@@ -273,6 +273,9 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.16
+- **Node 24 support:** corrected `engines.node` to `^22.12.0 || ^24.0.0`, removing the incorrect `EBADENGINE` warning on Node 24; synchronized all workspaces, lockfile, installation guidance, and launcher messages.
 
 ### 0.1.15
 - **Terminal copying**: added a Copy button, selection copy shortcuts, a text snapshot selection mode without Shift, and optional automatic copying of mouse selections; interactive `Ctrl+C` still interrupts when nothing is selected.

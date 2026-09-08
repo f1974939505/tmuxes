@@ -6,7 +6,7 @@ cd /d "%~dp0"
 
 where npm >nul 2>nul
 if errorlevel 1 (
-  echo [tmuxes] Node.js / npm not found. Install Node 18+ from https://nodejs.org and retry.
+  echo [tmuxes] Node.js / npm not found. Install Node 22.12+ / 24.x from https://nodejs.org and retry.
   pause
   exit /b 1
 )
