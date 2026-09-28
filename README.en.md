@@ -136,13 +136,13 @@ Installation reads the target interactive shell PATH and exported configuration 
 | OpenCode | Installs a global v1 plugin, respecting `XDG_CONFIG_HOME`. Only v1 is currently supported. The v2 plugin API changed; installation refuses v2 without modifying its configuration. v2 status collection is not implemented. |
 | Hermes | Installs under `HERMES_HOME/plugins/tmuxes-native-observer` (default `~/.hermes`). Run `hermes plugins enable tmuxes-native-observer`, then restart. Missing lifecycle fields or background counters degrade to unknown. Install separately in each named profile's environment. |
 
-A shared Codex daemon may not prove which pane owns a session. Unbound sessions appear only in the integration panel and do not trigger window alerts. Check the full session ID before linking to the selected tmux session's active pane; linking requires one matching agent process. Automatic binding verifies process ancestry and start time, not merely inherited `TMUX_PANE`. Resumed sessions may need linking again.
+Ordinary Codex launches stay unbound; the old process-guessing association is disabled. For a verified pane binding, first Install / update, then choose Launch bound Codex for an idle pane. This starts a private official app-server with its own Unix socket; the TUI connects directly, without a tmuxes protocol relay. Hooks must carry the launch identity and originate from that backend process. Resume/new-session events update ownership. Exiting the TUI releases the pane binding while preserving the backend for background work; no task is silently stopped. Each binding launch creates a separate backend, whose retained socket path is printed on exit. The panel identifies session, window and pane; the sidebar follows only the active pane, with other panes listed separately.
 
 Codex `waitingOnApproval` cannot identify human versus automatic review, so it currently shows unknown without a human-decision alert. Structured user questions can still alert. Paused goals, background work, incomplete pagination, and unverifiable endings never produce completion alerts. These are explicit limits of passive observation.
 
 The collector stores bounded status metadata, never prompts or tool output. Installed files live under `~/.local/share/tmuxes/observer/`; records live under `~/.cache/tmuxes/observations/`. Reads are batched into the existing session refresh using the existing management connection, without additional SSH login probes or independent polling. `TMUXES_NO_AUTOHOOK` does not disable installed native integrations. To disable, remove only hooks pointing to the tmuxes observer, delete the corresponding OpenCode plugin file, or run `hermes plugins disable tmuxes-native-observer`.
 
-New launches no longer use the bridge that caused `/resume` compatibility problems. Exit and restart already-running old processes. User-supplied Codex configuration overrides can still produce Codex's own embedded-mode warning. Click launch buttons only at an idle shell. Native Windows shells lack tmux; use WSL or SSH. See the [notification design](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md).
+Ordinary launches inject no proxy or configuration flags. Binding launch uses the official Codex `--remote` option to connect directly to a dedicated backend, never the old relay. Restart old processes in the desired mode. User-supplied config overrides can still trigger Codex embedded-mode warnings. Use launch buttons only at an idle shell. Native Windows shells lack tmux; use WSL or SSH. See the [notification design](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md).
 
 ## 🔀 Git Panel
 
@@ -166,7 +166,7 @@ Switch the sidebar bottom from `Files` to `Git`. The Git panel is scoped to the 
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  Key/agent auth must already work from a normal shell. For a brand-new host, accept its host key once in a regular terminal first. To avoid repeated SSH handshakes for short management calls, Unix-like platforms keep reusing one long-lived OpenSSH connection with `ControlMaster` / `ControlPersist`; native Windows keeps an app-owned long-lived SSH management connection instead of using Windows OpenSSH mux sockets, avoiding `getsockname failed: Not a socket`. tmuxes no longer forces `ServerAliveInterval`, so add keepalives to your own `~/.ssh/config` only when your site allows them. If the shared/management connection is interrupted, tmuxes rebuilds it and retries once; if that still fails, the frontend shows a warning and pauses automatic polling for that SSH target. Click `Reconnect` to try again manually.
+  **Cluster iron rule: no repeated SSH logins.** Expanding targets, page refreshes and polling cannot open SSH connections; click Connect / Reconnect explicitly. All platforms reuse one persistent management connection per destination and coalesce/cache session snapshots across browsers, without per-refresh SSH processes. A terminal connects on its first explicit opening per target/session; subsequent tab switches, page refreshes and browsers reuse that terminal. Transport failures, timeouts and authentication failures latch the destination offline on the server across all APIs. No automatic retries occur. A failure imposes a minimum ten-minute cooldown, after which reconnect still requires a manual click; cooldown expiry never initiates a connection. Terminal attachments reuse OpenSSH ControlMaster/ControlPersist where supported. No forced short keepalives or host scans. Configure keys and host-key trust in a normal terminal beforehand.
 
 ## 💻 Requirements
 
@@ -281,6 +281,12 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.20
+- **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches enforce at least a ten-minute cooldown before manual reconnect; polling and other browsers cannot bypass it.
+- **Reuse terminal connections:** refreshes, tab switches and multiple browsers share the existing target/session terminal; session snapshots are coalesced and cached across browsers.
+- **Verified Codex ownership:** shared-daemon environment/process guesses no longer bind panes. Launch bound Codex uses a private official backend with verified launch identity and ancestry. TUI exit unbinds the pane while preserving background work. Install / update the integration again to deploy the new runtime.
+- **Exact pane display:** the panel identifies session/window/pane; sidebar state follows the active pane instead of mixing other windows.
 
 ### 0.1.19
 - **Fix false agent-not-installed errors:** installation reads the target interactive shell PATH and exported agent configuration directories. Codex, Claude, and Hermes hook setup no longer requires an agent executable in the management process PATH. This runs only during explicit installation, without extra status polling or SSH logins.

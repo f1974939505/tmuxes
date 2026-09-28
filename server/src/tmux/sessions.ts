@@ -17,6 +17,8 @@ import {
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
 import { applyNativeObservers, type NativeObserver } from '../nativeObservers.js';
+import { sshTargetConnected } from '../sshManagement.js';
+import { existingTerminal } from '../ws/terminalSession.js';
 
 export type LaunchAgent = 'claude' | 'codex' | 'opencode' | 'hermes';
 
@@ -53,7 +55,29 @@ export async function listSessions(target: Target): Promise<SessionInfo[]> {
   return (await listSessionSnapshot(target)).sessions;
 }
 
-export async function listSessionSnapshot(target: Target): Promise<{ sessions: SessionInfo[]; observers: NativeObserver[] }> {
+type Snapshot = { sessions: SessionInfo[]; observers: NativeObserver[] };
+const snapshots = new Map<string, { at: number; value: Promise<Snapshot> }>();
+export function invalidateSessionSnapshot(id: string): void { snapshots.delete(id); }
+
+export async function listSessionSnapshot(target: Target): Promise<Snapshot> {
+  if (target.kind === 'ssh' && !sshTargetConnected(target)) {
+    throw new TmuxError(503, 'SSH offline. Click Connect / Reconnect; no automatic connection attempted.');
+  }
+  const cached = snapshots.get(target.id);
+  if (cached && (cached.at === Infinity || Date.now() - cached.at < 5000)) return cached.value;
+  const entry = { at: Infinity, value: readSessionSnapshot(target) };
+  snapshots.set(target.id, entry);
+  try {
+    const result = await entry.value;
+    entry.at = Date.now();
+    return result;
+  } catch (error) {
+    if (snapshots.get(target.id) === entry) snapshots.delete(target.id);
+    throw error;
+  }
+}
+
+async function readSessionSnapshot(target: Target): Promise<Snapshot> {
   const fallback = `tmux list-sessions -F ${sshQuote(SESSION_FORMAT)}`;
   const script = `if [ -f "$HOME/.local/share/tmuxes/observer/native.py" ]; then python3 "$HOME/.local/share/tmuxes/observer/native.py" snapshot 2>/dev/null || { printf 'TMUXES_NATIVE_FAILED\\n'; ${fallback}; }; else ${fallback}; fi`;
   // One existing management request; observation happens locally on the target.
@@ -131,8 +155,16 @@ export async function launchAgentInSession(
   target: Target,
   name: string,
   agent: LaunchAgent,
+  bindCodex = false,
 ): Promise<void> {
   const augmented = await prepareAgentCommand(target, agent);
+  if (bindCodex) {
+    if (agent !== 'codex') throw new TmuxError(400, 'Binding launch is only available for Codex');
+    const check = await runTargetCommand(target, (opts) => commandArgv(target,
+      ['sh', '-c', 'grep -q tmuxes-binding-launch-v1 "$HOME/.local/share/tmuxes/observer/native.py"'], opts), { timeoutMs: 10_000 });
+    if (check.code !== 0) throw new TmuxError(400, 'Install / update the Codex observer on this target before binding launch.');
+    augmented.command = 'python3 "$HOME/.local/share/tmuxes/observer/native.py" launch codex';
+  }
 
   const set = await run(target, [
     'set-option',
@@ -162,7 +194,10 @@ export async function renameSession(
 ): Promise<void> {
   if (!isValidSessionName(newName)) throw new TmuxError(400, 'invalid new session name');
   const r = await run(target, ['rename-session', '-t', name, newName]);
-  if (r.code === 0) return;
+  if (r.code === 0) {
+    existingTerminal(target.id, name)?.rename(newName);
+    return;
+  }
   if (/can't find session|session not found/i.test(r.stderr)) {
     throw new TmuxError(404, `session "${name}" not found`);
   }

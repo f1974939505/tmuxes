@@ -70,6 +70,8 @@ export function sshClientArgs(
     ...(opts.batchMode ? ['-o', 'BatchMode=yes'] : []),
     '-o',
     `ConnectTimeout=${opts.connectTimeout}`,
+    '-o',
+    'ConnectionAttempts=1',
     ...(opts.multiplex === false ? ['-o', 'ControlMaster=no'] : sshMultiplexArgs(t)),
     ...portArgs,
     sshDestination(t),

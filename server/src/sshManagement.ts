@@ -40,10 +40,12 @@ const SENSITIVE_SSH_OPTIONS = new Set([
   '-w',
 ]);
 
-const sessions = new Map<string, WindowsSshSession>();
+const sessions = new Map<string, SshManagementSession>();
+const failures = new Map<string, number>();
+const FAILURE_COOLDOWN = 10 * 60_000;
 
 function targetKey(target: Target): string {
-  return `${sshDestination(target)}:${target.port ?? 22}:${target.id}`;
+  return `${sshDestination(target)}:${target.port ?? 22}`;
 }
 
 function splitSshArgs(args: string[]): { connectArgs: string[]; remoteArgs: string[] } {
@@ -69,7 +71,7 @@ function connectArgsFor(target: Target): string[] {
   const argv = sshClientArgs(target, {
     batchMode: true,
     connectTimeout: config.ssh.connectTimeoutMgmt,
-    multiplex: false,
+    multiplex: true,
   });
   const { connectArgs } = splitSshArgs(argv.slice(1));
   return ['-T', ...connectArgs, 'sh'];
@@ -107,34 +109,39 @@ function scriptFor(id: string, command: string, input?: string): string {
   ].join('\n') + '\n';
 }
 
-class WindowsSshSession {
+class SshManagementSession {
   private readonly child: ChildProcessWithoutNullStreams;
   private queue: Promise<void> = Promise.resolve();
   private stdout = '';
   private sshStderr = '';
-  private closed = false;
+  closed = false;
+  ready = false;
   private pending?: PendingCommand;
 
   constructor(
     private readonly key: string,
     target: Target,
   ) {
-    this.child = spawn('ssh', connectArgsFor(target), { shell: false });
+    this.child = spawn('ssh', connectArgsFor(target), { shell: false, windowsHide: true });
     this.child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk.toString('utf8')));
     this.child.stderr.on('data', (chunk: Buffer) => {
       this.sshStderr += chunk.toString('utf8');
     });
-    this.child.on('error', (err) => this.finishPending(null, null, err.message));
+    this.child.on('error', (err) => {
+      this.closed = true;
+      failures.set(this.key, Date.now());
+      this.finishPending(null, null, err.message);
+    });
     this.child.on('close', (code, signal) => {
       this.closed = true;
-      if (sessions.get(this.key) === this) sessions.delete(this.key);
+      if (sessions.get(this.key) === this) failures.set(this.key, Date.now());
       this.finishPending(code, signal, this.sshStderr || 'ssh connection closed');
     });
   }
 
   dispose(): void {
     this.closed = true;
-    if (sessions.get(this.key) === this) sessions.delete(this.key);
+    if (sessions.get(this.key) === this) failures.set(this.key, Date.now());
     try {
       this.child.kill('SIGKILL');
     } catch {
@@ -215,25 +222,51 @@ class WindowsSshSession {
   }
 }
 
-function sessionFor(target: Target): WindowsSshSession {
+/** Called only by the explicit Connect/Reconnect endpoint. Never from reads. */
+export function connectSshTarget(target: Target): Promise<CommandResult> {
   const key = targetKey(target);
   const existing = sessions.get(key);
-  if (existing) return existing;
-  const session = new WindowsSshSession(key, target);
+  if (existing && !existing.closed && existing.ready) return Promise.resolve({ code: 0, signal: null, stdout: '', stderr: '' });
+  if (existing && !existing.closed) return Promise.resolve(offline('SSH connection is already being established; no new connection attempted.'));
+  const failed = failures.get(key);
+  if (failed !== undefined && Date.now() - failed < FAILURE_COOLDOWN) {
+    return Promise.resolve(offline(`SSH reconnect is locked for ${Math.ceil((FAILURE_COOLDOWN - Date.now() + failed) / 1000)}s after failure; no connection attempted.`));
+  }
+  const session = new SshManagementSession(key, target);
   sessions.set(key, session);
-  return session;
+  return session.run('true', undefined, { timeoutMs: 10_000 }).then(result => {
+    session.ready = result.code === 0 && !session.closed;
+    return result;
+  });
 }
 
-export async function runWindowsSshCommand(
+function offline(message = 'SSH offline. Use Connect / Reconnect explicitly; automatic logins are disabled.'): CommandResult {
+  return { code: 255, signal: null, stdout: '', stderr: message };
+}
+
+export function sshTargetConnected(target: Target): boolean {
+  const session = sessions.get(targetKey(target));
+  return !!session && !session.closed && session.ready;
+}
+
+export function blockSshTarget(target: Target): void {
+  failures.set(targetKey(target), Date.now());
+  sessions.get(targetKey(target))?.dispose();
+}
+
+export function disposeSshTargets(): void {
+  for (const session of sessions.values()) session.dispose();
+}
+
+export async function runSshManagementCommand(
   target: Target,
   file: string,
   args: string[],
-  opts: RunOptions,
+  opts: RunOptions = {},
 ): Promise<CommandResult> {
   const { command, input } = commandFromSshArgv(file, args, opts.input);
-  return sessionFor(target).run(command, input, opts);
+  const session = sessions.get(targetKey(target));
+  if (!session || session.closed || !session.ready) return offline();
+  return session.run(command, input, opts);
 }
 
-export function dropWindowsSshSession(target: Target): void {
-  sessions.get(targetKey(target))?.dispose();
-}

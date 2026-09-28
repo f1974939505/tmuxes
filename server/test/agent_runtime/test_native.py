@@ -56,6 +56,26 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(native.restore(data["state"]).snapshot(), ("unknown", ""))
         self.assertEqual(data["candidate"], "t")
 
+    def test_shared_codex_never_binds_even_with_plausible_ancestry(self):
+        with patch.object(native, "binding", return_value={"pid": 10, "pane": "%1"}):
+            native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
+        data = json.loads(next(self.base.glob("*.json")).read_text())
+        self.assertNotIn("binding", data)
+
+    def test_codex_rejects_manual_process_guess(self):
+        native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
+        key = next(self.base.glob("*.json")).stem
+        with self.assertRaisesRegex(ValueError, "cannot be linked"):
+            native.bind_record(key, "a")
+
+    def test_dedicated_backends_keep_same_thread_id_separate(self):
+        for token, pane in (("a" * 32, "%1"), ("b" * 32, "%2")):
+            claim = {"binding": {"token": token, "pane": pane, "proof": "dedicated-codex-v1"},
+                     "endpoint": "/tmp/" + token, "backend": {"pid": 20, "stamp": "x"}}
+            with patch.object(native, "launch_claim", return_value=claim):
+                native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
+        self.assertEqual(len(list(self.base.glob("*.json"))), 2)
+
     def test_claude_background_tasks_survive_stop(self):
         native.report("claude", {"session_id": "root", "hook_event_name": "UserPromptSubmit"})
         native.report("claude", {"session_id": "root", "hook_event_name": "Stop", "background_tasks": [{"id": "monitor"}], "session_crons": []})

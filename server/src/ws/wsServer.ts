@@ -4,10 +4,11 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { config } from '../config.js';
 import { getTarget, isValidTargetId, type Target } from '../targets.js';
 import { isValidSessionName, isValidDimension } from '../validate.js';
-import { TerminalSession, track } from './terminalSession.js';
+import { TerminalSession, track, existingTerminal } from './terminalSession.js';
 import { winShell, type ShellClient } from '../winshell/manager.js';
 import type { ClientControl } from './protocol.js';
 import { log } from '../logger.js';
+import { sshTargetConnected, blockSshTarget } from '../sshManagement.js';
 
 const HEARTBEAT_MS = 30_000;
 
@@ -133,6 +134,7 @@ export function attachWebSocket(server: HttpServer): void {
     if (!isValidTargetId(targetId)) return reject(socket, 400, 'Bad Request');
     const target = getTarget(targetId);
     if (!target) return reject(socket, 404, 'Not Found');
+    if (target.kind === 'ssh' && !sshTargetConnected(target)) return reject(socket, 503, 'SSH requires manual connection');
     if (!isValidSessionName(session)) return reject(socket, 400, 'Bad Request');
 
     const colsRaw = Number(url.searchParams.get('cols'));
@@ -146,8 +148,15 @@ export function attachWebSocket(server: HttpServer): void {
         attachWinShell(ws, target, session, cols, rows);
         return;
       }
-      const ts = new TerminalSession(ws, target, session, cols, rows);
-      track(ts);
+      try {
+        const existing = existingTerminal(target.id, session);
+        if (existing) { existing.attach(ws, cols, rows); return; }
+        const ts = new TerminalSession(ws, target, session, cols, rows);
+        track(ts);
+      } catch {
+        if (target.kind === 'ssh') blockSshTarget(target);
+        ws.close(1011, 'Terminal launch failed; reconnect manually');
+      }
     });
   });
 }

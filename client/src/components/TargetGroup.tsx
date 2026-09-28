@@ -29,6 +29,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [observers, setObservers] = useState<NativeObserver[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sshReady, setSshReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -38,14 +39,14 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const folders = useFolders(target.id, expanded, target.kind === 'ssh');
+  const folders = useFolders(target.id, expanded && (target.kind !== 'ssh' || sshReady), target.kind === 'ssh');
   const attention = useAttention();
   const { t } = useI18n();
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
   // Avoid repeated SSH login failures that can look like brute-force attempts.
-  // Collapse/re-expand the target to retry after fixing keys, VPN, or host access.
+  // Server also latches failures; only explicit Connect can establish SSH.
   const pollingPaused = useRef(false);
   // Last-seen agent hook event key per session; first sight is a baseline.
   const lastAgentEvent = useRef<Map<string, string>>(new Map());
@@ -120,9 +121,11 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
       const { sessions, observers } = await api.getSessions(target.id);
       setSessions(sessions);
       setObservers(observers ?? []);
+      setSshReady(true);
       detectAttention(sessions);
       setError(null);
     } catch (e) {
+      setSshReady(false);
       setError(e instanceof ApiError ? e.message : t.failedListSessions);
       if (target.kind === 'ssh') pollingPaused.current = true;
     } finally {
@@ -131,11 +134,19 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
     }
   }, [target.id, target.kind, detectAttention, t.failedListSessions]);
 
-  const manualReconnect = useCallback(() => {
-    pollingPaused.current = false;
-    setError(null);
-    void refresh();
-  }, [refresh]);
+  const manualReconnect = useCallback(async () => {
+    setLoading(true);
+    try {
+      await api.connectTarget(target.id);
+      pollingPaused.current = false;
+      setError(null);
+      await refresh();
+    } catch (e) {
+      setSshReady(false);
+      pollingPaused.current = true;
+      setError(e instanceof Error ? e.message : t.failedListSessions);
+    } finally { setLoading(false); }
+  }, [refresh, target.id, t.failedListSessions]);
 
   useEffect(() => {
     if (!expanded) return;

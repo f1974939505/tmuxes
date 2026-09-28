@@ -12,6 +12,7 @@ import { disposeAll } from './ws/terminalSession.js';
 import { refreshTargets } from './targets.js';
 import { winShell } from './winshell/manager.js';
 import { openBrowser } from './openBrowser.js';
+import { disposeSshTargets } from './sshManagement.js';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -55,6 +56,7 @@ function shutdown(signal: string): void {
     /* ignore */
   }
   disposeAll();
+  disposeSshTargets();
   winShell.disposeAll();
   server.close(() => process.exit(0));
   // Don't wait forever for lingering sockets.

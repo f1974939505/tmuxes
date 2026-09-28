@@ -3,9 +3,12 @@ import { applyNativeObservers, type NativeObserver } from '../src/nativeObserver
 
 const sessions = [{ name: 'a', windows: 2, attached: true, created: 1, lastActivity: 2 }];
 const observer = (state: NativeObserver['state'], reason: NativeObserver['reason'] = ''): NativeObserver => ({
-  key: state, kind: 'codex', id: state, state, reason, session: 'a', since: 1, updated: 2, capability: 'events',
+  key: state, kind: 'codex', id: state, state, reason, session: 'a', since: 1, updated: 2, capability: 'events', activePane: true,
 });
 describe('native status aggregation', () => {
+  it('does not show another window or pane as the currently visible agent', () => {
+    expect(applyNativeObservers(sessions, [{ ...observer('waiting', 'decision'), activePane: false }])).toEqual(sessions);
+  });
   it('does not let completion hide another pane or background process', () => {
     for (const state of ['running', 'background', 'unknown'] as const) {
       const result = applyNativeObservers(sessions, [observer('idle', 'done'), observer(state)]);

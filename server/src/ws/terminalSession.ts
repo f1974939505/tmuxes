@@ -6,18 +6,20 @@ import { attachArgv } from '../tmux/builder.js';
 import { resolveExecutable } from '../exe.js';
 import { classifySsh } from './sshState.js';
 import type { ClientControl, ServerControl } from './protocol.js';
-import { log } from '../logger.js';
+import { blockSshTarget } from '../sshManagement.js';
 
 const HEARTBEAT_MS = 30_000;
 const HIGH_WATER = 1 << 20; // 1 MiB buffered → pause the PTY
 const LOW_WATER = 1 << 18; // 256 KiB → resume
 const KILL_GRACE_MS = 2_000;
 
-/** Owns exactly one PTY for one WebSocket. dispose() is idempotent. */
+/** One persistent PTY per target/session, shared across browser connections. */
 export class TerminalSession {
   private readonly ptyProc: pty.IPty;
   private disposed = false;
-  private alive = true;
+  private clients = new Map<WebSocket, boolean>();
+  private replay: Buffer = Buffer.alloc(0);
+  key: string;
   private paused = false;
   private heartbeat?: NodeJS.Timeout;
   private drainTimer?: NodeJS.Timeout;
@@ -26,12 +28,13 @@ export class TerminalSession {
   private sshScanBudget: number;
 
   constructor(
-    private readonly ws: WebSocket,
+    ws: WebSocket,
     private readonly target: Target,
-    private readonly session: string,
+    private session: string,
     cols: number,
     rows: number,
   ) {
+    this.key = `${target.id}/${session}`;
     this.sshScanBudget = target.kind === 'ssh' ? 8192 : 0;
 
     const { file, args } = attachArgv(target, session);
@@ -47,16 +50,26 @@ export class TerminalSession {
     this.ptyProc.onData((data) => this.onPtyData(data));
     this.ptyProc.onExit(({ exitCode }) => this.onPtyExit(exitCode));
 
-    this.ws.on('message', (data, isBinary) => this.onClientMessage(data, isBinary));
-    this.ws.on('close', () => this.dispose());
-    this.ws.on('error', () => this.dispose());
-    this.ws.on('pong', () => {
-      this.alive = true;
-    });
-
     this.heartbeat = setInterval(() => this.tick(), HEARTBEAT_MS);
+    this.attach(ws, cols, rows);
+  }
 
-    this.sendControl({ type: 'ready', target: target.id, session });
+  /** Browser remounts and tab switches reuse the PTY instead of reopening SSH. */
+  attach(ws: WebSocket, cols: number, rows: number): void {
+    if (this.disposed) { ws.close(); return; }
+    this.clients.set(ws, true);
+    ws.on('message', (data, isBinary) => this.onClientMessage(data, isBinary));
+    ws.on('close', () => this.clients.delete(ws));
+    ws.on('error', () => this.clients.delete(ws));
+    ws.on('pong', () => this.clients.set(ws, true));
+    if (this.replay.length) ws.send(this.replay, { binary: true });
+    this.ptyProc.resize(cols, rows);
+    ws.send(JSON.stringify({ type: 'ready', target: this.target.id, session: this.session }));
+  }
+
+  rename(session: string): void {
+    this.session = session;
+    this.key = `${this.target.id}/${session}`;
   }
 
   private onPtyData(data: string): void {
@@ -69,6 +82,7 @@ export class TerminalSession {
   }
 
   private onPtyExit(exitCode: number | null): void {
+    if (!this.disposed && this.target.kind === 'ssh' && exitCode !== 0) blockSshTarget(this.target);
     this.sendControl({ type: 'exit', code: exitCode });
     this.closeWs(1000, 'pty exited');
     this.dispose();
@@ -103,9 +117,10 @@ export class TerminalSession {
   }
 
   private sendBinary(buf: Buffer): void {
-    if (this.disposed || this.ws.readyState !== this.ws.OPEN) return;
-    this.ws.send(buf, { binary: true });
-    if (!this.paused && this.ws.bufferedAmount > HIGH_WATER) {
+    if (this.disposed) return;
+    this.replay = Buffer.concat([this.replay, buf]).subarray(-HIGH_WATER);
+    for (const ws of this.clients.keys()) if (ws.readyState === ws.OPEN) ws.send(buf, { binary: true });
+    if (!this.paused && [...this.clients.keys()].some(ws => ws.bufferedAmount > HIGH_WATER)) {
       this.paused = true;
       this.ptyProc.pause();
       this.drainTimer = setInterval(() => this.checkDrain(), 50);
@@ -114,7 +129,7 @@ export class TerminalSession {
 
   private checkDrain(): void {
     if (this.disposed) return;
-    if (this.ws.bufferedAmount < LOW_WATER) {
+    if ([...this.clients.keys()].every(ws => ws.bufferedAmount < LOW_WATER)) {
       this.paused = false;
       if (this.drainTimer) clearInterval(this.drainTimer);
       this.drainTimer = undefined;
@@ -123,38 +138,32 @@ export class TerminalSession {
   }
 
   private sendControl(msg: ServerControl): void {
-    if (this.disposed || this.ws.readyState !== this.ws.OPEN) return;
-    this.ws.send(JSON.stringify(msg), { binary: false });
+    if (this.disposed) return;
+    for (const ws of this.clients.keys()) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg), { binary: false });
   }
 
   private tick(): void {
-    if (!this.alive) {
-      log.warn(`heartbeat lost for ${this.target.id}/${this.session}, terminating`);
-      try {
-        this.ws.terminate();
-      } catch {
-        /* ignore */
+    for (const [ws, alive] of this.clients) {
+      if (!alive) {
+        this.clients.delete(ws);
+        ws.terminate();
+        continue;
       }
-      this.dispose();
-      return;
-    }
-    this.alive = false;
-    try {
-      this.ws.ping();
-    } catch {
-      /* ignore */
+      this.clients.set(ws, false);
+      try { ws.ping(); } catch { this.clients.delete(ws); }
     }
   }
 
   private closeWs(code: number, reason: string): void {
     try {
-      if (this.ws.readyState === this.ws.OPEN) this.ws.close(code, reason);
+      for (const ws of this.clients.keys()) if (ws.readyState === ws.OPEN) ws.close(code, reason);
+      this.clients.clear();
     } catch {
       /* ignore */
     }
   }
 
-  /** Idempotent teardown — called from pty exit, ws close, and shutdown. */
+  /** Idempotent teardown — called from PTY exit and server shutdown. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -200,6 +209,10 @@ export const registry = new Set<TerminalSession>();
 
 export function track(s: TerminalSession): void {
   registry.add(s);
+}
+
+export function existingTerminal(targetId: string, session: string): TerminalSession | undefined {
+  return [...registry].find(item => item.key === `${targetId}/${session}`);
 }
 
 export function disposeAll(): void {

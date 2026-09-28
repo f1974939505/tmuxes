@@ -43,6 +43,9 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  connectTarget(targetId: string): Promise<{ ok: true }> {
+    return request(`/api/targets/${encodeURIComponent(targetId)}/connect`, { method: 'POST' });
+  },
   getTargets(): Promise<{ targets: Target[] }> {
     return request('/api/targets');
   },
@@ -80,10 +83,10 @@ export const api = {
       { method: 'DELETE' },
     );
   },
-  launchAgent(targetId: string, name: string, agent: LaunchAgent): Promise<{ ok: true }> {
+  launchAgent(targetId: string, name: string, agent: LaunchAgent, bindCodex = false): Promise<{ ok: true }> {
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/agent`,
-      { method: 'POST', body: JSON.stringify({ agent }) },
+      { method: 'POST', body: JSON.stringify({ agent, bindCodex }) },
     );
   },
   getWindows(targetId: string, name: string): Promise<{ windows: WindowInfo[] }> {

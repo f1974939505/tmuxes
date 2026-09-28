@@ -136,13 +136,13 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 | OpenCode | 安装全局 v1 插件，遵循 `XDG_CONFIG_HOME`。当前适配器仅支持 v1；v2 改变了插件 API，安装器会拒绝并保留原配置，尚不支持 v2 状态采集。 |
 | Hermes | 在 `HERMES_HOME/plugins/tmuxes-native-observer`（默认 `~/.hermes`）安装插件；执行 `hermes plugins enable tmuxes-native-observer` 后重启。缺少生命周期字段或后台任务计数时降级未知。命名 profile 需在相应环境分别安装。 |
 
-Codex 共享 daemon 不一定能证明会话属于哪个 pane。未绑定的会话只显示在接入面板，不触发窗口提醒；核对完整会话 ID 后，可关联到选定 tmux 会话的当前 pane，关联要求存在唯一匹配的 agent 进程。自动绑定同时校验进程祖先与启动时间，不能仅凭继承的 `TMUX_PANE` 猜窗。恢复会话后可能需要重新关联。
+Codex 普通启动保持未关联；旧版的进程猜测关联已禁用。需要准确绑定时，先点击「安装 / 更新」，在目标的空闲 pane 选择「绑定启动 Codex」。它为本次启动创建独立的官方 app-server 和私有 Unix socket，TUI 直接连接，tmuxes 不转发协议。hook 必须携带本次启动标识、来自对应后端进程，才能绑定到准确的 pane。`/resume`、`/new` 会更新归属；退出 TUI 后解除窗口绑定，后端继续保留后台工作，不会擅自停止任务。每次绑定启动会有独立后端；退出时终端会显示保留的 socket 路径。面板显示具体的 session、window 和 pane，侧栏仅取当前 pane 的状态，其他 pane 的状态在面板中单独查看。
 
 Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。暂停的 goal、后台工作、分页不完整或不可验证的结束均不会报完成。这是当前旁路方案的明确能力边界。
 
 采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。
 
-新启动不再经过导致 `/resume` 兼容性问题的桥接；已运行的旧进程需要退出后重新启动。用户自行传入 Codex 配置覆盖参数仍可能触发 Codex 自身的 embedded-mode 提示。按钮仅应在空闲 shell 点击。原生 Windows shell 没有 tmux，请使用 WSL 或 SSH 目标。详见[通知设计说明](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md)（英文技术文档）。
+普通启动不使用桥接或注入配置参数；绑定启动仅使用 Codex 官方 `--remote` 直连独立后端，并不经过旧代理。旧进程需退出后按所需模式重新启动；用户自行传入配置覆盖参数仍可能触发 Codex 自身的 embedded-mode 提示。按钮仅应在空闲 shell 点击。原生 Windows shell 没有 tmux，请使用 WSL 或 SSH 目标。详见[通知设计说明](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md)（英文技术文档）。
 
 ## 🔀 Git 面板
 
@@ -166,7 +166,7 @@ Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前�
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  密钥 / agent 认证必须在普通 shell 里已经能用。全新主机请先在普通终端里接受一次它的 host key。为避免短命管理命令反复新建 SSH 连接，类 Unix 平台会通过 OpenSSH `ControlMaster` / `ControlPersist` 长期复用同一条 SSH 连接；原生 Windows 则由 tmuxes 维护一条应用层 SSH 管理长连接，不使用 Windows OpenSSH mux socket，避免 `getsockname failed: Not a socket`。tmuxes 不再强制设置 `ServerAliveInterval`，如需保活请按所在平台规则写进你自己的 `~/.ssh/config`。如果复用 / 管理连接中断，tmuxes 会自动重建并重试一次；仍失败时会在前端页面提示并暂停该 SSH 目标的自动轮询，点击 `Reconnect` 可手动再试一次。
+  **集群连接铁律：禁止反复 SSH 登录。** 展开目标、刷新页面和状态轮询均不能建立 SSH；必须点击「连接 / 重连」。所有平台的管理请求复用每个目标地址的一条持久连接，多网页的会话快照请求合并缓存；不创建每次刷新的 SSH 进程。终端每个目标/会话首次手动打开时建立连接，之后切换标签页、刷新网页和多客户端复用该终端连接。断线、超时或认证失败后服务端统一锁住目标，所有入口禁止自动重连；至少冷却 10 分钟后，仍需手动点击连接，冷却到期本身不会发起连接。支持时终端复用 OpenSSH ControlMaster/ControlPersist；不强制短 keepalive、不扫描主机。密钥认证和 host key 信任请预先在正常终端配置。
 
 ## 💻 环境要求
 
@@ -280,6 +280,12 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.20
+- **集群 SSH 铁律**：管理连接只能手动建立，所有平台复用持久连接；取消全部自动重连。失败后服务端统一锁住目标，至少冷却 10 分钟后才允许手动重连，轮询和其他网页不能绕过。
+- **复用终端连接**：同一目标/会话的终端在网页刷新、切换与多客户端间复用，避免反复 SSH；多网页会话快照合并缓存。
+- **Codex 确定归属**：取消基于共享 daemon 环境和进程猜测的绑定。新增「绑定启动 Codex」，使用独立官方后端直连并核验启动标识与进程来源；退出 TUI 解除绑定，保留后台工作。需要重新点击「安装 / 更新」部署新版接入。
+- **准确显示 pane**：面板显示 session、window、pane；侧栏跟随当前 pane，不再混合其他窗口状态。
 
 ### 0.1.19
 - **修复接入安装误报未安装**：安装时读取目标交互 shell 的 PATH 和 agent 配置目录，兼容通过 shell 初始化的工具路径；Codex、Claude、Hermes 的 hook 安装不再要求后台进程能找到 agent 可执行文件。此步骤仅在点击安装时执行，不增加状态轮询或 SSH 登录。

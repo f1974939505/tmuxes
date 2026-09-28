@@ -43,15 +43,26 @@ a stable launcher live in `~/.local/share/tmuxes/observer`. Native callbacks wri
 allowlisted metadata into private atomic JSON files, never prompts or tool
 output. No extra listener or collector daemon is started. The normal session
 refresh reads these files on the target using the existing management transport.
-SSH reconnect and authentication-failure policy is unchanged.
+SSH management uses one explicitly opened persistent connection on all platforms.
+Reads never create or retry it. Failure state lives on the server, across APIs
+and browser clients. Reconnect is manual only with a ten-minute failure cooldown.
+Session snapshots are coalesced across browsers; terminal PTYs survive browser
+remounts and are reused per target/session. The browser never auto-retries a
+terminal connection. These rules are mandatory in AGENTS.md. Validation uses
+mock SSH processes and isolated local tmux; no real cluster is contacted.
 
-An automatic pane binding requires process ancestry and a matching process start
-time. Inherited daemon environment alone is insufficient. Unbound observations
-are visible separately, without window alerts. Users can explicitly link a
-session ID to an active pane containing exactly one matching agent process.
-Resumes reset stale state; records owned by the same live process prefer the
-latest session. Multiple live processes aggregate conservatively so one ending
-cannot hide another running process.
+Codex no longer trusts inherited pane environment or a guessed process match.
+Ordinary shared-daemon sessions stay unbound. Explicit binding launch owns a
+private official app-server, a private Unix socket, and a random launch identity.
+The TUI connects directly through the official remote option; there is no proxy.
+A hook must carry that identity and have the live backend PID in its ancestry.
+Records include the launch identity so two runtimes opening the same historical
+thread cannot overwrite each other's pane. Old guessed bindings are ignored.
+Resuming updates the current record for that launch; leaving the TUI unbinds it.
+The backend deliberately remains alive for background work, and its socket path
+is printed on exit. This costs one dedicated backend per explicit launch.
+The sidebar follows the active pane only; the integration panel shows exact
+session/window/pane identities. Other agents retain ancestry-based bindings.
 
 Codex hooks follow normal `/hooks` trust. A separate read-only connection to the
 existing daemon uses only thread reads, turn summaries, goal, descendant, and
@@ -64,8 +75,7 @@ Missing interfaces and older unsupported histories degrade to unknown.
 
 `waitingOnApproval` cannot identify the reviewer. It therefore remains unknown
 rather than falsely announcing a human decision during automatic review.
-`waitingOnUserInput` can announce a decision. Shared-daemon pane binding may
-require explicit user association. These limits mean native observation is not
+`waitingOnUserInput` can announce a decision. Shared-daemon pane binding is disabled; use explicit dedicated launch. These limits mean native observation is not
 feature-equivalent to intercepting every TUI protocol message.
 
 Claude requires its background evidence fields to certify completion. Another

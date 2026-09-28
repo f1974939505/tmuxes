@@ -11,6 +11,9 @@ export interface NativeObserver {
   since: number;
   updated: number;
   capability: string;
+  pane?: string | null;
+  window?: string | null;
+  activePane?: boolean;
 }
 
 export function applyNativeObservers(sessions: SessionInfo[], observers: NativeObserver[]): SessionInfo[] {
@@ -18,7 +21,7 @@ export function applyNativeObservers(sessions: SessionInfo[], observers: NativeO
     agentEvent: _event, agentNonce: _nonce, ...session }) => {
     // Multiple native processes can share a tmux session. A completion in one
     // must never hide another process's running/background/unknown state.
-    const records = observers.filter((x) => x.session === session.name);
+    const records = observers.filter((x) => x.session === session.name && x.activePane === true);
     if (!records.length) return session;
     const rank = (x: NativeObserver) => x.reason === 'decision' ? 0 : x.reason === 'error' ? 1
       : x.state === 'running' ? 2 : x.state === 'background' ? 3 : x.state === 'unknown' ? 4

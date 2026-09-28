@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import secrets
 
 from claude import Claude
 from state import State
@@ -90,6 +91,76 @@ def binding():
     return None
 
 
+def launch_claim():
+    """A Codex binding requires a dedicated backend created by our launcher."""
+    token = os.environ.get("TMUXES_CODEX_BINDING", "")
+    if not re.fullmatch(r"[0-9a-f]{32}", token):
+        return None
+    try:
+        claim = json.loads((STORE / (token + ".claim")).read_text())
+        scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve())
+        if claim["scope"] != scope or not alive(claim["backend"]):
+            return None
+        pid = os.getppid()
+        for _ in range(32):
+            if pid == claim["backend"]["pid"]:
+                return claim
+            info = process(pid)
+            if not info or pid <= 1:
+                break
+            pid = info[0]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def launch_codex():
+    """Explicitly own one pane, one official backend and one TUI. No proxy."""
+    import shutil
+    codex = shutil.which("codex")
+    if not codex:
+        raise ValueError("codex is not in this terminal's PATH")
+    pane = os.environ.get("TMUX_PANE", "")
+    sock = os.environ.get("TMUX", "").rsplit(",", 2)[0]
+    if not re.fullmatch(r"%\d+", pane) or not sock:
+        raise ValueError("Run binding launch from an idle tmux pane")
+    actual = command(["tmux", "-S", sock, "display-message", "-p", "-t", pane, "#{pane_id}"])
+    if actual != pane:
+        raise ValueError("Pane identity changed")
+    token = secrets.token_hex(16)
+    directory = Path(tempfile.mkdtemp(prefix="tmuxes-codex-"))
+    endpoint = directory / "server.sock"
+    env = {**os.environ, "TMUXES_CODEX_BINDING": token}
+    scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve())
+    log = (directory / "server.log").open("w")
+    backend = subprocess.Popen([codex, "app-server", "--listen", "unix://" + str(endpoint)],
+                               env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    try:
+        for _ in range(100):
+            if backend.poll() is not None:
+                raise ValueError("Codex backend exited; see " + str(directory / "server.log"))
+            if endpoint.exists():
+                break
+            time.sleep(.1)
+        else:
+            raise ValueError("Codex backend did not create its private socket")
+        owner = {"pid": os.getpid(), "stamp": process(os.getpid())[1], "socket": sock, "pane": pane,
+                 "proof": "dedicated-codex-v1", "token": token}
+        claim = {"scope": scope, "binding": owner, "endpoint": str(endpoint),
+                 "backend": {"pid": backend.pid, "stamp": process(backend.pid)[1]}}
+        with locked():
+            atomic(STORE / (token + ".claim"), claim)
+        # Native /resume connects directly to the official server. No relay.
+        result = subprocess.call([codex, "--remote", "unix://" + str(endpoint)], env=env)
+        print("\nCodex pane binding ended. Private backend remains available for background work: " + str(endpoint))
+        return result
+    except Exception:
+        backend.terminate()
+        raise
+    finally:
+        log.close()
+
+
 def alive(bound):
     info = process(bound.get("pid", 0)) if bound else None
     return bool(info and info[1] == bound.get("stamp"))
@@ -118,13 +189,19 @@ def report(kind, payload):
     if payload.get("agent_id") and payload.get("hook_event_name") not in ("SubagentStart", "SubagentStop"):
         return
     scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve()) if kind == "codex" else ""
-    key = key_for(kind, sid, scope)
+    claim = launch_claim() if kind == "codex" else None
+    key = key_for(kind, sid, scope + (":" + claim["binding"]["token"] if claim else ""))
     path = STORE / (key + ".json")
-    bound = binding()
+    bound = claim["binding"] if claim else (None if kind == "codex" else binding())
     with locked():
         record = json.loads(path.read_text()) if path.exists() else {
             "key": key, "kind": kind, "id": sid, "scope": scope, "since": time.time(), "state": {}}
         state = restore(record["state"])
+        if kind == "codex":
+            record["endpoint"] = claim["endpoint"] if claim else None
+            record["backend"] = claim["backend"] if claim else None
+            if not claim:
+                record.pop("binding", None)
         event = payload.get("hook_event_name")
         starting = event == "SessionStart" or payload.get("type") == "start"
         if bound and (not record.get("binding") or starting or event == "UserPromptSubmit"):
@@ -178,14 +255,14 @@ class ReadOnlyCodex:
     METHODS = {"thread/read", "thread/turns/list", "thread/goal/get",
                "thread/list", "thread/backgroundTerminals/list"}
 
-    def __init__(self, home, deadline=None):
+    def __init__(self, home, deadline=None, endpoint=None):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.ws = WebSocket(sock, client=True)
         self.counter = 0
         self.deadline = deadline or time.monotonic() + 3
         try:
             sock.settimeout(0.5)
-            sock.connect(str(Path(home) / "app-server-control/app-server-control.sock"))
+            sock.connect(endpoint or str(Path(home) / "app-server-control/app-server-control.sock"))
             self.ws.handshake(timeout=0.5)
             sock.settimeout(0.5)
             self._request("initialize", {"clientInfo": {"name": "tmuxes-observer", "version": "1"},
@@ -289,9 +366,10 @@ def snapshot():
             return {"raw": "", "observers": []}
         raise ValueError(result.stderr.strip())
     panes = {}
-    for row in command(["tmux", "list-panes", "-a", "-F", "#{pane_id}|#{socket_path}|#{session_name}"]).splitlines():
-        pane, sock, name = row.split("|", 2)
-        panes[(sock, pane)] = name
+    for row in command(["tmux", "list-panes", "-a", "-F", "#{pane_id}|#{socket_path}|#{window_index}|#{window_active}|#{pane_active}|#{session_name}"]).splitlines():
+        pane, sock, window, window_active, pane_active, name = row.split("|", 5)
+        panes[(sock, pane)] = {"name": name, "window": window, "pane": pane,
+                               "active": window_active == "1" and pane_active == "1"}
     records = []
     clients = {}
     deadline = time.monotonic() + 3
@@ -308,18 +386,25 @@ def snapshot():
                 if record["kind"] == "codex":
                     try:
                         home = record["scope"]
-                        if home not in clients:
-                            clients[home] = None
-                            clients[home] = ReadOnlyCodex(home, deadline)
-                        if clients[home] is None:
+                        endpoint = record.get("endpoint")
+                        if endpoint and not alive(record.get("backend")):
+                            raise ValueError("Dedicated backend exited")
+                        client_key = endpoint or home
+                        if client_key not in clients:
+                            clients[client_key] = None
+                            clients[client_key] = ReadOnlyCodex(home, deadline, endpoint)
+                        if clients[client_key] is None:
                             raise ValueError("Daemon unavailable")
-                        state = inspect_codex(record, clients[home])
+                        state = inspect_codex(record, clients[client_key])
                         capability = "read-only runtime"
                     except (OSError, ValueError, KeyError, TypeError, EOFError):
                         state.apply({"type": "reset"})
                         capability = "limited"
                 bound = record.get("binding")
-                session = panes.get((bound["socket"], bound["pane"])) if bound and alive(bound) else None
+                if record["kind"] == "codex" and (not bound or bound.get("proof") != "dedicated-codex-v1"):
+                    bound = None
+                location = panes.get((bound["socket"], bound["pane"])) if bound and alive(bound) else None
+                session = location["name"] if location else None
                 phase, reason = state.snapshot()
                 # Read verification must be stable across two refreshes before
                 # announcing success; no process is kept alive just to settle.
@@ -332,12 +417,15 @@ def snapshot():
                         record["verified"] = {"turn": marker, "at": time.time()}
                 else:
                     record.pop("verified", None)
-                if bound and not session:
+                if bound and not session and record["kind"] != "codex":
                     phase, reason = "unknown", ""
                 if incomplete and phase in ("idle", "settling"):
                     phase, reason, capability = "unknown", "", "limited"
                 records.append({"key": record["key"], "kind": record["kind"], "id": record["id"],
                                 "state": phase, "reason": reason, "session": session,
+                                "pane": location["pane"] if location else None,
+                                "window": location["window"] if location else None,
+                                "activePane": location["active"] if location else False,
                                 "since": record["since"], "updated": record["updated"],
                                 "capability": capability, "bindingKey":
                                 json.dumps(bound, sort_keys=True) if session else None})
@@ -376,6 +464,8 @@ def bind_record(key, session):
         raise ValueError("Invalid observation key")
     path = STORE / (key + ".json")
     record = json.loads(path.read_text())
+    if record["kind"] == "codex":
+        raise ValueError("Codex cannot be linked by guessing a process. Use explicit binding launch in an idle pane.")
     pane, sock, pid = command(["tmux", "display-message", "-p", "-t", session,
                               "#{pane_id}|#{socket_path}|#{pane_pid}"]).split("|", 2)
     rows = [row.split(None, 2) for row in command(["ps", "-eo", "pid=,ppid=,comm="]).splitlines()]
@@ -404,6 +494,8 @@ def bind_record(key, session):
 
 
 def main():
+    if sys.argv[1:] == ["launch", "codex"]:
+        sys.exit(launch_codex())
     if len(sys.argv) == 2 and sys.argv[1] == "snapshot":
         print("TMUXES_NATIVE_V1=" + json.dumps(snapshot(), ensure_ascii=True))
         return

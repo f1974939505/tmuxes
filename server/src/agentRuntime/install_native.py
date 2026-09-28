@@ -108,7 +108,7 @@ def install(kind):
     for path in files:
         shutil.copyfile(path, runtime / path.name)
     python = sys.executable
-    launcher = ("# " + MARKER + "\nimport os,sys\n"
+    launcher = ("# " + MARKER + "\n# tmuxes-binding-launch-v1\nimport os,sys\n"
                 "os.execv(" + repr(python) + ", [" + repr(python) + ", " + repr(str(runtime / "native.py")) + "] + sys.argv[1:])\n")
     write_owned(DEST / "native.py", launcher)
     command = shlex.join([python, str(DEST / "native.py"), kind])

@@ -4,6 +4,7 @@ import { isValidSessionName } from '../validate.js';
 import {
   TmuxError,
   listSessionSnapshot,
+  invalidateSessionSnapshot,
   createSession,
   renameSession,
   killSession,
@@ -36,6 +37,7 @@ import { winShell, ManagerError } from '../winshell/manager.js';
 import { installNativeObserver } from '../agentHooks.js';
 import { commandArgv } from '../tmux/builder.js';
 import { runTargetCommand } from '../targetCommand.js';
+import { connectSshTarget } from '../sshManagement.js';
 
 /** Cap on a saved file's size (matches the editor's text-only use). */
 const MAX_WRITE_BYTES = 5_000_000;
@@ -54,6 +56,7 @@ function requireTarget(req: Request): Target {
   if (!isValidTargetId(id)) throw new TmuxError(400, 'invalid target id');
   const target = getTarget(id);
   if (!target) throw new TmuxError(404, 'target not found');
+  if (req.method !== 'GET') invalidateSessionSnapshot(target.id);
   return target;
 }
 
@@ -90,6 +93,14 @@ async function requireSessionScopedPath(
 }
 
 export const apiRouter = Router();
+
+apiRouter.post('/targets/:id/connect', wrap(async (req, res) => {
+  const target = requireTarget(req);
+  if (target.kind !== 'ssh') throw new TmuxError(400, 'Not an SSH target');
+  const result = await connectSshTarget(target);
+  if (result.code !== 0) throw new TmuxError(503, result.stderr.trim());
+  res.json({ ok: true });
+}));
 
 apiRouter.get('/health', (_req, res) => {
   res.json({ ok: true });
@@ -180,7 +191,7 @@ apiRouter.post(
     if (target.kind === 'winlocal') throw new TmuxError(400, 'agent hooks require a tmux target');
     const name = requireSessionName(req.params.name);
     const agent = requireLaunchAgent((req.body ?? {}).agent);
-    await launchAgentInSession(target, name, agent);
+    await launchAgentInSession(target, name, agent, req.body?.bindCodex === true);
     res.json({ ok: true });
   }),
 );
