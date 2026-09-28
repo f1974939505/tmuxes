@@ -54,8 +54,11 @@ mock SSH processes and isolated local tmux; no real cluster is contacted.
 The toolbar types `codex --no-daemon` directly into the existing pane shell.
 No Python launcher, capability probe, or observer installation is required to
 start Codex. The sidebar has no launch control. Optional native collection still
-uses Python; direct launches lack the legacy launch claim and remain unbound
-when ownership cannot be established. Unbound, ended and superseded observations
+uses Python. On Linux / WSL, direct hooks prove ownership by walking their
+ancestry to the actual pane, identifying a Codex --no-daemon ancestor via argv,
+and verifying its terminal foreground process group. PID plus process start
+time guards lifetime; a shared daemon or detached process cannot claim a pane.
+No prompts or argv are persisted. Unsupported process inspection stays unbound. Unbound, ended and superseded observations
 are hidden and removed from tmuxes metadata on reads, guarded against newer hooks.
 Agent history and existing backend processes are untouched.
 
@@ -79,6 +82,10 @@ normal plugin enablement and reliable lifecycle/background fields. OpenCode
 currently supports only v1; installation rejects v2 before changing config
 because its plugin API changed. Future adapters should be added from actual
 schemas and fixtures, without guessing compatibility.
+
+`scripts/test-direct-codex.py` exercises direct shell launch in two isolated tmux
+panes with synthetic native hooks, resume, and exit cleanup; no launcher claim
+or account access is used.
 
 ## Validation
 

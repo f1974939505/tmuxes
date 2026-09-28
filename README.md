@@ -144,7 +144,7 @@ Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前�
 
 采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。
 
-也可以直接在目标 pane 输入 `codex --no-daemon`。可选的原生 hooks 状态采集仍依赖目标 Python 和 `/hooks` 信任；移除的是启动过程的 Python 依赖。直接启动不携带旧启动器的绑定标识，因此当前采集器不能保证自动关联 Codex pane；未关联记录不展示且会清理；已关联但证据不足时显示未知，不猜测完成。
+也可以直接在目标 pane 输入 `codex --no-daemon`。可选的原生 hooks 状态采集仍依赖目标 Python 和 `/hooks` 信任；移除的是启动过程的 Python 依赖。Linux / WSL 上直接启动的 Codex 通过原生 hook 的真实进程祖先链、`--no-daemon` 参数、启动时间和前台进程组关联 pane，不需要启动器标识。需更新目标接入并信任 hooks；没有事件或无法核验归属时不猜测绑定。未关联记录不展示且会清理；已关联但证据不足时显示未知，不猜测完成。
 
 ## 🔀 Git 面板
 

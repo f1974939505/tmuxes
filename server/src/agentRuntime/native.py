@@ -91,6 +91,45 @@ def binding():
     return None
 
 
+def process_arguments(pid):
+    # Linux/WSL: preserve argv boundaries; never persist prompts or arguments.
+    try:
+        return [x.decode("utf-8", "replace") for x in
+                Path("/proc", str(int(pid)), "cmdline").read_bytes().split(b"\0") if x]
+    except (OSError, ValueError):
+        return []
+
+
+def direct_codex_binding():
+    """Prove a foreground --no-daemon ancestor belongs to the actual pane."""
+    pane_owner = binding()
+    if not pane_owner:
+        return None
+    pid = os.getppid()
+    for _ in range(32):
+        info = process(pid)
+        if not info or pid <= 1:
+            return None
+        argv = process_arguments(pid)
+        executable = Path(argv[0]).name if argv else ""
+        offset = 1
+        if executable in ("node", "nodejs", "python", "python3") and len(argv) > 1:
+            executable, offset = Path(argv[1]).name, 2
+        flags = argv[offset:]
+        flags = flags[:flags.index("--")] if "--" in flags else flags
+        if executable in ("codex", "codex.js") and "--no-daemon" in flags and "app-server" not in flags:
+            try:
+                groups = command(["ps", "-o", "pgid=,tpgid=", "-p", str(pid)]).split()
+                if len(groups) == 2 and groups[0] == groups[1] and int(groups[0]) > 0:
+                    return {**pane_owner, "pid": pid, "stamp": info[1], "proof": "foreground-direct-v1"}
+            except (OSError, ValueError, subprocess.SubprocessError):
+                return None
+        if pid == pane_owner["pid"]:
+            break
+        pid = info[0]
+    return None
+
+
 def launch_claim():
     """Validate launcher ownership; daemon-inherited pane variables are not proof."""
     token = os.environ.get("TMUXES_CODEX_BINDING", "")
@@ -182,10 +221,10 @@ def report(kind, payload):
         return
     scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve()) if kind == "codex" else ""
     claim = launch_claim() if kind == "codex" else None
-    bound = claim["binding"] if claim else (None if kind == "codex" else binding())
+    bound = claim["binding"] if claim else (direct_codex_binding() if kind == "codex" else binding())
     # A resumed session ID can exist in multiple processes/panes concurrently.
     # Keep their event streams separate; one process cannot end another's work.
-    owner_scope = json.dumps(bound, sort_keys=True) if bound and kind != "codex" else ""
+    owner_scope = json.dumps(bound, sort_keys=True) if bound and not claim else ""
     key = key_for(kind, sid, scope + owner_scope + (":" + claim["binding"]["token"] if claim else ""))
     path = STORE / (key + ".json")
     with locked():
@@ -195,7 +234,7 @@ def report(kind, payload):
         if kind == "codex":
             record["endpoint"] = claim.get("endpoint") if claim else None
             record["backend"] = claim.get("backend") if claim else None
-            if not claim:
+            if not bound:
                 record.pop("binding", None)
         event = payload.get("hook_event_name")
         starting = event == "SessionStart" or payload.get("type") == "start"
@@ -380,7 +419,7 @@ def snapshot():
                     continue
                 state = restore(record["state"])
                 capability = "events"
-                foreground = (record.get("binding") or {}).get("proof") == "foreground-codex-v1"
+                foreground = (record.get("binding") or {}).get("proof") in ("foreground-codex-v1", "foreground-direct-v1")
                 if record["kind"] == "codex" and not foreground:
                     try:
                         home = record["scope"]
@@ -399,7 +438,7 @@ def snapshot():
                         state.apply({"type": "reset"})
                         capability = "limited"
                 bound = record.get("binding")
-                if record["kind"] == "codex" and (not bound or bound.get("proof") not in ("dedicated-codex-v1", "foreground-codex-v1")):
+                if record["kind"] == "codex" and (not bound or bound.get("proof") not in ("dedicated-codex-v1", "foreground-codex-v1", "foreground-direct-v1")):
                     bound = None
                 location = panes.get((bound["socket"], bound["pane"])) if bound and alive(bound) else None
                 binding_key = json.dumps(bound, sort_keys=True) if location else None

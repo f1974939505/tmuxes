@@ -144,7 +144,7 @@ Codex `waitingOnApproval` cannot identify human versus automatic review, so it c
 
 The collector stores bounded status metadata, never prompts or tool output. Installed files live under `~/.local/share/tmuxes/observer/`; records live under `~/.cache/tmuxes/observations/`. Reads are batched into the existing session refresh using the existing management connection, without additional SSH login probes or independent polling. `TMUXES_NO_AUTOHOOK` does not disable installed native integrations. To disable, remove only hooks pointing to the tmuxes observer, delete the corresponding OpenCode plugin file, or run `hermes plugins disable tmuxes-native-observer`.
 
-You can also type `codex --no-daemon` yourself in the target pane. Optional native hook collection still requires target Python and `/hooks` trust; Python is removed from the launch path. Direct launches do not carry the old launcher identity, so the current collector cannot guarantee automatic Codex pane binding. Unbound observations are hidden and cleaned up; incomplete linked observations stay unknown instead of guessing completion.
+You can also type `codex --no-daemon` yourself in the target pane. Optional native hook collection still requires target Python and `/hooks` trust; Python is removed from the launch path. On Linux / WSL, direct launches bind through native hook process ancestry, the --no-daemon argument, process start time, and the terminal foreground process group, without a launcher identity. Update the target integration and trust its hooks; missing events or unverifiable ownership never imply a guessed binding. Unbound observations are hidden and cleaned up; incomplete linked observations stay unknown instead of guessing completion.
 
 ## 🔀 Git Panel
 

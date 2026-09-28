@@ -211,6 +211,21 @@ class NativeTests(unittest.TestCase):
 
 
 class BindingTests(unittest.TestCase):
+    def test_direct_codex_requires_foreground_flag_and_real_pane_ancestry(self):
+        owner = {"socket": "/sock", "pane": "%1", "pid": 20, "stamp": "agent"}
+        with patch.object(native, "binding", return_value=owner), \
+             patch.object(native.os, "getppid", return_value=100), \
+             patch.object(native, "process", side_effect=lambda pid: {100: (20, "hook"), 20: (10, "agent")}.get(pid)), \
+             patch.object(native, "process_arguments", side_effect=lambda pid: ["/bin/codex", "--no-daemon"] if pid == 20 else ["sh"]), \
+             patch.object(native, "command", return_value="20 20"):
+            self.assertEqual(native.direct_codex_binding(), {**owner, "proof": "foreground-direct-v1"})
+            with patch.object(native, "process_arguments", return_value=["codex", "app-server", "--managed-daemon"]):
+                self.assertIsNone(native.direct_codex_binding())
+            with patch.object(native, "command", return_value="20 10"):
+                self.assertIsNone(native.direct_codex_binding())
+            with patch.object(native, "binding", return_value=None):
+                self.assertIsNone(native.direct_codex_binding())
+
     def test_daemon_inherited_pane_is_not_a_binding(self):
         with patch.dict(native.os.environ, {"TMUX": "/tmp/test.sock,1,0", "TMUX_PANE": "%2"}), \
              patch.object(native, "command", return_value="10"), \
