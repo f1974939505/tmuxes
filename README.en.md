@@ -279,6 +279,12 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.18
+- **Native status integration:** install hooks/plugins once per target, then launch agents with ordinary commands in tmux panes. Existing configuration is preserved and modified hook files are backed up.
+- **Codex launch and resume:** toolbar launches no longer inject `--remote`, `-c`, or wrappers, removing the bridge path behind the `/resume` connection failure. Restart old processes and trust Codex hooks through `/hooks`.
+- **Conservative status checks:** independently read background tasks, subagents, and goals; unverifiable completion stays unknown. Shared-daemon sessions can be linked manually to panes. Ambiguous human/automatic approval states do not trigger decision alerts.
+- **Compatibility limits:** the OpenCode plugin currently supports v1 only and refuses v2 installation. Hermes requires normal plugin enablement after installation. See the integration section above.
+
 ### 0.1.17
 - **Agent alerts redesigned:** distinguish errors, pending user decisions, and verified task completion; background tasks, subagents, monitor shells, and brief pauses do not count as overall completion. Unverifiable activity is shown as unknown.
 - **Codex shared background server:** use a local protocol bridge instead of injecting `-c` hooks, removing the resulting embedded-mode warning; restore actual user-decision alerts while filtering brief automatic approvals.
