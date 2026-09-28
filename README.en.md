@@ -284,6 +284,14 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 ## 📋 Changelog
 
+### 0.1.21
+
+- **Direct foreground Codex:** the toolbar types `codex --no-daemon` into the interactive shell. Launching requires neither Python nor an extra app-server; the duplicate sidebar launch control is removed.
+- **Verified ownership:** on Linux / WSL, native hooks verify direct Codex process ancestry, foreground process group, and process identity. Identical session IDs in different processes remain isolated. Install / update the target integration again and trust it in `/hooks`; optional status collection still requires Python.
+- **Old observation cleanup:** unbound, ended, and superseded observation metadata is no longer displayed or retained. Agent session history and background processes are untouched.
+- **Claude background compatibility:** background-task and cron lists are read independently, preserving positive evidence when one field is missing. Incomplete evidence never reports completion.
+- **SSH constraints preserved:** management requests reuse an explicitly established connection; no automatic connection, reconnection, or per-refresh SSH login.
+
 ### 0.1.20
 - **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches enforce at least a ten-minute cooldown before manual reconnect; polling and other browsers cannot bypass it.
 - **Reuse terminal connections:** refreshes, tab switches and multiple browsers share the existing target/session terminal; session snapshots are coalesced and cached across browsers.
