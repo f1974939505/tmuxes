@@ -1,4 +1,4 @@
-"""Minimal RFC6455 server for one private Unix-socket Codex TUI connection.
+"""Minimal RFC6455 transport for private Unix-socket Codex connections.
 
 No TCP listener, extensions, compression, authentication bypass, or reconnect.
 The parent directory is mode 0700. Codex's proxy handles upstream transport.

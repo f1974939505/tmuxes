@@ -12,11 +12,41 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
+import uuid
+from contextlib import contextmanager
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server/src/agentRuntime"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server/test/agent_runtime"))
 from main import CodexBridge
 from test_websocket import frame
+from websocket import WebSocket
+
+
+@contextmanager
+def picker_connection(path):
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.connect(path)
+    ws = WebSocket(conn, client=True)
+    try:
+        ws.handshake()
+        conn.settimeout(5)
+
+        def request(key, method, params):
+            ws.send({"id": key, "method": method, "params": params})
+            while True:
+                result = ws.receive()
+                if result.get('id') == key:
+                    assert 'error' not in result, (method, result.get('error'))
+                    return result['result']
+
+        request(1, "initialize", {"clientInfo": {"name": "tmuxes-picker-test", "version": "0.1"},
+                                  "capabilities": {"experimentalApi": True}})
+        ws.send({"method": "initialized", "params": {}})
+        yield request
+    finally:
+        ws.close()
+        ws.file.close()
 
 
 def main():
@@ -78,7 +108,33 @@ def main():
                 request(4, "thread/goal/get", {"threadId": tid})
                 request(5, "thread/backgroundTerminals/list", {"threadId": tid, "limit": 100})
                 request(6, "thread/list", {"ancestorThreadId": tid, "limit": 100})
-                stream.close()
+                # /resume opens an auxiliary app-server client while the TUI's
+                # original connection is still alive. Exercise repeated opens.
+                for _ in range(2):
+                    before = len(events)
+                    with picker_connection(bridge.path) as picker:
+                        picker(2, "thread/list", {"limit": 10})
+                        request(7, "thread/read", {"threadId": tid})
+                    request(8, "thread/read", {"threadId": tid})
+                    time.sleep(0.1)
+                    assert len(events) == before, 'Picker changed main TUI attention state'
+                # A new thread without a model turn has no on-disk rollout.
+                # Supply synthetic history only in this isolated protocol test.
+                request(9, "thread/resume", {"threadId": str(uuid.uuid4()), "history": [
+                    {"type": "message", "role": "user", "content": [
+                        {"type": "input_text", "text": "Synthetic test history"}]}]})
+                with picker_connection(bridge.path) as replacement:
+                    replacement_thread = replacement(2, "thread/start", {"cwd": directory})['thread']['id']
+                    before = len(events)
+                    conn.shutdown(socket.SHUT_RDWR)
+                    stream.close()
+                    replacement(3, "thread/read", {"threadId": replacement_thread})
+                    time.sleep(0.1)
+                    assert len(events) == before, 'Old TUI cleared replacement connection state'
+                print('Concurrent session picker + resume: PASS', flush=True)
+            with picker_connection(bridge.path) as picker:
+                picker(2, "thread/list", {"limit": 10})
+            print('Listener survives client replacement: PASS', flush=True)
             print('Shared daemon bridge: PASS (no model turns)', flush=True)
         finally:
             if bridge:

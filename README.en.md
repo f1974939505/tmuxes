@@ -137,6 +137,8 @@ Integration and compatibility boundaries:
 
 Monitored Codex launches do not accept `-c/--config`, `--enable`, `--disable`, `--search`, `--no-daemon`, or a custom `--remote`. Put settings in Codex's own configuration files, or launch an unmonitored command manually. tmuxes does not edit persistent Codex configuration, hook trust, or approval policy. The protocol is experimental; incompatible updates prefer unknown over false completion.
 
+Current source fixes the 0.1.17 `/resume` picker failure to establish a second connection and isolates picker closure from main-session state. See the [notification transport review](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md) for native hooks, `notify`, terminal notifications, and their coverage limits; these simpler alternatives have not replaced the existing bridge.
+
 The collector handles events on the target, stores no prompts or tool output, and adds no SSH polling, login probes, or reconnect loops. The browser reads tmux status through the existing management connection. Set the server environment variable `TMUXES_NO_AUTOHOOK=1` to disable automatic integration of initial commands. Disable a Hermes observer with `hermes plugins disable <plugin-name>`.
 
 Buttons type a launch command into the current pane: use them only at an idle shell. Bare `cc` remains the system compiler. Native Windows shells have no tmux and do not support monitoring; use WSL or SSH targets.

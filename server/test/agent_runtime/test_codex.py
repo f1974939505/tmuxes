@@ -54,6 +54,18 @@ class CodexTests(unittest.TestCase):
         self.assertEqual(self.adapter.root, "root")
         self.assertEqual(self.state.snapshot(), ("running", ""))
 
+    def test_resume_clears_previous_thread_attention_and_tasks(self):
+        self.event("thread/started", thread={"id": "child", "parentThreadId": "root"})
+        self.event("error", willRetry=False)
+        bindings = []
+        self.adapter.on_bind = lambda: bindings.append(self.adapter.root)
+        self.adapter.client({"id": 2, "method": "thread/resume"})
+        self.adapter.server({"id": 2, "result": {"thread": {"id": "resumed"}}})
+        self.assertEqual(bindings, ["resumed"])
+        self.assertEqual(self.state.snapshot(), ("unknown", ""))
+        self.assertFalse(self.state.tasks)
+        self.assertFalse(self.state.requests)
+
     def test_completed_turn_requires_complete_runtime_snapshot(self):
         self.event("turn/completed", turn={"status": "completed"})
         self.assertNotEqual(self.state.snapshot()[1], "done")

@@ -18,7 +18,12 @@ class State:
         kind = event.get("type")
         self.event = event.get("event", kind or "unknown")
         self.revision += 1
-        if kind == "start":
+        if kind == "reset":
+            self.running, self.error, self.known = False, False, False
+            self.tasks.clear()
+            self.requests.clear()
+            self.complete_at = None
+        elif kind == "start":
             self.running, self.error = True, False
             self.complete_at = None
             if not event.get("preserveRequests"):

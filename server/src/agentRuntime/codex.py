@@ -7,8 +7,9 @@ import uuid
 
 
 class Codex:
-    def __init__(self, emit, send):
+    def __init__(self, emit, send, on_bind=None):
         self.emit, self.send = emit, send
+        self.on_bind = on_bind
         self.root = None
         self.client_requests = {}
         self.queries = {}
@@ -50,13 +51,14 @@ class Codex:
             thread = msg.get("result", {}).get("thread", {})
             if thread.get("id"):
                 self.root = thread["id"]
+                if self.on_bind:
+                    self.on_bind()
                 self.generation += 1
                 self.children.clear()
                 self.batch = None
                 self.completion_pending = False
                 self.last_status = thread.get("status", {}).get("type")
-                self.event("tasks", ids=[], known=False)
-                self.event("unknown")
+                self.event("reset")
         p = msg.get("params") or {}
         method = msg.get("method", "")
         tid = p.get("threadId")

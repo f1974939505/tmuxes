@@ -122,27 +122,73 @@ class CodexBridge:
         self.path = str(Path(directory) / "codex.sock")
         self.listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.listener.bind(self.path)
-        self.listener.listen(1)
-        self.listener.settimeout(30)
-        self.upstream = None
-        self.ws = None
+        self.listener.listen(16)
+        self.listener.settimeout(0.5)
+        self.connections = set()
+        self.owner = None
         self.lock = threading.RLock()
         self.closing = False
+
+    def bind(self, connection):
+        with self.lock:
+            self.owner = connection
+
+    def event(self, connection, event):
+        with self.lock:
+            if not self.closing and self.owner is connection:
+                self.emit(event)
+
+    def run(self):
+        # The TUI opens extra connections for /resume's picker. Each needs an
+        # independent upstream connection and JSON-RPC request-id namespace.
+        while not self.closing:
+            try:
+                conn, _ = self.listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            with self.lock:
+                if self.closing:
+                    conn.close()
+                    return
+                connection = CodexConnection(self, conn)
+                self.connections.add(connection)
+            threading.Thread(target=connection.run, daemon=True).start()
+
+    def close(self):
+        with self.lock:
+            self.closing = True
+            self.listener.close()
+            connections = list(self.connections)
+        for connection in connections:
+            connection.close()
+
+
+class CodexConnection:
+    def __init__(self, bridge, conn):
+        self.bridge = bridge
+        self.upstream_path = bridge.upstream_path
+        self.upstream = None
+        self.ws = WebSocket(conn)
+        self.lock = threading.RLock()
+        self.closing = False
+
+    def emit(self, event):
+        self.bridge.event(self, event)
 
     def send(self, message):
         self.upstream.send(message)
 
     def run(self):
         try:
-            conn, _ = self.listener.accept()
-            self.ws = WebSocket(conn)
             self.ws.handshake()
             upstream = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.upstream = WebSocket(upstream, client=True)
             upstream.settimeout(10)
             upstream.connect(self.upstream_path)
-            self.upstream = WebSocket(upstream, client=True)
             self.upstream.handshake()
-            observer = Codex(self.emit, self.send)
+            observer = Codex(self.emit, self.send, lambda: self.bridge.bind(self))
 
             def read_server():
                 try:
@@ -156,9 +202,7 @@ class CodexBridge:
                     if not self.closing and not isinstance(error, EOFError):
                         print('[tmuxes] Codex upstream: ' + str(error), file=sys.stderr)
                 finally:
-                    if not self.closing:
-                        self.emit({"type": "unknown", "event": "CodexDisconnected"})
-                    self.ws.close()
+                    self.close()
 
             threading.Thread(target=read_server, daemon=True).start()
             while True:
@@ -170,17 +214,21 @@ class CodexBridge:
             if not self.closing:
                 if not isinstance(error, EOFError):
                     print('[tmuxes] Codex bridge: ' + str(error), file=sys.stderr)
-                self.emit({"type": "unknown", "event": "CodexDisconnected"})
         finally:
             self.close()
 
     def close(self):
-        self.closing = True
-        self.listener.close()
-        if self.ws:
+        with self.bridge.lock:
+            if self.closing:
+                return
+            self.closing = True
+            # A list-only picker must never clear the active TUI's state;
+            # neither may an old TUI connection after a new one has bound.
+            self.emit({"type": "unknown", "event": "CodexDisconnected"})
             self.ws.close()
-        if self.upstream:
-            self.upstream.close()  # Only our connection, never the shared daemon.
+            if self.upstream:
+                self.upstream.close()  # Never stop the shared daemon.
+            self.bridge.connections.discard(self)
 
 
 def configure(kind, argv, env, supervisor):

@@ -137,6 +137,8 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 Codex 的监测启动不接受 `-c/--config`、`--enable`、`--disable`、`--search`、`--no-daemon` 或自定义 `--remote`；请将配置放进 Codex 自己的配置文件，或在终端手动启动不带监测的命令。tmuxes 不修改 Codex 的持久配置、hook 信任或审批策略。协议是实验接口，升级后会优先降级为未知而非误报完成。
 
+当前源码已修复 0.1.17 中 `/resume` 选择器无法建立第二条连接的问题，并隔离选择器退出与主会话状态。原生 hooks、`notify` 和终端通知的替代方案及能力边界见 [通知传输设计评估](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md)（英文技术说明）；这些简化方案尚未替换现有桥接。
+
 采集器只在目标机器本地处理事件，不保存提示词或工具输出，不新增 SSH 轮询、登录探测或重连循环。浏览器沿用既有管理连接读取 tmux 状态。设置服务端环境变量 `TMUXES_NO_AUTOHOOK=1` 可关闭初始命令的自动接入。Hermes 插件可通过 `hermes plugins disable <插件名>` 停用。
 
 按钮会向当前 pane 输入启动命令，请仅在 shell 空闲时点击。裸 `cc` 仍按系统编译器处理。原生 Windows shell 没有 tmux，不支持这套监测；请使用 WSL 或 SSH 目标。
