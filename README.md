@@ -126,6 +126,9 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 - **错误**：根任务最终失败；普通工具错误、警告和自动重试不会直接提醒。
 - **未知**：接口缺失、失联、窗口归属或后台工作证据不足；不会猜测完成。
 
+
+安装时会读取目标交互 shell 的 PATH 和导出的配置目录，支持 shell 初始化的安装路径；不修改 PATH。若 shell 初始化阻塞，安装会超时并提示检查启动配置。
+
 | Agent | 接入方式与边界 |
 | --- | --- |
 | Codex | 合并 `CODEX_HOME/hooks.json`（默认 `~/.codex/hooks.json`），重启后在 `/hooks` 正常审查并信任。hooks 单向写入元数据；tmuxes 通过已有 daemon 的独立只读连接核验状态、goal、子线程及后台终端，不代理 TUI、不启动 daemon、不响应审批。以 0.158.0 为验证基线；缺少 hooks 或只读接口、旧历史不支持分页时降级未知。 |
@@ -277,6 +280,9 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.19
+- **修复接入安装误报未安装**：安装时读取目标交互 shell 的 PATH 和 agent 配置目录，兼容通过 shell 初始化的工具路径；Codex、Claude、Hermes 的 hook 安装不再要求后台进程能找到 agent 可执行文件。此步骤仅在点击安装时执行，不增加状态轮询或 SSH 登录。
 
 ### 0.1.18
 - **原生状态接入**：每个目标一次安装 hooks／插件，之后直接在 tmux pane 输入 agent 命令即可上报；保留已有配置并备份 hooks 文件。

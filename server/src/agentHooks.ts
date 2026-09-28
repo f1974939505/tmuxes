@@ -54,7 +54,7 @@ export async function installNativeObserver(target: Target, kind: AgentKind): Pr
   if (!runtime.python || !runtime.path) throw new Error('Invalid agent runtime installation response');
   const installed = await runTargetCommand(target,
     (opts) => commandArgv(target, [runtime.python, runtime.path.replace(/main\.py$/, 'install_native.py'), kind], opts),
-    { timeoutMs: 15_000 });
+    { timeoutMs: 25_000 });
   if (installed.code !== 0) throw new Error(installed.stderr.trim() || 'Native observer installation failed');
   return JSON.parse(installed.stdout.trim());
 }

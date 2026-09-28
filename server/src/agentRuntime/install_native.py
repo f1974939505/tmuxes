@@ -16,6 +16,29 @@ DEST = HOME / ".local/share/tmuxes/observer"
 MARKER = "tmuxes-native-observer"
 
 
+def shell_environment():
+    """Read exported agent settings from the user's interactive shell once.
+
+    Management commands do not load shell rc files (notably nvm PATH). Only
+    explicit installation does this; session polling never starts a shell.
+    """
+    import pwd
+    shell = os.environ.get("SHELL") or pwd.getpwuid(os.getuid()).pw_shell or "/bin/sh"
+    keys = ("PATH", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "HERMES_HOME", "XDG_CONFIG_HOME")
+    marker = "TMUXES_INSTALL_ENV="
+    script = "import os,json; print(" + repr(marker) + "+json.dumps({k:os.environ.get(k) for k in " + repr(keys) + "}))"
+    result = subprocess.run([shell, "-ic", shlex.join([sys.executable, "-c", script])],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10)
+    for line in reversed(result.stdout.splitlines()):
+        if line.startswith(marker):
+            data = json.loads(line[len(marker):])
+            for key in keys:
+                if isinstance(data.get(key), str):
+                    os.environ[key] = data[key]
+            return
+    raise ValueError("Cannot read the target's interactive shell environment. Check shell startup files or run the observer installer from your working terminal.")
+
+
 def write_owned(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text(encoding="utf-8") != content:
@@ -65,9 +88,11 @@ def merge_hooks(path, events, command):
 def install(kind):
     if kind not in ("claude", "codex", "opencode", "hermes"):
         raise ValueError("Unknown agent")
-    if not shutil.which(kind):
-        raise ValueError(kind + " is not installed in this target's PATH")
+    # Hook files can be installed without resolving the agent executable.
+    # This also supports agents launched through shell aliases/functions.
     if kind == "opencode":
+        if not shutil.which(kind):
+            raise ValueError("OpenCode version check cannot find opencode in the interactive shell PATH; run the installer from the terminal where opencode works.")
         version = subprocess.check_output([kind, "--version"], text=True, timeout=5).strip()
         import re
         major = re.search(r"\b(\d+)\.\d+\.\d+", version)
@@ -141,6 +166,7 @@ def register(ctx):
 
 if __name__ == "__main__":
     try:
+        shell_environment()
         print(json.dumps(install(sys.argv[1])))
     except Exception as error:
         print(str(error), file=sys.stderr)

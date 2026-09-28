@@ -126,6 +126,9 @@ Open **Agent status integration** on a target, select an agent, and click **Inst
 - **Error**: a terminal root-task failure. Ordinary tool errors, warnings, and automatic retries do not directly alert.
 - **Unknown**: missing interfaces, disconnection, uncertain pane ownership, or incomplete background evidence. Completion is never guessed.
 
+
+Installation reads the target interactive shell PATH and exported configuration directories, supporting shell-initialized tool paths without modifying PATH. Blocking shell startup files cause a bounded installation failure.
+
 | Agent | Integration and limits |
 | --- | --- |
 | Codex | Merges `CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`). Restart and review/trust through `/hooks`. Hooks write metadata one way; an independent read-only connection to the existing daemon checks status, goals, descendants, and background terminals. It never proxies the TUI, starts the daemon, or answers approvals. Validation baseline: 0.158.0. Missing hooks/interfaces or older history without pagination support degrade to unknown. |
@@ -278,6 +281,9 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.19
+- **Fix false agent-not-installed errors:** installation reads the target interactive shell PATH and exported agent configuration directories. Codex, Claude, and Hermes hook setup no longer requires an agent executable in the management process PATH. This runs only during explicit installation, without extra status polling or SSH logins.
 
 ### 0.1.18
 - **Native status integration:** install hooks/plugins once per target, then launch agents with ordinary commands in tmux panes. Existing configuration is preserved and modified hook files are backed up.

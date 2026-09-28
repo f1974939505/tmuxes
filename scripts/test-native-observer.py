@@ -56,7 +56,19 @@ while True:
     time.sleep(.05)
 ''')
     fake.chmod(0o700)
-    env = {**os.environ, "HOME": temp, "PATH": str(binpath) + ":" + os.environ["PATH"]}
+    # Management PATH deliberately lacks the agents. Only the interactive rc
+    # exports their location and the custom configuration directory.
+    opencode = binpath / "opencode"
+    opencode.write_text("#!/bin/sh\necho 1.18.29\n")
+    opencode.chmod(0o700)
+    (home / ".bashrc").write_text("echo startup-banner\nexport PATH=" + shlex.quote(str(binpath)) + ":$PATH\nexport XDG_CONFIG_HOME=" + shlex.quote(str(home / "custom-config")) + "\n")
+    env = {**os.environ, "HOME": temp, "SHELL": "/bin/bash", "PATH": os.environ["PATH"]}
+    for key in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "HERMES_HOME", "XDG_CONFIG_HOME"):
+        env.pop(key, None)
+    subprocess.run([sys.executable, str(RUNTIME / "install_native.py"), "opencode"], env=env, check=True)
+    assert (home / "custom-config/opencode/plugins/tmuxes-native-observer.js").exists()
+    print("Interactive-only PATH + exported config + noisy shell startup: PASS")
+    env["PATH"] = str(binpath) + ":" + env["PATH"]
     env.pop("CLAUDE_CONFIG_DIR", None)
     subprocess.run([sys.executable, str(RUNTIME / "install_native.py"), "claude"], env=env, check=True)
     installed = home / ".local/share/tmuxes/observer/native.py"
