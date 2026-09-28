@@ -62,6 +62,34 @@ class NativeTests(unittest.TestCase):
         data = json.loads(next(self.base.glob("*.json")).read_text())
         self.assertNotIn("binding", data)
 
+    def test_ended_claude_record_cannot_be_rebound_to_new_process(self):
+        native.report("claude", {"session_id": "old", "hook_event_name": "SessionEnd"})
+        key = next(self.base.glob("*.json")).stem
+        with patch.object(native, "command") as command:
+            with self.assertRaisesRegex(ValueError, "observation ended"):
+                native.bind_record(key, "current")
+            command.assert_not_called()
+
+    def test_snapshot_does_not_link_ended_record_even_if_process_alive(self):
+        native.report("claude", {"session_id": "old", "hook_event_name": "SessionEnd"})
+        path = next(self.base.glob("*.json"))
+        record = json.loads(path.read_text())
+        record["binding"] = {"socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        path.write_text(json.dumps(record))
+        older = {**record, "key": "older", "since": record["since"] - 1,
+                 "state": {"event": "Stop", "tasks": ["background:old"]}}
+        (self.base / "older.json").write_text(json.dumps(older))
+        from types import SimpleNamespace
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True):
+            observations = native.snapshot()["observers"]
+        self.assertEqual(len(observations), 1)
+        observation = observations[0]
+        self.assertIsNone(observation["session"])
+        self.assertFalse(observation["activePane"])
+        self.assertEqual(observation["lastEvent"], "SessionEnd")
+
     def test_codex_rejects_manual_process_guess(self):
         native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
         key = next(self.base.glob("*.json")).stem
@@ -75,6 +103,22 @@ class NativeTests(unittest.TestCase):
             with patch.object(native, "launch_claim", return_value=claim):
                 native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
         self.assertEqual(len(list(self.base.glob("*.json"))), 2)
+
+    def test_same_session_id_in_two_processes_keeps_independent_states(self):
+        for pane, event in (("%1", "Stop"), ("%2", "SessionEnd")):
+            with patch.object(native, "binding", return_value={"socket": "/sock", "pane": pane, "pid": pane, "stamp": "x"}):
+                native.report("claude", {"session_id": "shared", "hook_event_name": event,
+                                        "background_tasks": [{"id": "monitor"}], "session_crons": []})
+        records = [json.loads(path.read_text()) for path in self.base.glob("*.json")]
+        self.assertEqual(len(records), 2)
+        states = {r["binding"]["pane"]: native.restore(r["state"]).snapshot()[0] for r in records}
+        self.assertEqual(states, {"%1": "background", "%2": "unknown"})
+
+    def test_manual_binding_cannot_claim_another_process_session_id(self):
+        native.report("claude", {"session_id": "other", "hook_event_name": "Stop"})
+        key = next(self.base.glob("*.json")).stem
+        with self.assertRaisesRegex(ValueError, "cannot verify a session ID"):
+            native.bind_record(key, "current")
 
     def test_claude_background_tasks_survive_stop(self):
         native.report("claude", {"session_id": "root", "hook_event_name": "UserPromptSubmit"})

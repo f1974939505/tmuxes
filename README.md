@@ -136,6 +136,8 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 | OpenCode | 安装全局 v1 插件，遵循 `XDG_CONFIG_HOME`。当前适配器仅支持 v1；v2 改变了插件 API，安装器会拒绝并保留原配置，尚不支持 v2 状态采集。 |
 | Hermes | 在 `HERMES_HOME/plugins/tmuxes-native-observer`（默认 `~/.hermes`）安装插件；执行 `hermes plugins enable tmuxes-native-observer` 后重启。缺少生命周期字段或后台任务计数时降级未知。命名 profile 需在相应环境分别安装。 |
 
+面板数量仅统计已关联 pane 的记录；未关联记录折叠放在“未关联 / 历史记录”中，不代表当前正在运行的 agent。每条记录显示最后事件和上报时间。Claude 的 `SessionEnd` 记录不再占用窗口，也不能重新手工绑定；当前进程必须上报新事件。接入前已启动的任务无法从旧记录还原，请在方便时重新加载 hooks 或重启 agent。后台任务和定时任务列表分别读取：其中一个缺失时仍保留另一个提供的后台工作证据，但不会据此报告完成。 非 Codex 记录也按进程身份隔离，同一会话 ID 在不同 pane 恢复不会互相覆盖。移除基于进程名称的手工绑定，普通 agent 必须通过自身原生事件建立关联。
+
 Codex 普通启动保持未关联；旧版的进程猜测关联已禁用。需要准确绑定时，先点击「安装 / 更新」，在目标的空闲 pane 选择「绑定启动 Codex」。它为本次启动创建独立的官方 app-server 和私有 Unix socket，TUI 直接连接，tmuxes 不转发协议。hook 必须携带本次启动标识、来自对应后端进程，才能绑定到准确的 pane。`/resume`、`/new` 会更新归属；退出 TUI 后解除窗口绑定，后端继续保留后台工作，不会擅自停止任务。每次绑定启动会有独立后端；退出时终端会显示保留的 socket 路径。面板显示具体的 session、window 和 pane，侧栏仅取当前 pane 的状态，其他 pane 的状态在面板中单独查看。
 
 Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。暂停的 goal、后台工作、分页不完整或不可验证的结束均不会报完成。这是当前旁路方案的明确能力边界。

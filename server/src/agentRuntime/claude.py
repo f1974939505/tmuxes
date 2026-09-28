@@ -55,8 +55,9 @@ class Claude:
             tasks, crons = p.get("background_tasks"), p.get("session_crons")
             known = isinstance(tasks, list) and isinstance(crons, list)
             ids = ["child:" + x for x in self.children]
-            if known:
+            if isinstance(tasks, list):
                 ids += ["background:" + str(x.get("id", i)) for i, x in enumerate(tasks)]
+            if isinstance(crons, list):
                 ids += ["cron:" + str(x.get("id", i)) for i, x in enumerate(crons)]
             send("tasks", ids=ids, known=known)
             # A continued Stop hook is not evidence that its continuation/goal

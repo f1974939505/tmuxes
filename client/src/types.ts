@@ -38,6 +38,8 @@ export type AttentionReason = 'decision' | 'done' | 'error';
 export type LaunchAgent = AgentKind;
 
 export interface NativeObserver {
+  lastEvent?: string;
+  updated?: number;
   pane?: string | null;
   window?: string | null;
   activePane?: boolean;

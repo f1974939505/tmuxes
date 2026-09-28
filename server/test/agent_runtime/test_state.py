@@ -85,6 +85,14 @@ class ClaudeTests(unittest.TestCase):
         self.hook("Stop", background_tasks=[], session_crons=[{"id": "wake"}])
         self.assertEqual(self.state.snapshot(), ("background", ""))
 
+    def test_partial_registry_preserves_positive_background_evidence(self):
+        for field in ("background_tasks", "session_crons"):
+            self.hook("Stop", **{field: [{"id": "work"}]})
+            self.assertEqual(self.state.snapshot(), ("background", ""))
+            self.assertFalse(self.state.known)
+            self.hook("Stop", **{field: []})
+            self.assertEqual(self.state.snapshot(), ("unknown", ""))
+
     def test_missing_registry_is_unknown_not_empty(self):
         self.hook("Stop")
         self.assertEqual(self.state.snapshot(), ("unknown", ""))

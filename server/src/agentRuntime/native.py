@@ -190,9 +190,12 @@ def report(kind, payload):
         return
     scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve()) if kind == "codex" else ""
     claim = launch_claim() if kind == "codex" else None
-    key = key_for(kind, sid, scope + (":" + claim["binding"]["token"] if claim else ""))
-    path = STORE / (key + ".json")
     bound = claim["binding"] if claim else (None if kind == "codex" else binding())
+    # A resumed session ID can exist in multiple processes/panes concurrently.
+    # Keep their event streams separate; one process cannot end another's work.
+    owner_scope = json.dumps(bound, sort_keys=True) if bound and kind != "codex" else ""
+    key = key_for(kind, sid, scope + owner_scope + (":" + claim["binding"]["token"] if claim else ""))
+    path = STORE / (key + ".json")
     with locked():
         record = json.loads(path.read_text()) if path.exists() else {
             "key": key, "kind": kind, "id": sid, "scope": scope, "since": time.time(), "state": {}}
@@ -404,6 +407,9 @@ def snapshot():
                 if record["kind"] == "codex" and (not bound or bound.get("proof") != "dedicated-codex-v1"):
                     bound = None
                 location = panes.get((bound["socket"], bound["pane"])) if bound and alive(bound) else None
+                binding_key = json.dumps(bound, sort_keys=True) if location else None
+                if record["kind"] == "claude" and record.get("state", {}).get("event") == "SessionEnd":
+                    location = None
                 session = location["name"] if location else None
                 phase, reason = state.snapshot()
                 # Read verification must be stable across two refreshes before
@@ -423,12 +429,13 @@ def snapshot():
                     phase, reason, capability = "unknown", "", "limited"
                 records.append({"key": record["key"], "kind": record["kind"], "id": record["id"],
                                 "state": phase, "reason": reason, "session": session,
+                                "lastEvent": record.get("state", {}).get("event", ""),
                                 "pane": location["pane"] if location else None,
                                 "window": location["window"] if location else None,
                                 "activePane": location["active"] if location else False,
                                 "since": record["since"], "updated": record["updated"],
                                 "capability": capability, "bindingKey":
-                                json.dumps(bound, sort_keys=True) if session else None})
+                                binding_key})
                 # Only verification metadata is written, and never over a newer event.
                 with locked():
                     latest = json.loads(path.read_text())
@@ -466,31 +473,9 @@ def bind_record(key, session):
     record = json.loads(path.read_text())
     if record["kind"] == "codex":
         raise ValueError("Codex cannot be linked by guessing a process. Use explicit binding launch in an idle pane.")
-    pane, sock, pid = command(["tmux", "display-message", "-p", "-t", session,
-                              "#{pane_id}|#{socket_path}|#{pane_pid}"]).split("|", 2)
-    rows = [row.split(None, 2) for row in command(["ps", "-eo", "pid=,ppid=,comm="]).splitlines()]
-    descendants = {int(pid)}
-    candidates = []
-    for _ in range(8):
-        children = {int(row[0]) for row in rows if len(row) == 3 and int(row[1]) in descendants}
-        for row in rows:
-            if len(row) == 3 and int(row[0]) in descendants | children and Path(row[2]).name == record["kind"]:
-                candidates.append(int(row[0]))
-        if candidates:
-            break
-        descendants |= children
-    if len(set(candidates)) != 1:
-        raise ValueError("Cannot identify one matching agent process in the active pane")
-    owner = candidates[0]
-    info = process(owner)
-    if not info:
-        raise ValueError("Agent process exited")
-    with locked():
-        record = json.loads(path.read_text())
-        record["binding"] = {"socket": sock, "pane": pane, "pid": owner, "stamp": info[1]}
-        record["since"] = time.time()
-        atomic(path, record)
-    print(json.dumps({"ok": True}))
+    if record.get("state", {}).get("event") == "SessionEnd":
+        raise ValueError("This observation ended. Wait for a new native hook event from the current agent; an old session ID cannot be rebound.")
+    raise ValueError("Manual process guessing cannot verify a session ID. Install native hooks and let the current agent report its own pane.")
 
 
 def main():
