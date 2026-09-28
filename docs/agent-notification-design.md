@@ -52,19 +52,16 @@ terminal connection. These rules are mandatory in AGENTS.md. Validation uses
 mock SSH processes and isolated local tmux; no real cluster is contacted.
 
 Codex no longer trusts inherited pane environment or a guessed process match.
-Ordinary shared-daemon sessions stay unbound. Explicit binding launch owns a
-private official app-server, a private Unix socket, and a random launch identity.
-The TUI connects directly through the official remote option; there is no proxy.
-A hook must carry that identity and have the live backend PID in its ancestry.
-Records include the launch identity so two runtimes opening the same historical
-thread cannot overwrite each other's pane. Old guessed bindings are ignored.
-Resuming updates the current record for that launch; leaving the TUI unbinds it.
-The backend deliberately remains alive for background work, and its socket path
-is printed on exit. This costs one dedicated backend per explicit launch.
-The sidebar follows the active pane only; the integration panel shows exact
-session/window/pane identities. Other agents retain ancestry-based bindings.
+Foreground Codex launch runs `codex --no-daemon` after checking local CLI support.
+The launcher creates a short-lived identity claim, verifies hook process ancestry,
+and removes the claim when the TUI exits. It creates no private app-server and
+uses no remote protocol relay. Hooks from a shared daemon cannot inherit ownership.
+Foreground observations never query the shared daemon; incomplete task evidence
+stays unknown. Ordinary daemon sessions remain unbound. Old retained backends are
+not killed automatically. tmux, rather than a detached Codex backend, provides
+persistence for this mode.
 
-Codex hooks follow normal `/hooks` trust. A separate read-only connection to the
+Codex hooks follow normal `/hooks` trust. Only legacy daemon observations use a separate read-only connection to the
 existing daemon uses only thread reads, turn summaries, goal, descendant, and
 background-terminal lists. It never launches a daemon, resumes a thread,
 subscribes by mutation, or responds to approval requests. A Stop event only
@@ -75,7 +72,7 @@ Missing interfaces and older unsupported histories degrade to unknown.
 
 `waitingOnApproval` cannot identify the reviewer. It therefore remains unknown
 rather than falsely announcing a human decision during automatic review.
-`waitingOnUserInput` can announce a decision. Shared-daemon pane binding is disabled; use explicit dedicated launch. These limits mean native observation is not
+`waitingOnUserInput` can announce a decision. Shared-daemon pane binding is disabled; use explicit foreground launch. These limits mean native observation is not
 feature-equivalent to intercepting every TUI protocol message.
 
 Claude requires its background evidence fields to certify completion. Another
@@ -85,6 +82,10 @@ currently supports only v1; installation rejects v2 before changing config
 because its plugin API changed. Future adapters should be added from actual
 schemas and fixtures, without guessing compatibility.
 
+The toolbar requires the updated foreground-launch marker before sending a command.
+A target with an old observer must be explicitly updated; it never falls back to
+creating another backend. Arguments following `launch codex` are passed to the TUI.
+
 ## Validation
 
 `npm test` covers event transitions, background work, incomplete evidence,
@@ -92,6 +93,8 @@ metadata privacy, preserved configuration, pane ownership and aggregation.
 `scripts/test-native-observer.py` exercises real isolated tmux panes and the
 installer with a synthetic Claude executable entered as an ordinary command;
 it covers resume, renaming, background work and stale inherited environment.
+`scripts/test-bound-codex.py` checks two foreground panes, hook ownership, resume,
+exit unbinding, and claim cleanup with a synthetic Codex executable.
 This is not a live model test. `scripts/test-codex-bridge.py` also checks a separate
 read-only observer against a real isolated Codex 0.158 daemon, with no model
 requests. It does not prove all interactive agent/version combinations.

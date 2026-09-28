@@ -50,6 +50,21 @@ class NativeTests(unittest.TestCase):
         self.assertNotIn("private", data)
         self.assertTrue(json.loads(data)["state"]["running"])
 
+    def test_foreground_snapshot_never_reads_shared_daemon(self):
+        claim = {"scope": "/home/test/.codex", "binding": {"token": "a" * 32,
+                 "proof": "foreground-codex-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}}
+        with patch.object(native, "launch_claim", return_value=claim):
+            native.report("codex", {"session_id": "root", "hook_event_name": "UserPromptSubmit"})
+        from types import SimpleNamespace
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True), \
+             patch.object(native, "ReadOnlyCodex") as daemon:
+            observation = native.snapshot()["observers"][0]
+            daemon.assert_not_called()
+        self.assertEqual(observation["session"], "current")
+        self.assertEqual(observation["state"], "running")
+
     def test_codex_stop_is_not_completion_without_runtime_evidence(self):
         native.report("codex", {"session_id": "root", "hook_event_name": "Stop", "turn_id": "t"})
         data = json.loads(next(self.base.glob("*.json")).read_text())

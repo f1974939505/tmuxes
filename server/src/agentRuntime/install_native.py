@@ -108,7 +108,7 @@ def install(kind):
     for path in files:
         shutil.copyfile(path, runtime / path.name)
     python = sys.executable
-    launcher = ("# " + MARKER + "\n# tmuxes-binding-launch-v1\nimport os,sys\n"
+    launcher = ("# " + MARKER + "\n# tmuxes-foreground-launch-v1\nimport os,sys\n"
                 "os.execv(" + repr(python) + ", [" + repr(python) + ", " + repr(str(runtime / "native.py")) + "] + sys.argv[1:])\n")
     write_owned(DEST / "native.py", launcher)
     command = shlex.join([python, str(DEST / "native.py"), kind])
@@ -120,7 +120,7 @@ def install(kind):
         home = Path(os.environ.get("CODEX_HOME", str(HOME / ".codex")))
         merge_hooks(home / "hooks.json", ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                                            "Stop", "SubagentStart", "SubagentStop", "Interrupt", "SessionEnd"), command)
-        message = "Restart Codex and review/trust the observer in /hooks. Shared-daemon sessions may remain unbound to a pane."
+        message = "Review/trust the observer in /hooks, then use Foreground Codex in an idle pane. Ordinary shared-daemon launches remain unbound."
     elif kind == "opencode":
         home = Path(os.environ.get("XDG_CONFIG_HOME", str(HOME / ".config"))) / "opencode"
         content = f'''// {MARKER}

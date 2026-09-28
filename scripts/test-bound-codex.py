@@ -26,22 +26,21 @@ with tempfile.TemporaryDirectory(prefix="tmuxes-binding-test-") as tmp:
     fake = bins / "codex"
     fake.write_text('''#!/usr/bin/env python3
 import json,os,pathlib,socket,subprocess,sys,time
+if sys.argv[1:] == ['--help']:
+    print('--no-daemon'); sys.exit(0)
+assert sys.argv[1] == '--no-daemon', sys.argv
 home=pathlib.Path.home()
 token=os.environ['TMUXES_CODEX_BINDING']
 phase=home/(token+'.phase')
-if sys.argv[1]=='app-server':
-    sock=socket.socket(socket.AF_UNIX); sock.bind(sys.argv[-1][7:]); sock.listen()
-    previous=''
-    while True:
-        current=phase.read_text() if phase.exists() else ''
-        if current and current!=previous:
-            previous=current
-            subprocess.run([sys.executable,os.environ['TEST_NATIVE'],'codex'],input=json.dumps({'hook_event_name':'SessionStart','session_id':current}),text=True,check=True,stdout=subprocess.DEVNULL)
-        time.sleep(.05)
-else:
-    assert sys.argv[1]=='--remote'
-    phase.write_text('root-'+os.environ['TMUX_PANE'])
-    while not (home/(token+'.exit')).exists(): time.sleep(.05)
+phase.write_text('root-'+os.environ['TMUX_PANE'])
+previous=''
+while not (home/(token+'.exit')).exists():
+    current=phase.read_text()
+    if current!=previous:
+        previous=current
+        for event in ('SessionStart','UserPromptSubmit'):
+            subprocess.run([sys.executable,os.environ['TEST_NATIVE'],'codex'],input=json.dumps({'hook_event_name':event,'session_id':current}),text=True,check=True,stdout=subprocess.DEVNULL)
+    time.sleep(.05)
 ''')
     fake.chmod(0o700)
     native.STORE = home / ".cache/tmuxes/observations"
@@ -59,11 +58,12 @@ else:
                 return native.snapshot()["observers"]
         for _ in range(100):
             data = rows()
-            if len(data) == 2 and {r['session'] for r in data} == {'one','two'}: break
+            if len(data) == 2 and {r['session'] for r in data} == {'one','two'} and all(r['state']=='running' for r in data): break
             time.sleep(.1)
         else: raise AssertionError(data)
         claims = [json.loads(p.read_text()) for p in native.STORE.glob('*.claim')]
-        assert len(claims)==2 and len({c['endpoint'] for c in claims})==2
+        assert len(claims)==2 and all('backend' not in c and 'endpoint' not in c for c in claims)
+        assert all(r['state']=='running' for r in data), data
         first = next(c for c in claims if c['binding']['pane']==next(r['pane'] for r in data if r['session']=='one'))
         token=first['binding']['token']
         (home/(token+'.phase')).write_text('resumed-root')
@@ -78,10 +78,7 @@ else:
             if all(r['session'] is None for r in data if r['id']=='resumed-root'): break
             time.sleep(.1)
         assert all(r['session'] is None for r in data if r['id']=='resumed-root'), data
-        assert native.alive(first['backend']), 'Exiting the TUI killed background work'
-        print('Two panes + private backend identity + resume + TUI exit unbind + background survival: PASS')
+        assert not (native.STORE/(token+'.claim')).exists(), 'Exit left a launch claim'
+        print('Two foreground panes + native hook state + resume + exit unbind + claim cleanup: PASS')
     finally:
         subprocess.run(['tmux','-L',label,'kill-server'], stderr=subprocess.DEVNULL)
-        for path in native.STORE.glob('*.claim'):
-            claim=json.loads(path.read_text())
-            if native.alive(claim['backend']): os.kill(claim['backend']['pid'], signal.SIGTERM)

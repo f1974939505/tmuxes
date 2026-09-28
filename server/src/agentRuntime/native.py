@@ -92,18 +92,19 @@ def binding():
 
 
 def launch_claim():
-    """A Codex binding requires a dedicated backend created by our launcher."""
+    """Validate launcher ownership; daemon-inherited pane variables are not proof."""
     token = os.environ.get("TMUXES_CODEX_BINDING", "")
     if not re.fullmatch(r"[0-9a-f]{32}", token):
         return None
     try:
         claim = json.loads((STORE / (token + ".claim")).read_text())
         scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve())
-        if claim["scope"] != scope or not alive(claim["backend"]):
+        owner = claim["binding"] if claim["binding"].get("proof") == "foreground-codex-v1" else claim["backend"]
+        if claim["scope"] != scope or not alive(owner):
             return None
         pid = os.getppid()
         for _ in range(32):
-            if pid == claim["backend"]["pid"]:
+            if pid == owner["pid"]:
                 return claim
             info = process(pid)
             if not info or pid <= 1:
@@ -115,7 +116,7 @@ def launch_claim():
 
 
 def launch_codex():
-    """Explicitly own one pane, one official backend and one TUI. No proxy."""
+    """Run a foreground TUI owned by this pane; tmux provides persistence."""
     import shutil
     codex = shutil.which("codex")
     if not codex:
@@ -125,40 +126,31 @@ def launch_codex():
     if not re.fullmatch(r"%\d+", pane) or not sock:
         raise ValueError("Run binding launch from an idle tmux pane")
     actual = command(["tmux", "-S", sock, "display-message", "-p", "-t", pane, "#{pane_id}"])
-    if actual != pane:
-        raise ValueError("Pane identity changed")
+    if actual != pane or binding() is None:
+        raise ValueError("Launcher must run inside the owning tmux pane")
     token = secrets.token_hex(16)
-    directory = Path(tempfile.mkdtemp(prefix="tmuxes-codex-"))
-    endpoint = directory / "server.sock"
     env = {**os.environ, "TMUXES_CODEX_BINDING": token}
     scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve())
-    log = (directory / "server.log").open("w")
-    backend = subprocess.Popen([codex, "app-server", "--listen", "unix://" + str(endpoint)],
-                               env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    # Probe only the local executable. Never fall back to a shared daemon.
+    help_text = subprocess.check_output([codex, "--help"], text=True, timeout=10)
+    if "--no-daemon" not in help_text:
+        raise ValueError("This Codex version lacks --no-daemon; update Codex before foreground launch")
+    owner = {"pid": os.getpid(), "stamp": process(os.getpid())[1], "socket": sock, "pane": pane,
+             "proof": "foreground-codex-v1", "token": token}
+    claim_path = STORE / (token + ".claim")
+    with locked():
+        atomic(claim_path, {"scope": scope, "binding": owner})
     try:
-        for _ in range(100):
-            if backend.poll() is not None:
-                raise ValueError("Codex backend exited; see " + str(directory / "server.log"))
-            if endpoint.exists():
-                break
-            time.sleep(.1)
-        else:
-            raise ValueError("Codex backend did not create its private socket")
-        owner = {"pid": os.getpid(), "stamp": process(os.getpid())[1], "socket": sock, "pane": pane,
-                 "proof": "dedicated-codex-v1", "token": token}
-        claim = {"scope": scope, "binding": owner, "endpoint": str(endpoint),
-                 "backend": {"pid": backend.pid, "stamp": process(backend.pid)[1]}}
-        with locked():
-            atomic(STORE / (token + ".claim"), claim)
-        # Native /resume connects directly to the official server. No relay.
-        result = subprocess.call([codex, "--remote", "unix://" + str(endpoint)], env=env)
-        print("\nCodex pane binding ended. Private backend remains available for background work: " + str(endpoint))
-        return result
-    except Exception:
-        backend.terminate()
-        raise
+        child = subprocess.Popen([codex, "--no-daemon", *sys.argv[3:]], env=env)
+        while True:
+            try:
+                return child.wait()
+            except KeyboardInterrupt:
+                # The TUI shares our foreground process group and receives
+                # Ctrl-C itself. Do not drop ownership while it handles cancel.
+                continue
     finally:
-        log.close()
+        claim_path.unlink(missing_ok=True)
 
 
 def alive(bound):
@@ -201,8 +193,8 @@ def report(kind, payload):
             "key": key, "kind": kind, "id": sid, "scope": scope, "since": time.time(), "state": {}}
         state = restore(record["state"])
         if kind == "codex":
-            record["endpoint"] = claim["endpoint"] if claim else None
-            record["backend"] = claim["backend"] if claim else None
+            record["endpoint"] = claim.get("endpoint") if claim else None
+            record["backend"] = claim.get("backend") if claim else None
             if not claim:
                 record.pop("binding", None)
         event = payload.get("hook_event_name")
@@ -386,7 +378,8 @@ def snapshot():
                     continue
                 state = restore(record["state"])
                 capability = "events"
-                if record["kind"] == "codex":
+                foreground = (record.get("binding") or {}).get("proof") == "foreground-codex-v1"
+                if record["kind"] == "codex" and not foreground:
                     try:
                         home = record["scope"]
                         endpoint = record.get("endpoint")
@@ -404,7 +397,7 @@ def snapshot():
                         state.apply({"type": "reset"})
                         capability = "limited"
                 bound = record.get("binding")
-                if record["kind"] == "codex" and (not bound or bound.get("proof") != "dedicated-codex-v1"):
+                if record["kind"] == "codex" and (not bound or bound.get("proof") not in ("dedicated-codex-v1", "foreground-codex-v1")):
                     bound = None
                 location = panes.get((bound["socket"], bound["pane"])) if bound and alive(bound) else None
                 binding_key = json.dumps(bound, sort_keys=True) if location else None
@@ -423,7 +416,7 @@ def snapshot():
                         record["verified"] = {"turn": marker, "at": time.time()}
                 else:
                     record.pop("verified", None)
-                if bound and not session and record["kind"] != "codex":
+                if bound and not session and (record["kind"] != "codex" or foreground):
                     phase, reason = "unknown", ""
                 if incomplete and phase in ("idle", "settling"):
                     phase, reason, capability = "unknown", "", "limited"
@@ -479,7 +472,7 @@ def bind_record(key, session):
 
 
 def main():
-    if sys.argv[1:] == ["launch", "codex"]:
+    if sys.argv[1:3] == ["launch", "codex"]:
         sys.exit(launch_codex())
     if len(sys.argv) == 2 and sys.argv[1] == "snapshot":
         print("TMUXES_NATIVE_V1=" + json.dumps(snapshot(), ensure_ascii=True))
