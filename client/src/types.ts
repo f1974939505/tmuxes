@@ -37,6 +37,16 @@ export type AgentState = 'running' | 'waiting' | 'idle' | 'background' | 'settli
 export type AttentionReason = 'decision' | 'done' | 'error';
 export type LaunchAgent = AgentKind;
 
+export interface NativeObserver {
+  key: string;
+  kind: AgentKind;
+  id: string;
+  state: AgentState;
+  reason: AttentionReason | '';
+  session: string | null;
+  capability: string;
+}
+
 export interface WindowInfo {
   index: number;
   name: string;

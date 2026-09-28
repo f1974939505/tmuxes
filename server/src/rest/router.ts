@@ -3,7 +3,7 @@ import { getTarget, isValidTargetId, refreshTargets, type Target } from '../targ
 import { isValidSessionName } from '../validate.js';
 import {
   TmuxError,
-  listSessions,
+  listSessionSnapshot,
   createSession,
   renameSession,
   killSession,
@@ -33,6 +33,9 @@ import {
 } from '../git.js';
 import { readFolders, writeFolders } from '../foldersStore.js';
 import { winShell, ManagerError } from '../winshell/manager.js';
+import { installNativeObserver } from '../agentHooks.js';
+import { commandArgv } from '../tmux/builder.js';
+import { runTargetCommand } from '../targetCommand.js';
 
 /** Cap on a saved file's size (matches the editor's text-only use). */
 const MAX_WRITE_BYTES = 5_000_000;
@@ -104,10 +107,30 @@ apiRouter.get(
   '/targets/:id/sessions',
   wrap(async (req, res) => {
     const target = requireTarget(req);
-    const sessions = target.kind === 'winlocal' ? winShell.list() : await listSessions(target);
-    res.json({ sessions: annotate(target.id, sessions) });
+    const data = target.kind === 'winlocal' ? { sessions: winShell.list(), observers: [] } : await listSessionSnapshot(target);
+    res.json({ ...data, sessions: annotate(target.id, data.sessions) });
   }),
 );
+
+apiRouter.post('/targets/:id/agent-monitor/install', wrap(async (req, res) => {
+  const target = requireTarget(req);
+  if (target.kind === 'winlocal') throw new TmuxError(400, 'Native observers require a POSIX tmux target');
+  res.json(await installNativeObserver(target, requireLaunchAgent(req.body?.agent)));
+}));
+
+apiRouter.post('/targets/:id/agent-monitor/bind', wrap(async (req, res) => {
+  const target = requireTarget(req);
+  const session = requireSessionName(req.body?.session);
+  const key = req.body?.key;
+  if (target.kind === 'winlocal' || typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) {
+    throw new TmuxError(400, 'Invalid observer binding');
+  }
+  const script = 'exec python3 "$HOME/.local/share/tmuxes/observer/native.py" bind "$1" "$2"';
+  const result = await runTargetCommand(target,
+    (opts) => commandArgv(target, ['sh', '-c', script, 'tmuxes-bind', key, session], opts), { timeoutMs: 10_000 });
+  if (result.code !== 0) throw new TmuxError(400, result.stderr.trim() || 'Binding failed');
+  res.json({ ok: true });
+}));
 
 apiRouter.post(
   '/targets/:id/sessions',

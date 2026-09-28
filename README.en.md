@@ -118,30 +118,28 @@ npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-
 
 ## 🔔 Agent status and notifications
 
-Create a session with `claude`, `codex`, `opencode`, or `hermes`, or open an empty session, `cd /your/project`, and click its toolbar button. The target needs **Python 3.9+ (`python3`)** and tmux. Launching deploys a Python standard-library-only collector to that target's `~/.cache/tmuxes/agents/<content-hash>/`; unchanged files are reused.
+Open **Agent status integration** on a target, select an agent, and click **Install / update** once. The target needs **Python 3.9+ (`python3`)**, tmux, and the installed agent. Installation preserves existing configuration and backs up modified hook files. Restart the agent, then type ordinary `claude`, `codex`, `opencode`, or `hermes` commands in a tmux pane. Toolbar buttons also enter the original command, without injected `--remote`, `-c`, or a launch wrapper.
 
-- **Running / background (red)**: the root agent is working, or background shells, monitors, subagents, goals, or scheduled wakeups remain. A child's completion is not the root's completion.
-- **Decision**: an approval or structured question actually reaches a human. Resolved requests clear; a request must survive another UI refresh before sounding, so briefly auto-resolved requests stay quiet.
-- **Done**: the root turn ended normally, known associated work has settled, and no new activity arrived during a short confirmation period. Silence, process exit, or final text alone never proves completion.
-- **Error**: a terminal root-task failure. Warnings, automatic retries, and ordinary tool failures do not directly alert.
-- **Unknown (gray)**: unmonitored, disconnected, unsupported interfaces, or incomplete background evidence. Interruption and client exit do not mean success.
+- **Running / background**: the root is working, or associated shells, monitors, subagents, goals, or scheduled wakeups remain.
+- **Decision**: structured evidence indicates user input is needed; briefly resolved requests stay quiet.
+- **Done**: the current root turn ended normally, known associated work settled, and a short confirmation period passed. Silence, process exit, and final text are insufficient.
+- **Error**: a terminal root-task failure. Ordinary tool errors, warnings, and automatic retries do not directly alert.
+- **Unknown**: missing interfaces, disconnection, uncertain pane ownership, or incomplete background evidence. Completion is never guessed.
 
-Integration and compatibility boundaries:
-
-| Agent | Integration |
+| Agent | Integration and limits |
 | --- | --- |
-| Codex | Observes the original TUI connection through a private Unix-socket WebSocket bridge to the shared app-server, then reads goals, descendants, and background terminals after completion events. CLI 0.158.0 is the validation baseline. No injected `-c hooks...`, forced embedded mode, approval responses, or shared-daemon shutdown. Unsupported older interfaces never produce a false completion. |
-| Claude Code | Appends launch-local hooks through `--settings`, preserving supplied settings. Reads `Stop.background_tasks/session_crons`, subagent events, questions, notifications, and `StopFailure`. Missing background fields or `stop_hook_active=true` prevent completion claims. Another Stop hook's first continuation decision may be invisible to the observer; the confirmation period only mitigates that race. |
-| OpenCode | Adds a local plugin through launch-local `OPENCODE_CONFIG_CONTENT`, preserving existing configuration. Uses session, descendant, permission, and question events. Detached third-party work without reliable completion events stays background / unknown conservatively. |
-| Hermes | On first launch, writes a separate local `tmuxes-observer-<hash>` plugin and calls `hermes plugins enable`, allowing Hermes to present any required enablement interaction. Adds no dependencies. The plugin is gated to this launch and reads lifecycle, human approval, subagent events, and the in-process background task count. An unavailable internal counter prevents completion claims. For named profiles, set that profile's `HERMES_HOME` first; the launcher does not accept `-p/--profile`. |
+| Codex | Merges `CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`). Restart and review/trust through `/hooks`. Hooks write metadata one way; an independent read-only connection to the existing daemon checks status, goals, descendants, and background terminals. It never proxies the TUI, starts the daemon, or answers approvals. Validation baseline: 0.158.0. Missing hooks/interfaces or older history without pagination support degrade to unknown. |
+| Claude Code | Merges `CLAUDE_CONFIG_DIR/settings.json` (default `~/.claude/settings.json`). Reads lifecycle, questions, failures, and background fields. Missing background evidence or continued Stop hooks prevent completion. Another Stop hook's first continuation decision may be invisible; the confirmation period only mitigates this race. |
+| OpenCode | Installs a global v1 plugin, respecting `XDG_CONFIG_HOME`. Only v1 is currently supported. The v2 plugin API changed; installation refuses v2 without modifying its configuration. v2 status collection is not implemented. |
+| Hermes | Installs under `HERMES_HOME/plugins/tmuxes-native-observer` (default `~/.hermes`). Run `hermes plugins enable tmuxes-native-observer`, then restart. Missing lifecycle fields or background counters degrade to unknown. Install separately in each named profile's environment. |
 
-Monitored Codex launches do not accept `-c/--config`, `--enable`, `--disable`, `--search`, `--no-daemon`, or a custom `--remote`. Put settings in Codex's own configuration files, or launch an unmonitored command manually. tmuxes does not edit persistent Codex configuration, hook trust, or approval policy. The protocol is experimental; incompatible updates prefer unknown over false completion.
+A shared Codex daemon may not prove which pane owns a session. Unbound sessions appear only in the integration panel and do not trigger window alerts. Check the full session ID before linking to the selected tmux session's active pane; linking requires one matching agent process. Automatic binding verifies process ancestry and start time, not merely inherited `TMUX_PANE`. Resumed sessions may need linking again.
 
-Current source fixes the 0.1.17 `/resume` picker failure to establish a second connection and isolates picker closure from main-session state. See the [notification transport review](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md) for native hooks, `notify`, terminal notifications, and their coverage limits; these simpler alternatives have not replaced the existing bridge.
+Codex `waitingOnApproval` cannot identify human versus automatic review, so it currently shows unknown without a human-decision alert. Structured user questions can still alert. Paused goals, background work, incomplete pagination, and unverifiable endings never produce completion alerts. These are explicit limits of passive observation.
 
-The collector handles events on the target, stores no prompts or tool output, and adds no SSH polling, login probes, or reconnect loops. The browser reads tmux status through the existing management connection. Set the server environment variable `TMUXES_NO_AUTOHOOK=1` to disable automatic integration of initial commands. Disable a Hermes observer with `hermes plugins disable <plugin-name>`.
+The collector stores bounded status metadata, never prompts or tool output. Installed files live under `~/.local/share/tmuxes/observer/`; records live under `~/.cache/tmuxes/observations/`. Reads are batched into the existing session refresh using the existing management connection, without additional SSH login probes or independent polling. `TMUXES_NO_AUTOHOOK` does not disable installed native integrations. To disable, remove only hooks pointing to the tmuxes observer, delete the corresponding OpenCode plugin file, or run `hermes plugins disable tmuxes-native-observer`.
 
-Buttons type a launch command into the current pane: use them only at an idle shell. Bare `cc` remains the system compiler. Native Windows shells have no tmux and do not support monitoring; use WSL or SSH targets.
+New launches no longer use the bridge that caused `/resume` compatibility problems. Exit and restart already-running old processes. User-supplied Codex configuration overrides can still produce Codex's own embedded-mode warning. Click launch buttons only at an idle shell. Native Windows shells lack tmux; use WSL or SSH. See the [notification design](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md).
 
 ## 🔀 Git Panel
 

@@ -6,17 +6,20 @@ import threading
 from pathlib import Path
 
 
-def register(ctx):
-    if os.environ.get("TMUXES_HERMES_PLUGIN") != Path(__file__).parent.name:
+def register(ctx, report=None):
+    if report is None and os.environ.get("TMUXES_HERMES_PLUGIN") != Path(__file__).parent.name:
         return
     path = os.environ.get("TMUXES_EVENT_SOCKET")
-    if not path:
+    if not path and report is None:
         return
     root = [None]
     children = set()
     lock = threading.RLock()
 
     def emit(kind, **data):
+        if report is not None:
+            report(kind, data, root[0])
+            return
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
                 sock.settimeout(0.5)
@@ -41,11 +44,13 @@ def register(ctx):
             children.discard(str(child_session_id))
         emit("task.end", id="child:" + str(child_session_id))
 
-    def end(session_id=None, completed=False, interrupted=False, **kwargs):
+    def end(session_id=None, completed=None, interrupted=False, **kwargs):
         if session_id != root[0]:
             return
         if interrupted:
             emit("interrupted")
+        elif completed is None:
+            emit("unknown")
         elif not completed:
             emit("error")
         else:
@@ -89,4 +94,8 @@ def register(ctx):
                            ("subagent_start", child_start), ("subagent_stop", child_stop),
                            ("pre_approval_request", request), ("post_approval_response", resolved),
                            ("pre_tool_call", pre_tool), ("post_tool_call", post_tool)):
-        ctx.register_hook(name, callback)
+        try:
+            ctx.register_hook(name, callback)
+        except (ValueError, KeyError):
+            # An older Hermes may not expose every optional observer hook.
+            continue

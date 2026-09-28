@@ -31,31 +31,67 @@ compatibility with every interactive Codex feature or future protocol version.
 | Read-only app-server queries beside the unmodified TUI | Can inspect goals, descendants, and background terminals without forwarding TUI traffic | Still experimental; needs a reliable thread-to-pane binding, and reads do not subscribe to thread events. Must not call `thread/resume` merely to monitor a thread. |
 | Transcript or screen scraping | Little initial setup | Transcript format and screen text are not stable status APIs. Text, process exit and silence cannot establish true completion. |
 
-## Recommended direction
+## Implemented passive integration
 
-Keep agent execution independent from monitoring. Prefer native hooks/plugins
-sending bounded metadata to a local receiver, which updates the existing tmux
-status option. That receiver should be fail-open, preserve per-launch ownership,
-and never send approvals or inject prompts. It needs no new SSH connections or
-public HTTP service. Model-authored "done" messages are not lifecycle evidence.
+New launches enter the original command. They do not use the bridge or inject
+configuration flags. The bridge remains only as legacy code with regression
+coverage; an already-running wrapped process must be restarted to migrate.
 
-For Codex, this is a direction, not a drop-in replacement with equal coverage.
-First validate native event coverage and a reliable session-to-pane binding in
-shared-daemon mode, including `/resume`, `/new`, multiple panes in the same
-directory, and an already-running daemon. Do not assume the daemon inherits each
-TUI launch's environment. Configure hooks through supported files and the normal
-trust flow; do not inject `-c` or silently bypass hook trust.
+The target panel explicitly installs native hooks/plugins once, preserving
+existing hooks and backing up modified JSON. Versioned Python stdlib assets and
+a stable launcher live in `~/.local/share/tmuxes/observer`. Native callbacks write
+allowlisted metadata into private atomic JSON files, never prompts or tool
+output. No extra listener or collector daemon is started. The normal session
+refresh reads these files on the target using the existing management transport.
+SSH reconnect and authentication-failure policy is unchanged.
 
-Expose incomplete capability honestly: a turn-stop signal can trigger a
-read-only verification when available, otherwise the state remains unknown.
-Human decisions require evidence of an unresolved human-facing request; success
-requires verified completion of the root and associated work. A simpler
-transport alone cannot supply missing lifecycle evidence. The bridge fix is a
-compatibility repair, not a claim that the bridge is the preferred long-term
-architecture.
+An automatic pane binding requires process ancestry and a matching process start
+time. Inherited daemon environment alone is insufficient. Unbound observations
+are visible separately, without window alerts. Users can explicitly link a
+session ID to an active pane containing exactly one matching agent process.
+Resumes reset stale state; records owned by the same live process prefer the
+latest session. Multiple live processes aggregate conservatively so one ending
+cannot hide another running process.
+
+Codex hooks follow normal `/hooks` trust. A separate read-only connection to the
+existing daemon uses only thread reads, turn summaries, goal, descendant, and
+background-terminal lists. It never launches a daemon, resumes a thread,
+subscribes by mutation, or responds to approval requests. A Stop event only
+nominates a turn for verification; success requires a matching completed turn,
+no unresolved work, a second root-state check, and stable confirmation across
+refreshes. Paused goals and incomplete pagination cannot count as completion.
+Missing interfaces and older unsupported histories degrade to unknown.
+
+`waitingOnApproval` cannot identify the reviewer. It therefore remains unknown
+rather than falsely announcing a human decision during automatic review.
+`waitingOnUserInput` can announce a decision. Shared-daemon pane binding may
+require explicit user association. These limits mean native observation is not
+feature-equivalent to intercepting every TUI protocol message.
+
+Claude requires its background evidence fields to certify completion. Another
+Stop hook's first continuation decision may remain invisible. Hermes requires
+normal plugin enablement and reliable lifecycle/background fields. OpenCode
+currently supports only v1; installation rejects v2 before changing config
+because its plugin API changed. Future adapters should be added from actual
+schemas and fixtures, without guessing compatibility.
+
+## Validation
+
+`npm test` covers event transitions, background work, incomplete evidence,
+metadata privacy, preserved configuration, pane ownership and aggregation.
+`scripts/test-native-observer.py` exercises real isolated tmux panes and the
+installer with a synthetic Claude executable entered as an ordinary command;
+it covers resume, renaming, background work and stale inherited environment.
+This is not a live model test. `scripts/test-codex-bridge.py` also checks a separate
+read-only observer against a real isolated Codex 0.158 daemon, with no model
+requests. It does not prove all interactive agent/version combinations.
 
 ## Official references
 
 - [Hooks: discovery, trust, event fields and limitations](https://learn.chatgpt.com/docs/hooks)
 - [Notifications: notify versus TUI notifications](https://learn.chatgpt.com/docs/config-file/config-advanced#notifications)
 - [App Server: reading stored threads without resuming](https://learn.chatgpt.com/docs/app-server)
+
+- [Claude Code hooks](https://code.claude.com/docs/en/hooks)
+- [OpenCode v2 plugins](https://opencode.ai/v2/docs/build/plugins)
+- [Hermes hooks](https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks)

@@ -118,30 +118,28 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 ## 🔔 Agent 状态与提醒
 
-在新建 session 的初始命令中填写 `claude`、`codex`、`opencode` 或 `hermes`；也可以先进入空 session，`cd /你的目标目录` 后点击右上角对应按钮。目标机器需要 **Python 3.9+（`python3`）** 和 tmux。首次启动会把仅依赖 Python 标准库的采集器部署到该目标的 `~/.cache/tmuxes/agents/<内容哈希>/`，后续复用相同文件。
+在目标的「Agent 状态接入」面板选择 agent，点击「安装 / 更新」一次。目标需要 **Python 3.9+ (`python3`)**、tmux 和已安装的 agent。安装保留已有配置并备份被修改的 hooks 文件；重启 agent 后，可以直接在 tmux pane 输入 `claude`、`codex`、`opencode` 或 `hermes`，不需要通过右上角按钮启动。按钮现在也只输入原始命令，不注入 `--remote`、`-c` 或启动包装器。
 
-- **运行 / 后台（红点）**：主 agent 工作，或仍有后台 shell、monitor、子 agent、goal、定时唤醒。子任务结束不等于主任务结束。
-- **决策**：收到真正交给人工的审批或结构化提问。已解决请求会清除；同一请求持续到下一次界面同步才响铃，短暂自动处理不响铃。
-- **结束**：主轮次正常结束，且已知的关联工作全部收尾，短暂确认期内没有新活动。不会仅凭静默、进程退出或一段最终回答判断完成。
-- **错误**：主任务终止性失败；warning、自动重试和普通工具失败不会直接触发。
-- **未知（灰点）**：未接入、监测断开、接口不支持或后台状态不完整。中断和关闭客户端不等于完成。
+- **运行中 / 后台工作**：根任务仍执行，或关联的后台 shell、monitor、子 agent、goal、定时唤醒尚未结束。
+- **决策**：结构化事件表明需要用户输入；短暂且已解决的请求不提醒。
+- **结束**：当前根回合正常结束、已知关联工作收敛，并通过短暂确认期。静默、进程退出、最终文本均不足以证明结束。
+- **错误**：根任务最终失败；普通工具错误、警告和自动重试不会直接提醒。
+- **未知**：接口缺失、失联、窗口归属或后台工作证据不足；不会猜测完成。
 
-各工具的接入与兼容边界：
-
-| Agent | 接入方式与说明 |
+| Agent | 接入方式与边界 |
 | --- | --- |
-| Codex | 使用共享 app-server，经过私有 Unix socket 的 WebSocket 转发观察原 TUI 事件，并在结束事件后只读查询 goal、子线程、后台终端。验证基线为 CLI 0.158.0；不再注入 `-c hooks...`，不强制 embedded mode，不代答审批，不停止共享 daemon。旧版不支持接口时不会伪报完成。 |
-| Claude Code | 通过本次启动的 `--settings` 追加 hooks，保留用户传入的 settings。读取 `Stop.background_tasks/session_crons`，并区分子 agent、提问、通知和 `StopFailure`。缺少后台字段或 `stop_hook_active=true` 时不宣称完成。其他 Stop hook 的首次继续决定不一定对观察 hook 可见，确认期只能缓解该竞态。 |
-| OpenCode | 通过本次启动的 `OPENCODE_CONFIG_CONTENT` 追加本地插件，保留已有配置；读取会话、子会话、权限和提问事件。第三方工具脱离会话运行且没有可靠完成事件时，保守保持后台 / 未知。 |
-| Hermes | 首次启动写入独立的 `tmuxes-observer-<哈希>` 本地插件，并调用 `hermes plugins enable`，由 Hermes 展示必要的启用交互；不添加依赖。插件仅对本次启动生效，读取生命周期、人工审批、子 agent 和本进程后台任务计数。内部任务计数接口不可用时不宣称完成。命名 profile 请先设置该 profile 的 `HERMES_HOME`，启动器不接受 `-p/--profile`。 |
+| Codex | 合并 `CODEX_HOME/hooks.json`（默认 `~/.codex/hooks.json`），重启后在 `/hooks` 正常审查并信任。hooks 单向写入元数据；tmuxes 通过已有 daemon 的独立只读连接核验状态、goal、子线程及后台终端，不代理 TUI、不启动 daemon、不响应审批。以 0.158.0 为验证基线；缺少 hooks 或只读接口、旧历史不支持分页时降级未知。 |
+| Claude Code | 合并 `CLAUDE_CONFIG_DIR/settings.json`（默认 `~/.claude/settings.json`）。读取生命周期、问题、失败和后台任务字段；缺少后台字段或 Stop hook 继续运行时不宣称完成。其他 Stop hook 的首次继续决定可能不可见，确认期只能缓解竞态。 |
+| OpenCode | 安装全局 v1 插件，遵循 `XDG_CONFIG_HOME`。当前适配器仅支持 v1；v2 改变了插件 API，安装器会拒绝并保留原配置，尚不支持 v2 状态采集。 |
+| Hermes | 在 `HERMES_HOME/plugins/tmuxes-native-observer`（默认 `~/.hermes`）安装插件；执行 `hermes plugins enable tmuxes-native-observer` 后重启。缺少生命周期字段或后台任务计数时降级未知。命名 profile 需在相应环境分别安装。 |
 
-Codex 的监测启动不接受 `-c/--config`、`--enable`、`--disable`、`--search`、`--no-daemon` 或自定义 `--remote`；请将配置放进 Codex 自己的配置文件，或在终端手动启动不带监测的命令。tmuxes 不修改 Codex 的持久配置、hook 信任或审批策略。协议是实验接口，升级后会优先降级为未知而非误报完成。
+Codex 共享 daemon 不一定能证明会话属于哪个 pane。未绑定的会话只显示在接入面板，不触发窗口提醒；核对完整会话 ID 后，可关联到选定 tmux 会话的当前 pane，关联要求存在唯一匹配的 agent 进程。自动绑定同时校验进程祖先与启动时间，不能仅凭继承的 `TMUX_PANE` 猜窗。恢复会话后可能需要重新关联。
 
-当前源码已修复 0.1.17 中 `/resume` 选择器无法建立第二条连接的问题，并隔离选择器退出与主会话状态。原生 hooks、`notify` 和终端通知的替代方案及能力边界见 [通知传输设计评估](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md)（英文技术说明）；这些简化方案尚未替换现有桥接。
+Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。暂停的 goal、后台工作、分页不完整或不可验证的结束均不会报完成。这是当前旁路方案的明确能力边界。
 
-采集器只在目标机器本地处理事件，不保存提示词或工具输出，不新增 SSH 轮询、登录探测或重连循环。浏览器沿用既有管理连接读取 tmux 状态。设置服务端环境变量 `TMUXES_NO_AUTOHOOK=1` 可关闭初始命令的自动接入。Hermes 插件可通过 `hermes plugins disable <插件名>` 停用。
+采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。
 
-按钮会向当前 pane 输入启动命令，请仅在 shell 空闲时点击。裸 `cc` 仍按系统编译器处理。原生 Windows shell 没有 tmux，不支持这套监测；请使用 WSL 或 SSH 目标。
+新启动不再经过导致 `/resume` 兼容性问题的桥接；已运行的旧进程需要退出后重新启动。用户自行传入 Codex 配置覆盖参数仍可能触发 Codex 自身的 embedded-mode 提示。按钮仅应在空闲 shell 点击。原生 Windows shell 没有 tmux，请使用 WSL 或 SSH 目标。详见[通知设计说明](https://github.com/f1974939505/tmuxes/blob/main/docs/agent-notification-design.md)（英文技术文档）。
 
 ## 🔀 Git 面板
 

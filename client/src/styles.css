@@ -1076,3 +1076,11 @@ textarea:focus {
 .viewer-msg.error {
   color: var(--red);
 }
+.native-observers { margin: 8px 6px; font-size: 12px; }
+.native-observers summary { cursor: pointer; }
+.native-observers p { margin: 8px 0; line-height: 1.5; opacity: .85; }
+.native-observers .row { display: flex; gap: 6px; }
+.native-observers select { min-width: 0; flex: 1; }
+.native-observer { padding: 8px 0; border-top: 1px solid #6664; }
+.native-observer .badge { margin-left: 6px; }
+.native-message { overflow-wrap: anywhere; }

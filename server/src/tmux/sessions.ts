@@ -1,4 +1,4 @@
-import { managementArgv, newSessionArgv } from './builder.js';
+import { commandArgv, managementArgv, newSessionArgv, sshQuote } from './builder.js';
 import type { Target } from '../targets.js';
 import { runTargetCommand } from '../targetCommand.js';
 import {
@@ -16,6 +16,7 @@ import {
   type WindowInfo,
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
+import { applyNativeObservers, type NativeObserver } from '../nativeObservers.js';
 
 export type LaunchAgent = 'claude' | 'codex' | 'opencode' | 'hermes';
 
@@ -49,10 +50,27 @@ function firstStderrLine(stderr: string): string {
 }
 
 export async function listSessions(target: Target): Promise<SessionInfo[]> {
-  const r = await run(target, ['list-sessions', '-F', SESSION_FORMAT]);
-  if (r.code === 0) return parseSessions(r.stdout);
+  return (await listSessionSnapshot(target)).sessions;
+}
+
+export async function listSessionSnapshot(target: Target): Promise<{ sessions: SessionInfo[]; observers: NativeObserver[] }> {
+  const fallback = `tmux list-sessions -F ${sshQuote(SESSION_FORMAT)}`;
+  const script = `if [ -f "$HOME/.local/share/tmuxes/observer/native.py" ]; then python3 "$HOME/.local/share/tmuxes/observer/native.py" snapshot 2>/dev/null || { printf 'TMUXES_NATIVE_FAILED\\n'; ${fallback}; }; else ${fallback}; fi`;
+  // One existing management request; observation happens locally on the target.
+  const r = await runTargetCommand(target, (opts) => commandArgv(target, ['sh', '-c', script], opts),
+    { timeoutMs: timeoutFor(target) });
+  if (r.code === 0) {
+    if (r.stdout.startsWith('TMUXES_NATIVE_FAILED\n')) {
+      return { sessions: applyNativeObservers(parseSessions(r.stdout.slice('TMUXES_NATIVE_FAILED\n'.length)), []), observers: [] };
+    }
+    if (r.stdout.startsWith('TMUXES_NATIVE_V1=')) {
+      const data = JSON.parse(r.stdout.slice('TMUXES_NATIVE_V1='.length)) as { raw: string; observers: NativeObserver[] };
+      return { sessions: applyNativeObservers(parseSessions(data.raw), data.observers), observers: data.observers };
+    }
+    return { sessions: parseSessions(r.stdout), observers: [] };
+  }
   // "no server running" / "no sessions" is the normal empty case.
-  if (isEmptySessionsError(r.stderr)) return [];
+  if (isEmptySessionsError(r.stderr)) return { sessions: [], observers: [] };
   throw new TmuxError(502, firstStderrLine(r.stderr));
 }
 
@@ -115,7 +133,6 @@ export async function launchAgentInSession(
   agent: LaunchAgent,
 ): Promise<void> {
   const augmented = await prepareAgentCommand(target, agent);
-  if (!augmented.kind) throw new TmuxError(400, 'unsupported agent');
 
   const set = await run(target, [
     'set-option',
@@ -123,7 +140,7 @@ export async function launchAgentInSession(
     name,
     '-q',
     AGENT_OPTION,
-    agentInitialValue(augmented.kind),
+    agentInitialValue(agent),
   ]);
   if (set.code !== 0) {
     if (/can't find session|session not found|no server running/i.test(set.stderr)) {

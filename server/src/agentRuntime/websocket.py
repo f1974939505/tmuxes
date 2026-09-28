@@ -23,8 +23,8 @@ class WebSocket:
         self.fragment = bytearray()
         self.fragmenting = False
 
-    def handshake(self):
-        self.conn.settimeout(10)
+    def handshake(self, timeout=10):
+        self.conn.settimeout(timeout)
         if self.client:
             key = base64.b64encode(os.urandom(16)).decode()
             self.conn.sendall(("GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n"

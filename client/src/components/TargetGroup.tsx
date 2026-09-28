@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AttentionReason, SessionInfo, Selection, Target } from '../types';
+import type { AttentionReason, NativeObserver, SessionInfo, Selection, Target } from '../types';
 import { api, ApiError } from '../api';
 import { isValidSessionName } from '../util';
 import { useFolders } from '../folders';
 import { useAttention } from '../attention';
 import { useI18n } from '../i18n';
 import { SessionTree } from './SessionTree';
+import { NativeObserverPanel } from './NativeObserverPanel';
 
 interface Props {
   target: Target;
@@ -26,6 +27,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
     target.kind === 'local' || target.kind === 'wsl' || target.kind === 'winlocal',
   );
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
+  const [observers, setObservers] = useState<NativeObserver[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,8 +117,9 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
     inFlight.current = true;
     setLoading(true);
     try {
-      const { sessions } = await api.getSessions(target.id);
+      const { sessions, observers } = await api.getSessions(target.id);
       setSessions(sessions);
+      setObservers(observers ?? []);
       detectAttention(sessions);
       setError(null);
     } catch (e) {
@@ -234,6 +237,8 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
             </button>
             <button onClick={() => setShowForm((v) => !v)}>{t.newSession}</button>
           </div>
+          {target.kind !== 'winlocal' && <NativeObserverPanel targetId={target.id}
+            observers={observers} sessions={sessions ?? []} refresh={refresh} />}
 
           {showForm && (
             <div className="create-form" onClick={(e) => e.stopPropagation()}>

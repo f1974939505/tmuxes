@@ -6,6 +6,7 @@ import type {
   GitOperationResult,
   GitState,
   LaunchAgent,
+  NativeObserver,
   SessionDirectory,
   SessionInfo,
   Target,
@@ -45,8 +46,18 @@ export const api = {
   getTargets(): Promise<{ targets: Target[] }> {
     return request('/api/targets');
   },
-  getSessions(targetId: string): Promise<{ sessions: SessionInfo[] }> {
+  getSessions(targetId: string): Promise<{ sessions: SessionInfo[]; observers?: NativeObserver[] }> {
     return request(`/api/targets/${encodeURIComponent(targetId)}/sessions`);
+  },
+  installObserver(targetId: string, agent: LaunchAgent): Promise<{ message: string }> {
+    return request(`/api/targets/${encodeURIComponent(targetId)}/agent-monitor/install`, {
+      method: 'POST', body: JSON.stringify({ agent }),
+    });
+  },
+  bindObserver(targetId: string, key: string, session: string): Promise<{ ok: true }> {
+    return request(`/api/targets/${encodeURIComponent(targetId)}/agent-monitor/bind`, {
+      method: 'POST', body: JSON.stringify({ key, session }),
+    });
   },
   createSession(
     targetId: string,

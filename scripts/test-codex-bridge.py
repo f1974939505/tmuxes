@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server/test/agent_
 from main import CodexBridge
 from test_websocket import frame
 from websocket import WebSocket
+from native import ReadOnlyCodex, inspect_codex
 
 
 @contextmanager
@@ -108,6 +109,21 @@ def main():
                 request(4, "thread/goal/get", {"threadId": tid})
                 request(5, "thread/backgroundTerminals/list", {"threadId": tid, "limit": 100})
                 request(6, "thread/list", {"ancestorThreadId": tid, "limit": 100})
+                observer = ReadOnlyCodex(directory)
+                try:
+                    assert observer.request("thread/read", {"threadId": tid})['thread']['id'] == tid
+                    observer.request("thread/list", {"ancestorThreadId": tid, "sourceKinds": [
+                        "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther"]})
+                    assert inspect_codex({"id": tid, "state": {}}, observer).snapshot() == ("unknown", "")
+                    try:
+                        observer.request("thread/resume", {"threadId": tid})
+                        raise AssertionError('Observer allowed a control method')
+                    except ValueError:
+                        pass
+                finally:
+                    observer.close()
+                request(10, "thread/read", {"threadId": tid})
+                print('Independent read-only observer: PASS', flush=True)
                 # /resume opens an auxiliary app-server client while the TUI's
                 # original connection is still alive. Exercise repeated opens.
                 for _ in range(2):

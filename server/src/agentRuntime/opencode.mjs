@@ -1,9 +1,10 @@
 import net from 'node:net';
 
-// This plugin is injected for this launch only. No project/global config edits.
-export const TmuxesPlugin = async ({ client }) => {
+// Shared adapter for the native installer and legacy launch-local integration.
+export const TmuxesPlugin = async ({ client }, report) => {
   const path = process.env.TMUXES_EVENT_SOCKET;
-  if (!path) return {};
+  const nativeReport = typeof report === 'function' ? report : undefined;
+  if (!path && !nativeReport) return {};
   let root;
   let generation = 0;
   const parents = new Map();
@@ -11,7 +12,8 @@ export const TmuxesPlugin = async ({ client }) => {
   const tasks = new Set();
   let uncertainBackground = false;
   let queue = Promise.resolve();
-  const emit = (type, data = {}) => new Promise((resolve) => {
+  const emit = (type, data = {}) => nativeReport
+    ? nativeReport(type, data, root) : new Promise((resolve) => {
     const sock = net.createConnection(path);
     sock.setTimeout(500);
     sock.on('connect', () => sock.end(JSON.stringify({ type, event: 'OpenCodePlugin', ...data }) + '\n'));

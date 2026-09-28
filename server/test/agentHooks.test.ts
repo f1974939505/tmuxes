@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { augmentAgentCommand, detectAgentKind, runtimeBundle } from '../src/agentHooks.js';
+import { augmentAgentCommand, detectAgentKind, prepareAgentCommand, runtimeBundle } from '../src/agentHooks.js';
 
 afterEach(() => { delete process.env.TMUXES_NO_AUTOHOOK; });
 const runtime = { python: '/usr/bin/python3', path: "/home/user's files/agent/main.py" };
 
 describe('agent launch', () => {
+  it('launches native commands without a proxy, injected flags or Python prerequisite', async () => {
+    const command = 'codex --profile mine resume --last';
+    expect(await prepareAgentCommand({ id: 'local', kind: 'local', label: 'Local' }, command))
+      .toEqual({ command, kind: 'codex' });
+  });
   it.each(['claude', 'codex', 'opencode', 'hermes'])('recognizes %s and preserves user arguments', (kind) => {
     expect(detectAgentKind(kind)).toBe(kind);
     const out = augmentAgentCommand(`${kind} --model test "do x"`, runtime);
