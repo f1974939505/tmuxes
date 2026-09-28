@@ -1,6 +1,6 @@
 {
   "name": "tmuxes",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Web UI to run and supervise many CLI coding agents in tmux — local, SSH, and WSL.",
   "keywords": [
     "tmux",
@@ -40,9 +40,9 @@
   ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../scripts/copy-agent-runtime.mjs",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "vitest run && node ../scripts/test-agent-runtime.mjs",
     "prepack": "node ../scripts/prepack.mjs"
   },
   "dependencies": {

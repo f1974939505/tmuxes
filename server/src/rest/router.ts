@@ -60,7 +60,7 @@ function requireSessionName(raw: unknown): string {
 }
 
 function requireLaunchAgent(raw: unknown): LaunchAgent {
-  if (raw === 'claude' || raw === 'codex') return raw;
+  if (raw === 'claude' || raw === 'codex' || raw === 'opencode' || raw === 'hermes') return raw;
   throw new TmuxError(400, 'invalid agent');
 }
 

@@ -37,7 +37,9 @@ export const TEXT = {
     disconnected: '连接已断开。',
     failedLaunchAgent: '启动 agent 失败',
     runClaude: '在当前 tmux 会话中启动已接入 hook 的 Claude Code',
-    runCodex: '在当前 tmux 会话中启动已接入 hook 的 Codex',
+    runCodex: '在当前 tmux 会话中启动带状态监测的 Codex',
+    runOpenCode: '在当前 tmux 会话中启动带状态监测的 OpenCode',
+    runHermes: '在当前 tmux 会话中启动带状态监测的 Hermes',
     selectOrCreateSession: '选择或创建一个 tmux 会话',
     pickSession: '在侧边栏选择会话以打开实时终端。',
     dragResize: '拖动调整大小',
@@ -144,6 +146,12 @@ export const TEXT = {
     agentDone: (kind: string) => `${kind} 已结束运行`,
     agentError: (kind: string) => `${kind} 异常停止`,
     agentIdle: (kind: string) => `${kind} 空闲`,
+    agentBackground: (kind: string) => `${kind} 后台运行 / 等待唤醒`,
+    agentUnknown: (kind: string) => `${kind} 状态未知`,
+    agentSettling: (kind: string) => `${kind} 正在确认结束`,
+    agentBackgroundShort: '后台',
+    agentUnknownShort: '未知',
+    agentSettlingShort: '确认中',
     justNow: '刚刚',
   },
   en: {
@@ -180,7 +188,9 @@ export const TEXT = {
     disconnected: 'Disconnected.',
     failedLaunchAgent: 'failed to launch agent',
     runClaude: 'Run hooked Claude Code in this tmux session',
-    runCodex: 'Run hooked Codex in this tmux session',
+    runCodex: 'Run monitored Codex in this tmux session',
+    runOpenCode: 'Run monitored OpenCode in this tmux session',
+    runHermes: 'Run monitored Hermes in this tmux session',
     selectOrCreateSession: 'Select or create a tmux session',
     pickSession: 'Pick a session in the sidebar to open a live terminal.',
     dragResize: 'Drag to resize',
@@ -287,6 +297,12 @@ export const TEXT = {
     agentDone: (kind: string) => `${kind} done`,
     agentError: (kind: string) => `${kind} stopped abnormally`,
     agentIdle: (kind: string) => `${kind} idle`,
+    agentBackground: (kind: string) => `${kind} background work / awaiting wakeup`,
+    agentUnknown: (kind: string) => `${kind} status unknown`,
+    agentSettling: (kind: string) => `${kind} checking completion`,
+    agentBackgroundShort: 'background',
+    agentUnknownShort: 'unknown',
+    agentSettlingShort: 'settling',
     justNow: 'just now',
   },
 };
@@ -319,6 +335,9 @@ export function attentionTitle(reason: AttentionReason, t: I18n): string {
 
 export function agentStatusLabel(session: SessionInfo, t: I18n): string {
   if (!session.agentKind || !session.agentState) return t.agentNotHooked;
+  if (session.agentState === 'background') return t.agentBackground(session.agentKind);
+  if (session.agentState === 'unknown') return t.agentUnknown(session.agentKind);
+  if (session.agentState === 'settling') return t.agentSettling(session.agentKind);
   if (session.agentState === 'running') return t.agentRunning(session.agentKind);
   if (session.agentState === 'waiting') return t.agentWaiting(session.agentKind);
   if (session.attentionReason === 'done') return t.agentDone(session.agentKind);

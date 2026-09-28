@@ -6,7 +6,7 @@ describe('agent state values', () => {
     const parsed = parseAgentValue(agentInitialValue('codex'));
     expect(parsed).toMatchObject({
       agentKind: 'codex',
-      agentState: 'idle',
+      agentState: 'unknown',
       agentEvent: 'launch',
     });
     expect(parsed?.attentionReason).toBeUndefined();

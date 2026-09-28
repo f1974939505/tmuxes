@@ -181,6 +181,12 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           >
             codex
           </button>
+          <button disabled={startingAgent !== null} onClick={() => void launchAgent('opencode')} title={t.runOpenCode}>
+            opencode
+          </button>
+          <button disabled={startingAgent !== null} onClick={() => void launchAgent('hermes')} title={t.runHermes}>
+            hermes
+          </button>
           {agentError && <span className="agent-error" title={agentError}>!</span>}
         </>
       )}>

@@ -72,7 +72,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
         const prev = lastAgentEvent.current.get(s.name);
         lastAgentEvent.current.set(s.name, key);
 
-        if (s.agentState === 'running') {
+        if (['running', 'background', 'settling', 'unknown'].includes(s.agentState ?? '') || !s.attentionReason) {
           decisionCandidates.current.delete(s.name);
           attention.clearAlert(target.id, s.name);
         } else if (s.agentState === 'waiting' && s.attentionReason === 'decision' && key) {

@@ -1,5 +1,5 @@
-export type AgentKind = 'claude' | 'codex';
-export type AgentState = 'running' | 'waiting' | 'idle';
+export type AgentKind = 'claude' | 'codex' | 'opencode' | 'hermes';
+export type AgentState = 'running' | 'waiting' | 'idle' | 'background' | 'settling' | 'unknown';
 export type AttentionReason = 'decision' | 'done' | 'error';
 
 export interface AgentSnapshot {
@@ -13,11 +13,11 @@ export interface AgentSnapshot {
 export const AGENT_OPTION = '@tmuxes_agent';
 
 function isAgentKind(v: string): v is AgentKind {
-  return v === 'claude' || v === 'codex';
+  return v === 'claude' || v === 'codex' || v === 'opencode' || v === 'hermes';
 }
 
 function isAgentState(v: string): v is AgentState {
-  return v === 'running' || v === 'waiting' || v === 'idle';
+  return ['running', 'waiting', 'idle', 'background', 'settling', 'unknown'].includes(v);
 }
 
 function isAttentionReason(v: string): v is AttentionReason {
@@ -45,16 +45,7 @@ export function agentValue(
 }
 
 export function agentInitialValue(kind: AgentKind): string {
-  return agentValue(kind, 'idle', '', 'launch', String(Date.now()));
-}
-
-export function agentHookCommand(
-  kind: AgentKind,
-  state: AgentState,
-  reason: AttentionReason | '',
-  event: string,
-): string {
-  return `tmux set-option -q ${AGENT_OPTION} ${agentValue(kind, state, reason, event, '$(date +%s).$$')}`;
+  return agentValue(kind, 'unknown', '', 'launch', String(Date.now()));
 }
 
 export function parseAgentValue(raw: string | undefined): AgentSnapshot | undefined {

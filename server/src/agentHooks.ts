@@ -1,115 +1,57 @@
-import {
-  agentHookCommand,
-  type AgentKind,
-  type AgentState,
-  type AttentionReason,
-} from './agentState.js';
-
-interface AugmentedCommand {
-  command: string;
-  kind?: AgentKind;
-}
-
-function isDisabled(): boolean {
-  const v = process.env.TMUXES_NO_AUTOHOOK;
-  return v === '1' || v === 'true';
-}
-
-function baseName(token: string): string {
-  return (token.split(/[\\/]/).pop() || '').toLowerCase().replace(/\.(exe|cmd|bat)$/, '');
-}
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import type { AgentKind } from './agentState.js';
+import type { Target } from './targets.js';
+import { commandArgv, sshQuote } from './tmux/builder.js';
+import { runTargetCommand } from './targetCommand.js';
 
 export function detectAgentKind(command: string): AgentKind | undefined {
-  if (isDisabled()) return undefined;
-  const trimmed = command.trim();
-  if (!trimmed) return undefined;
-
-  const m = /^(\S+)(\s+[\s\S]*)?$/.exec(trimmed);
-  if (!m) return undefined;
-  switch (baseName(m[1])) {
-    case 'claude':
-      return 'claude';
-    case 'codex':
-      return 'codex';
-    default:
-      return undefined;
-  }
+  if (['1', 'true'].includes(process.env.TMUXES_NO_AUTOHOOK ?? '')) return undefined;
+  const token = command.trim().split(/\s+/)[0].split(/[\\/]/).pop()?.toLowerCase().replace(/\.(exe|cmd|bat)$/, '');
+  return token === 'claude' || token === 'codex' || token === 'opencode' || token === 'hermes' ? token : undefined;
 }
 
-function hook(
-  kind: AgentKind,
-  state: AgentState,
-  reason: AttentionReason | '',
-  event: string,
-) {
-  return { type: 'command', command: agentHookCommand(kind, state, reason, event) };
+interface Runtime { python: string; path: string }
+
+// Assets are copied to dist/agentRuntime at build time. Deployment uses the
+// existing management connection once per launch, never probes other hosts.
+export function runtimeBundle(): { files: Record<string, string>; hash: string } {
+  const directory = new URL('./agentRuntime/', import.meta.url);
+  const files = Object.fromEntries(readdirSync(directory).filter((name) => /\.(py|mjs)$/.test(name)).sort()
+    .map((name) => [name, readFileSync(new URL(name, directory), 'utf8')]));
+  const hash = createHash('sha256').update(JSON.stringify(files)).digest('hex').slice(0, 20);
+  return { files, hash };
 }
 
-function claudeSettings(): string {
-  return JSON.stringify({
-    hooks: {
-      UserPromptSubmit: [{ hooks: [hook('claude', 'running', '', 'UserPromptSubmit')] }],
-      PreToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PreToolUse')] }],
-      PostToolUse: [{ matcher: '', hooks: [hook('claude', 'running', '', 'PostToolUse')] }],
-      PermissionRequest: [
-        { matcher: '', hooks: [hook('claude', 'waiting', 'decision', 'PermissionRequest')] },
-      ],
-      Notification: [
-        {
-          matcher: 'permission_prompt',
-          hooks: [hook('claude', 'waiting', 'decision', 'Notification.permission_prompt')],
-        },
-        {
-          matcher: 'elicitation_dialog',
-          hooks: [hook('claude', 'waiting', 'decision', 'Notification.elicitation_dialog')],
-        },
-      ],
-      Stop: [{ hooks: [hook('claude', 'idle', 'done', 'Stop')] }],
-      StopFailure: [{ hooks: [hook('claude', 'idle', 'error', 'StopFailure')] }],
-      SessionEnd: [{ hooks: [hook('claude', 'idle', 'done', 'SessionEnd')] }],
-    },
-  });
-}
+const INSTALL = `import json,os,pathlib,sys,tempfile
+if sys.version_info < (3,9): raise RuntimeError('tmuxes agent monitoring requires Python 3.9+')
+data=json.load(sys.stdin)
+base=pathlib.Path.home()/'.cache'/'tmuxes'/'agents'
+base.mkdir(parents=True,exist_ok=True,mode=0o700)
+dest=base/data['hash']
+dest.mkdir(exist_ok=True,mode=0o700)
+for name,content in data['files'].items():
+ p=dest/name
+ if p.exists() and p.read_text(encoding='utf-8')==content: continue
+ with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=dest,delete=False) as f:
+  f.write(content)
+ os.replace(f.name,p)
+print(json.dumps({'python':sys.executable,'path':str(dest/'main.py')}))`;
 
-function tomlString(v: string): string {
-  return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
-
-function codexHookConfig(
-  event: string,
-  cmd: string,
-  opts: { matcher?: string } = {},
-): string {
-  const matcher = opts.matcher === undefined ? '' : `matcher=${tomlString(opts.matcher)},`;
-  return `hooks.${event}=[{${matcher}hooks=[{type="command",command=${tomlString(cmd)}}]}]`;
-}
-
-function codexConfigArgs(): string {
-  const configs = [
-    codexHookConfig('UserPromptSubmit', agentHookCommand('codex', 'running', '', 'UserPromptSubmit')),
-    codexHookConfig('PreToolUse', agentHookCommand('codex', 'running', '', 'PreToolUse'), {
-      matcher: '',
-    }),
-    codexHookConfig('PostToolUse', agentHookCommand('codex', 'running', '', 'PostToolUse'), {
-      matcher: '',
-    }),
-    codexHookConfig('Stop', agentHookCommand('codex', 'idle', 'done', 'Stop')),
-  ];
-  return configs.map((c) => `-c '${c}'`).join(' ');
-}
-
-export function augmentAgentCommand(command: string): AugmentedCommand {
+export async function prepareAgentCommand(target: Target, command: string): Promise<{ command: string; kind?: AgentKind }> {
   const kind = detectAgentKind(command);
   if (!kind) return { command };
+  const result = await runTargetCommand(target,
+    (opts) => commandArgv(target, ['python3', '-c', INSTALL], opts),
+    { input: JSON.stringify(runtimeBundle()), timeoutMs: 15_000 });
+  if (result.code !== 0) throw new Error(`Cannot prepare agent monitoring (Python 3.9+ required on target): ${result.stderr.trim()}`);
+  const runtime = JSON.parse(result.stdout.trim()) as Runtime;
+  if (!runtime.python || !runtime.path) throw new Error('Invalid agent runtime installation response');
+  return augmentAgentCommand(command, runtime);
+}
 
-  const trimmed = command.trim();
-  const m = /^(\S+)(\s+[\s\S]*)?$/.exec(trimmed);
-  if (!m) return { command };
-  const prog = m[1];
-  const rest = m[2] ?? '';
-
-  if (kind === 'claude') {
-    return { kind, command: `${prog} --settings '${claudeSettings()}'${rest}` };
-  }
-  return { kind, command: `${prog} ${codexConfigArgs()}${rest}` };
+export function augmentAgentCommand(command: string, runtime: Runtime): { command: string; kind?: AgentKind } {
+  const kind = detectAgentKind(command);
+  if (!kind) return { command };
+  return { kind, command: `${sshQuote(runtime.python)} ${sshQuote(runtime.path)} ${kind} ${command.trim()}` };
 }

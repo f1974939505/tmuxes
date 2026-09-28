@@ -3,12 +3,9 @@ import type { Target } from '../targets.js';
 import { runTargetCommand } from '../targetCommand.js';
 import {
   AGENT_OPTION,
-  agentValue,
   agentInitialValue,
-  parseAgentValue,
 } from '../agentState.js';
-import { augmentAgentCommand } from '../agentHooks.js';
-import { classifyAgentTerminalError } from '../agentOutput.js';
+import { prepareAgentCommand } from '../agentHooks.js';
 import {
   SESSION_FORMAT,
   WINDOW_FORMAT,
@@ -20,7 +17,7 @@ import {
 } from './formats.js';
 import { isValidSessionName } from '../validate.js';
 
-export type LaunchAgent = 'claude' | 'codex';
+export type LaunchAgent = 'claude' | 'codex' | 'opencode' | 'hermes';
 
 /** A management error carrying the HTTP status the router should return. */
 export class TmuxError extends Error {
@@ -53,37 +50,10 @@ function firstStderrLine(stderr: string): string {
 
 export async function listSessions(target: Target): Promise<SessionInfo[]> {
   const r = await run(target, ['list-sessions', '-F', SESSION_FORMAT]);
-  if (r.code === 0) return reconcileAgentTerminalErrors(target, parseSessions(r.stdout));
+  if (r.code === 0) return parseSessions(r.stdout);
   // "no server running" / "no sessions" is the normal empty case.
   if (isEmptySessionsError(r.stderr)) return [];
   throw new TmuxError(502, firstStderrLine(r.stderr));
-}
-
-async function reconcileAgentTerminalErrors(
-  target: Target,
-  sessions: SessionInfo[],
-): Promise<SessionInfo[]> {
-  return Promise.all(sessions.map((session) => reconcileAgentTerminalError(target, session)));
-}
-
-async function reconcileAgentTerminalError(
-  target: Target,
-  session: SessionInfo,
-): Promise<SessionInfo> {
-  if (!session.agentKind || session.agentState !== 'running') return session;
-
-  const pane = await run(target, ['capture-pane', '-t', session.name, '-p', '-S', '-20']);
-  if (pane.code !== 0) return session;
-
-  const event = classifyAgentTerminalError(pane.stdout, session.agentKind);
-  if (!event) return session;
-
-  const value = agentValue(session.agentKind, 'idle', 'error', event, String(Date.now()));
-  const set = await run(target, ['set-option', '-t', session.name, '-q', AGENT_OPTION, value]);
-  if (set.code !== 0) return session;
-
-  const snapshot = parseAgentValue(value);
-  return snapshot ? { ...session, ...snapshot } : session;
 }
 
 export async function createSession(
@@ -119,7 +89,7 @@ export async function createSession(
   }
 
   if (opts.command && opts.command.length > 0) {
-    const augmented = augmentAgentCommand(opts.command);
+    const augmented = await prepareAgentCommand(target, opts.command);
     if (augmented.kind) {
       await run(target, [
         'set-option',
@@ -144,7 +114,7 @@ export async function launchAgentInSession(
   name: string,
   agent: LaunchAgent,
 ): Promise<void> {
-  const augmented = augmentAgentCommand(agent);
+  const augmented = await prepareAgentCommand(target, agent);
   if (!augmented.kind) throw new TmuxError(400, 'unsupported agent');
 
   const set = await run(target, [

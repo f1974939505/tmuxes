@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
 横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器和 Git 面板。
 
-🔔 **Claude Code 结束运行、异常停止或需要决策时,浏览器会自动提醒你** —— 侧边栏红/绿状态点 +「结束 / 错误 / 决策」提示 + 提示音 + 后台标签页标题闪烁。Codex 的审批 / 决策请求不再触发提醒，避免 Codex 自动审批时误报。
+🔔 **Agent 结束、报错停止或需要人工决策时，浏览器会提醒你** —— 支持 Claude Code、Codex、OpenCode、Hermes 的结构化事件；后台任务、子 agent、monitor 和等待唤醒不会直接当作结束。状态证据不足时显示「未知」。
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -37,7 +37,7 @@
 | | |
 |---|---|
 | 🧠 **为 agent 而生** | 每个 agent 独占一个 tmux 会话。新建时可带初始命令（比如 `claude` 或 `codex`），选中后右侧就是一个**完全可交互的实时终端**。 |
-| 🔔 **结束 / 错误提醒** | 新建会话时初始命令是 `claude` 或 `codex` 会自动接入官方 lifecycle hooks。也可以先进入空 session `cd` 到目标目录,再点终端右上角的 `claude` / `codex` 按钮启动带 hook 的 agent。已展开目标每 5 秒同步一次:红点表示 agent 正在运行,绿点表示已结束或异常停止;结束运行和异常停止会显示不同提示。 |
+| 🔔 **结束 / 错误 / 决策提醒** | 新建会话时填写 agent 命令，或在空闲终端右上角启动四种 agent。按结构化事件区分运行、后台工作、人工决策、完成、失败和未知；已展开目标每 5 秒同步 tmux 状态，不再扫描终端文字猜测错误。 |
 | 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧边栏同时列出你的本机、`~/.ssh/config` 里的主机、（Windows 上）你的 WSL 发行版，以及（Windows）原生 PowerShell / cmd 会话 —— 全部并排排开。 |
 | 🗂️ **文件夹树** | 像资源管理器一样，把会话拖进**可拖拽的文件夹**里整理。按目标分别持久化到本地。 |
 | 📂 **实时文件浏览 + 编辑** | 侧边栏底部跟随每个会话的**工作目录** —— 点一个代码文件就能把终端一分为二，在下面**直接读和改**（可保存、撤销/重做）。 |
@@ -116,25 +116,30 @@ npm run build
 npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自动打开浏览器）
 ```
 
-## 🔔 启动带 hook 的 Claude Code / Codex
+## 🔔 Agent 状态与提醒
 
-tmuxes 目前会给 **Claude Code (`claude`)** 和 **Codex (`codex`)** 自动接入官方 lifecycle hooks，用来判断 agent 是正在运行、已经结束或异常停止。
+在新建 session 的初始命令中填写 `claude`、`codex`、`opencode` 或 `hermes`；也可以先进入空 session，`cd /你的目标目录` 后点击右上角对应按钮。目标机器需要 **Python 3.9+（`python3`）** 和 tmux。首次启动会把仅依赖 Python 标准库的采集器部署到该目标的 `~/.cache/tmuxes/agents/<内容哈希>/`，后续复用相同文件。
 
-两种用法：
+- **运行 / 后台（红点）**：主 agent 工作，或仍有后台 shell、monitor、子 agent、goal、定时唤醒。子任务结束不等于主任务结束。
+- **决策**：收到真正交给人工的审批或结构化提问。已解决请求会清除；同一请求持续到下一次界面同步才响铃，短暂自动处理不响铃。
+- **结束**：主轮次正常结束，且已知的关联工作全部收尾，短暂确认期内没有新活动。不会仅凭静默、进程退出或一段最终回答判断完成。
+- **错误**：主任务终止性失败；warning、自动重试和普通工具失败不会直接触发。
+- **未知（灰点）**：未接入、监测断开、接口不支持或后台状态不完整。中断和关闭客户端不等于完成。
 
-1. 新建 session 时，在初始命令里直接填 `claude` 或 `codex`。
-2. 先新建空 session，进入后在终端里 `cd /你的目标目录`，再点终端右上角的 `claude` / `codex` 按钮。
+各工具的接入与兼容边界：
 
-状态含义：
+| Agent | 接入方式与说明 |
+| --- | --- |
+| Codex | 使用共享 app-server，经过私有 Unix socket 的 WebSocket 转发观察原 TUI 事件，并在结束事件后只读查询 goal、子线程、后台终端。验证基线为 CLI 0.158.0；不再注入 `-c hooks...`，不强制 embedded mode，不代答审批，不停止共享 daemon。旧版不支持接口时不会伪报完成。 |
+| Claude Code | 通过本次启动的 `--settings` 追加 hooks，保留用户传入的 settings。读取 `Stop.background_tasks/session_crons`，并区分子 agent、提问、通知和 `StopFailure`。缺少后台字段或 `stop_hook_active=true` 时不宣称完成。其他 Stop hook 的首次继续决定不一定对观察 hook 可见，确认期只能缓解该竞态。 |
+| OpenCode | 通过本次启动的 `OPENCODE_CONFIG_CONTENT` 追加本地插件，保留已有配置；读取会话、子会话、权限和提问事件。第三方工具脱离会话运行且没有可靠完成事件时，保守保持后台 / 未知。 |
+| Hermes | 首次启动写入独立的 `tmuxes-observer-<哈希>` 本地插件，并调用 `hermes plugins enable`，由 Hermes 展示必要的启用交互；不添加依赖。插件仅对本次启动生效，读取生命周期、人工审批、子 agent 和本进程后台任务计数。内部任务计数接口不可用时不宣称完成。命名 profile 请先设置该 profile 的 `HERMES_HOME`，启动器不接受 `-p/--profile`。 |
 
-- 红点：agent 正在运行。
-- 绿点：agent 已结束、异常停止，或这个 session 没接入 agent hook。
-- `结束` badge：本轮运行结束。
-- `错误` badge：agent 异常停止，例如 Codex 断流但没有触发 stop hook。tmuxes 会在已展开目标的 5 秒同步里扫描 running agent 的 pane 尾部并把这类错误纠正为提醒状态。
+Codex 的监测启动不接受 `-c/--config`、`--enable`、`--disable`、`--search`、`--no-daemon` 或自定义 `--remote`；请将配置放进 Codex 自己的配置文件，或在终端手动启动不带监测的命令。tmuxes 不修改 Codex 的持久配置、hook 信任或审批策略。协议是实验接口，升级后会优先降级为未知而非误报完成。
 
-审批 / 决策请求的处理分两种：Claude Code 的 `PermissionRequest`、`permission_prompt` 和 `elicitation_dialog` 会触发「决策」提醒；Codex 的审批 / 决策请求不再触发提醒，也就是说 Codex 开启自动审批 / Approve for me 时不会因为 `PermissionRequest` 把 tmuxes 切成“需要决策”提醒，人工审批模式也同样不再响铃。
+采集器只在目标机器本地处理事件，不保存提示词或工具输出，不新增 SSH 轮询、登录探测或重连循环。浏览器沿用既有管理连接读取 tmux 状态。设置服务端环境变量 `TMUXES_NO_AUTOHOOK=1` 可关闭初始命令的自动接入。Hermes 插件可通过 `hermes plugins disable <插件名>` 停用。
 
-注意：右上角按钮本质上是向当前 tmux pane 发送一条带 hook 的 `claude` / `codex` 命令。不要在当前 pane 里已有程序正在接收输入时点击它。裸 `cc` 常常是系统 C 编译器，tmuxes 不会默认把它当作 Claude Code。原生 Windows shell 没有 tmux session option，因此不支持这套 hook 状态。
+按钮会向当前 pane 输入启动命令，请仅在 shell 空闲时点击。裸 `cc` 仍按系统编译器处理。原生 Windows shell 没有 tmux，不支持这套监测；请使用 WSL 或 SSH 目标。
 
 ## 🔀 Git 面板
 
@@ -272,6 +277,11 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 </details>
 
 ## 📋 更新日志
+
+### 0.1.17
+- **Agent 提醒重做**：分别识别报错、等待用户决策和经确认的任务结束；后台任务、子 agent、monitor shell 及短暂停顿不作为整体结束，无法确认时显示未知状态。
+- **Codex 共享后台服务**：改用本地协议桥接，不再自动注入 `-c` hooks，消除因此触发的 embedded-mode 警告；恢复实际用户决策提醒，并过滤短暂的自动审批状态。
+- **四种 Agent 集成**：更新 Claude Code hooks，新增 OpenCode、Hermes 启动按钮与事件适配；自动集成要求 tmux 目标上的 Python 3.9+，兼容性限制及关闭方式见上文。
 
 ### 0.1.16
 - **Node 24 支持**：修正 npm 包的 `engines.node` 声明为 `^22.12.0 || ^24.0.0`，消除 Node 24 上错误的 `EBADENGINE` 警告；同步所有 workspace、锁文件、安装说明及启动脚本提示。

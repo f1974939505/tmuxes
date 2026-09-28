@@ -9,7 +9,7 @@
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
 live across **Local · SSH · WSL**, with a file browser and Git panel for every agent's working directory.
 
-🔔 **When Claude Code finishes, stops abnormally, or needs a decision, your browser pings you**: red/green sidebar status dots, done/error/decision badges, a sound, and a flashing tab title when you're away. Codex approval / decision requests no longer alert, so Codex auto-approval does not get misreported.
+🔔 **Get notified when an agent finishes, fails, or needs a human decision** — structured events from Claude Code, Codex, OpenCode, and Hermes. Background tasks, subagents, monitors, and scheduled wakeups do not directly count as completion. Incomplete evidence is shown as “unknown”.
 
 <p>
 <a href="https://www.npmjs.com/package/tmuxes"><img alt="npm version" src="https://img.shields.io/npm/v/tmuxes?style=flat-square&logo=npm&color=CB3837"></a>
@@ -37,7 +37,7 @@ live across **Local · SSH · WSL**, with a file browser and Git panel for every
 | | |
 |---|---|
 | 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
-| 🔔 **Done / error notifications** | Sessions created with an initial `claude` or `codex` command automatically get official lifecycle hooks. You can also open an empty session, `cd` to the target directory, then click the terminal's top-right `claude` / `codex` button to launch a hooked agent there. Expanded targets sync every 5 seconds: a red dot means running, a green dot means finished or stopped abnormally, and badges tell those cases apart. |
+| 🔔 **Done / error / decision notifications** | Enter an agent command when creating a session, or launch any of the four agents from an idle terminal's toolbar. Structured events distinguish running, background work, human decisions, completion, failure, and unknown state. Expanded targets sync tmux status every 5 seconds without scanning terminal text for errors. |
 | 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
 | 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
 | 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
@@ -116,25 +116,30 @@ npm run build
 npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-open the browser)
 ```
 
-## 🔔 Launch Hooked Claude Code / Codex
+## 🔔 Agent status and notifications
 
-tmuxes currently auto-wires official lifecycle hooks for **Claude Code (`claude`)** and **Codex (`codex`)**, so it can tell whether the agent is running, finished, or stopped abnormally.
+Create a session with `claude`, `codex`, `opencode`, or `hermes`, or open an empty session, `cd /your/project`, and click its toolbar button. The target needs **Python 3.9+ (`python3`)** and tmux. Launching deploys a Python standard-library-only collector to that target's `~/.cache/tmuxes/agents/<content-hash>/`; unchanged files are reused.
 
-Two launch paths:
+- **Running / background (red)**: the root agent is working, or background shells, monitors, subagents, goals, or scheduled wakeups remain. A child's completion is not the root's completion.
+- **Decision**: an approval or structured question actually reaches a human. Resolved requests clear; a request must survive another UI refresh before sounding, so briefly auto-resolved requests stay quiet.
+- **Done**: the root turn ended normally, known associated work has settled, and no new activity arrived during a short confirmation period. Silence, process exit, or final text alone never proves completion.
+- **Error**: a terminal root-task failure. Warnings, automatic retries, and ordinary tool failures do not directly alert.
+- **Unknown (gray)**: unmonitored, disconnected, unsupported interfaces, or incomplete background evidence. Interruption and client exit do not mean success.
 
-1. Create a session with `claude` or `codex` as the initial command.
-2. Create an empty session, `cd /your/project` in the terminal, then click the terminal's top-right `claude` / `codex` button.
+Integration and compatibility boundaries:
 
-Status meanings:
+| Agent | Integration |
+| --- | --- |
+| Codex | Observes the original TUI connection through a private Unix-socket WebSocket bridge to the shared app-server, then reads goals, descendants, and background terminals after completion events. CLI 0.158.0 is the validation baseline. No injected `-c hooks...`, forced embedded mode, approval responses, or shared-daemon shutdown. Unsupported older interfaces never produce a false completion. |
+| Claude Code | Appends launch-local hooks through `--settings`, preserving supplied settings. Reads `Stop.background_tasks/session_crons`, subagent events, questions, notifications, and `StopFailure`. Missing background fields or `stop_hook_active=true` prevent completion claims. Another Stop hook's first continuation decision may be invisible to the observer; the confirmation period only mitigates that race. |
+| OpenCode | Adds a local plugin through launch-local `OPENCODE_CONFIG_CONTENT`, preserving existing configuration. Uses session, descendant, permission, and question events. Detached third-party work without reliable completion events stays background / unknown conservatively. |
+| Hermes | On first launch, writes a separate local `tmuxes-observer-<hash>` plugin and calls `hermes plugins enable`, allowing Hermes to present any required enablement interaction. Adds no dependencies. The plugin is gated to this launch and reads lifecycle, human approval, subagent events, and the in-process background task count. An unavailable internal counter prevents completion claims. For named profiles, set that profile's `HERMES_HOME` first; the launcher does not accept `-p/--profile`. |
 
-- Red dot: the agent is running.
-- Green dot: the agent finished, stopped abnormally, or this session has no agent hook.
-- `done` badge: the current turn finished.
-- `error` badge: the agent stopped abnormally, for example when Codex disconnects without firing a stop hook. During the 5-second sync for expanded targets, tmuxes scans the tail of running agent panes and corrects these cases into an alert state.
+Monitored Codex launches do not accept `-c/--config`, `--enable`, `--disable`, `--search`, `--no-daemon`, or a custom `--remote`. Put settings in Codex's own configuration files, or launch an unmonitored command manually. tmuxes does not edit persistent Codex configuration, hook trust, or approval policy. The protocol is experimental; incompatible updates prefer unknown over false completion.
 
-Approval / decision handling differs by agent. Claude Code's `PermissionRequest`, `permission_prompt`, and `elicitation_dialog` events fire a "needs decision" alert. Codex approval / decision requests do not alert — that means Codex automatic approval / Approve for me will not turn `PermissionRequest` into a tmuxes "needs decision" notification, and manual approval mode no longer rings either.
+The collector handles events on the target, stores no prompts or tool output, and adds no SSH polling, login probes, or reconnect loops. The browser reads tmux status through the existing management connection. Set the server environment variable `TMUXES_NO_AUTOHOOK=1` to disable automatic integration of initial commands. Disable a Hermes observer with `hermes plugins disable <plugin-name>`.
 
-Note: the top-right buttons send a hooked `claude` / `codex` command into the current tmux pane. Do not click them while another program in that pane is waiting for input. Bare `cc` is often the system C compiler, so tmuxes does not treat it as Claude Code by default. Native Windows shells have no tmux session option, so this hook status is not supported there.
+Buttons type a launch command into the current pane: use them only at an idle shell. Bare `cc` remains the system compiler. Native Windows shells have no tmux and do not support monitoring; use WSL or SSH targets.
 
 ## 🔀 Git Panel
 
@@ -273,6 +278,11 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 </details>
 
 ## 📋 Changelog
+
+### 0.1.17
+- **Agent alerts redesigned:** distinguish errors, pending user decisions, and verified task completion; background tasks, subagents, monitor shells, and brief pauses do not count as overall completion. Unverifiable activity is shown as unknown.
+- **Codex shared background server:** use a local protocol bridge instead of injecting `-c` hooks, removing the resulting embedded-mode warning; restore actual user-decision alerts while filtering brief automatic approvals.
+- **Four agent integrations:** update Claude Code hooks and add OpenCode and Hermes launch buttons and event adapters. Automatic integration requires Python 3.9+ on the tmux target; compatibility limits and the opt-out are documented above.
 
 ### 0.1.16
 - **Node 24 support:** corrected `engines.node` to `^22.12.0 || ^24.0.0`, removing the incorrect `EBADENGINE` warning on Node 24; synchronized all workspaces, lockfile, installation guidance, and launcher messages.

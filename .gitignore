@@ -50,3 +50,5 @@ tmp/
 temp/
 .cache/
 .tmp-npm-cache/
+__pycache__/
+*.pyc

@@ -329,6 +329,14 @@ textarea:focus {
 .dot.inactive {
   background: var(--green);
 }
+.dot.unknown {
+  background: #8b949e;
+}
+.agent-state-badge {
+  font-size: 10px;
+  color: #8b949e;
+  white-space: nowrap;
+}
 .dot.active {
   background: var(--red);
   box-shadow: 0 0 0 2px rgba(247, 118, 142, 0.24);

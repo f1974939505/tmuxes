@@ -32,10 +32,10 @@ export interface SessionInfo {
   agentNonce?: string;
 }
 
-export type AgentKind = 'claude' | 'codex';
-export type AgentState = 'running' | 'waiting' | 'idle';
+export type AgentKind = 'claude' | 'codex' | 'opencode' | 'hermes';
+export type AgentState = 'running' | 'waiting' | 'idle' | 'background' | 'settling' | 'unknown';
 export type AttentionReason = 'decision' | 'done' | 'error';
-export type LaunchAgent = 'claude' | 'codex';
+export type LaunchAgent = AgentKind;
 
 export interface WindowInfo {
   index: number;

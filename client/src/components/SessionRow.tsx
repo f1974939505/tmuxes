@@ -71,8 +71,13 @@ export function SessionRow({
       onClick={onSelect}
       title={`${session.name} - ${status} - ${session.windows} ${t.windowsShort}`}
     >
-      <span className={`dot ${active ? 'active' : 'inactive'}`} title={status} />
+      <span className={`dot ${session.agentState === 'unknown' || !session.agentKind ? 'unknown' : active ? 'active' : 'inactive'}`} title={status} />
       <span className="name">{session.name}</span>
+      {!reason && session.agentKind && ['background', 'unknown', 'settling'].includes(session.agentState ?? '') && (
+        <span className="agent-state-badge" title={status}>
+          {session.agentState === 'background' ? t.agentBackgroundShort : session.agentState === 'settling' ? t.agentSettlingShort : t.agentUnknownShort}
+        </span>
+      )}
       {reason && (
         <span className={`attn-badge ${reason}`} title={attentionTitle(reason, t)}>
           {attentionText(reason, t)}
