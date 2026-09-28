@@ -155,16 +155,8 @@ export async function launchAgentInSession(
   target: Target,
   name: string,
   agent: LaunchAgent,
-  bindCodex = false,
 ): Promise<void> {
-  const augmented = await prepareAgentCommand(target, agent);
-  if (bindCodex || agent === 'codex') {
-    if (agent !== 'codex') throw new TmuxError(400, 'Binding launch is only available for Codex');
-    const check = await runTargetCommand(target, (opts) => commandArgv(target,
-      ['sh', '-c', 'grep -q tmuxes-foreground-launch-v1 "$HOME/.local/share/tmuxes/observer/native.py"'], opts), { timeoutMs: 10_000 });
-    if (check.code !== 0) throw new TmuxError(400, 'Install / update the Codex observer on this target before foreground launch.');
-    augmented.command = 'python3 "$HOME/.local/share/tmuxes/observer/native.py" launch codex';
-  }
+  const augmented = await prepareAgentCommand(target, agent === 'codex' ? 'codex --no-daemon' : agent);
 
   const set = await run(target, [
     'set-option',

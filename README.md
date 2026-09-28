@@ -136,15 +136,15 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 | OpenCode | 安装全局 v1 插件，遵循 `XDG_CONFIG_HOME`。当前适配器仅支持 v1；v2 改变了插件 API，安装器会拒绝并保留原配置，尚不支持 v2 状态采集。 |
 | Hermes | 在 `HERMES_HOME/plugins/tmuxes-native-observer`（默认 `~/.hermes`）安装插件；执行 `hermes plugins enable tmuxes-native-observer` 后重启。缺少生命周期字段或后台任务计数时降级未知。命名 profile 需在相应环境分别安装。 |
 
-面板数量仅统计已关联 pane 的记录；未关联记录折叠放在“未关联 / 历史记录”中，不代表当前正在运行的 agent。每条记录显示最后事件和上报时间。Claude 的 `SessionEnd` 记录不再占用窗口，也不能重新手工绑定；当前进程必须上报新事件。接入前已启动的任务无法从旧记录还原，请在方便时重新加载 hooks 或重启 agent。后台任务和定时任务列表分别读取：其中一个缺失时仍保留另一个提供的后台工作证据，但不会据此报告完成。 非 Codex 记录也按进程身份隔离，同一会话 ID 在不同 pane 恢复不会互相覆盖。移除基于进程名称的手工绑定，普通 agent 必须通过自身原生事件建立关联。
+面板仅显示已关联当前 pane 的观测记录。未关联、已结束和被新会话替代的历史观测在读取时从 tmuxes 状态缓存清理，不删除 agent 自身会话历史，也不停止进程。每条记录显示最后事件和上报时间。非 Codex 记录按进程身份隔离；禁止按进程名手工猜测绑定。
 
-Codex 使用前台模式：先在目标安装 / 更新接入，再点击右上角 Codex 或“前台启动 Codex”。启动器验证当前 pane 并运行 `codex --no-daemon`（需 CLI 支持，已核对 0.158.0），不创建常驻 app-server，不使用代理或 `--remote`。tmux detach 后界面继续运行；退出 Codex 后解除关联。原生 hooks 按启动身份和进程祖先关系上报状态，普通共享 daemon 会话仍保持未关联。不会自动停止以前遗留的后端。
+右上角 Codex 按钮直接向当前 pane 输入 `codex --no-daemon`，由当前交互 shell 执行。启动无需 Python、接入安装或额外后端；tmux 保持界面常驻。左侧接入面板只管理可选的状态采集，不再提供启动入口。原有 daemon 不会被自动停止。
 
 Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。暂停的 goal、后台工作、分页不完整或不可验证的结束均不会报完成。这是当前旁路方案的明确能力边界。
 
 采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。
 
-在目标 tmux pane 内也可以直接运行 `python3 "$HOME/.local/share/tmuxes/observer/native.py" launch codex`，后面可追加 `resume` 等 Codex 参数。先在 `/hooks` 信任接入。前台模式不向共享 daemon 查询状态；现有 hooks 不足以证明所有后台 shell、monitor、goal 已结束时显示未知，不将 Stop 或进程退出误报为完成。原有后台任务不会从共享 daemon 自动迁入。
+也可以直接在目标 pane 输入 `codex --no-daemon`。可选的原生 hooks 状态采集仍依赖目标 Python 和 `/hooks` 信任；移除的是启动过程的 Python 依赖。直接启动不携带旧启动器的绑定标识，因此当前采集器不能保证自动关联 Codex pane；未关联记录不展示且会清理；已关联但证据不足时显示未知，不猜测完成。
 
 ## 🔀 Git 面板
 

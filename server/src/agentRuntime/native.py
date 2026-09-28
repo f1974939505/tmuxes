@@ -366,6 +366,7 @@ def snapshot():
         panes[(sock, pane)] = {"name": name, "window": window, "pane": pane,
                                "active": window_active == "1" and pane_active == "1"}
     records = []
+    collected = {}
     clients = {}
     deadline = time.monotonic() + 3
     try:
@@ -375,6 +376,7 @@ def snapshot():
             try:
                 record = json.loads(path.read_text())
                 if time.time() - record.get("updated", 0) > 86400:
+                    collected[record["key"]] = (path, record.get("updated"), record.get("since"))
                     continue
                 state = restore(record["state"])
                 capability = "events"
@@ -429,6 +431,7 @@ def snapshot():
                                 "since": record["since"], "updated": record["updated"],
                                 "capability": capability, "bindingKey":
                                 binding_key})
+                collected[record["key"]] = (path, record.get("updated"), record.get("since"))
                 # Only verification metadata is written, and never over a newer event.
                 with locked():
                     latest = json.loads(path.read_text())
@@ -454,6 +457,19 @@ def snapshot():
         if key and (key not in newest or record["since"] > newest[key]["since"]):
             newest[key] = record
     records = [r for r in records if not r.get("bindingKey") or newest[r["bindingKey"]] is r]
+    records = [r for r in records if r.get("session") and r.get("pane")]
+    retained = {r["key"] for r in records}
+    # Remove observation metadata only, and never race a newer hook or bind.
+    with locked():
+        for key, (path, updated, since) in collected.items():
+            if key in retained:
+                continue
+            try:
+                current = json.loads(path.read_text())
+                if current.get("updated") == updated and current.get("since") == since:
+                    path.unlink(missing_ok=True)
+            except (OSError, ValueError):
+                pass
     for record in records:
         record.pop("bindingKey", None)
     return {"raw": result.stdout, "observers": records}

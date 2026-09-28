@@ -120,7 +120,7 @@ def install(kind):
         home = Path(os.environ.get("CODEX_HOME", str(HOME / ".codex")))
         merge_hooks(home / "hooks.json", ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                                            "Stop", "SubagentStart", "SubagentStop", "Interrupt", "SessionEnd"), command)
-        message = "Review/trust the observer in /hooks, then use Foreground Codex in an idle pane. Ordinary shared-daemon launches remain unbound."
+        message = "Review/trust the observer in /hooks. The toolbar runs codex --no-daemon directly; this does not guarantee pane association. Unbound observations are discarded."
     elif kind == "opencode":
         home = Path(os.environ.get("XDG_CONFIG_HOME", str(HOME / ".config"))) / "opencode"
         content = f'''// {MARKER}

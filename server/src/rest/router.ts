@@ -191,7 +191,7 @@ apiRouter.post(
     if (target.kind === 'winlocal') throw new TmuxError(400, 'agent hooks require a tmux target');
     const name = requireSessionName(req.params.name);
     const agent = requireLaunchAgent((req.body ?? {}).agent);
-    await launchAgentInSession(target, name, agent, req.body?.bindCodex === true);
+    await launchAgentInSession(target, name, agent);
     res.json({ ok: true });
   }),
 );

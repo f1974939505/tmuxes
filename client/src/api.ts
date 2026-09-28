@@ -83,10 +83,10 @@ export const api = {
       { method: 'DELETE' },
     );
   },
-  launchAgent(targetId: string, name: string, agent: LaunchAgent, bindCodex = false): Promise<{ ok: true }> {
+  launchAgent(targetId: string, name: string, agent: LaunchAgent): Promise<{ ok: true }> {
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/agent`,
-      { method: 'POST', body: JSON.stringify({ agent, bindCodex }) },
+      { method: 'POST', body: JSON.stringify({ agent }) },
     );
   },
   getWindows(targetId: string, name: string): Promise<{ windows: WindowInfo[] }> {

@@ -99,11 +99,8 @@ class NativeTests(unittest.TestCase):
              patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
              patch.object(native, "alive", return_value=True):
             observations = native.snapshot()["observers"]
-        self.assertEqual(len(observations), 1)
-        observation = observations[0]
-        self.assertIsNone(observation["session"])
-        self.assertFalse(observation["activePane"])
-        self.assertEqual(observation["lastEvent"], "SessionEnd")
+        self.assertEqual(observations, [])
+        self.assertEqual(list(self.base.glob("*.json")), [])
 
     def test_codex_rejects_manual_process_guess(self):
         native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})

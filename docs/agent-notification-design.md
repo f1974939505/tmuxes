@@ -51,15 +51,13 @@ remounts and are reused per target/session. The browser never auto-retries a
 terminal connection. These rules are mandatory in AGENTS.md. Validation uses
 mock SSH processes and isolated local tmux; no real cluster is contacted.
 
-Codex no longer trusts inherited pane environment or a guessed process match.
-Foreground Codex launch runs `codex --no-daemon` after checking local CLI support.
-The launcher creates a short-lived identity claim, verifies hook process ancestry,
-and removes the claim when the TUI exits. It creates no private app-server and
-uses no remote protocol relay. Hooks from a shared daemon cannot inherit ownership.
-Foreground observations never query the shared daemon; incomplete task evidence
-stays unknown. Ordinary daemon sessions remain unbound. Old retained backends are
-not killed automatically. tmux, rather than a detached Codex backend, provides
-persistence for this mode.
+The toolbar types `codex --no-daemon` directly into the existing pane shell.
+No Python launcher, capability probe, or observer installation is required to
+start Codex. The sidebar has no launch control. Optional native collection still
+uses Python; direct launches lack the legacy launch claim and remain unbound
+when ownership cannot be established. Unbound, ended and superseded observations
+are hidden and removed from tmuxes metadata on reads, guarded against newer hooks.
+Agent history and existing backend processes are untouched.
 
 Codex hooks follow normal `/hooks` trust. Only legacy daemon observations use a separate read-only connection to the
 existing daemon uses only thread reads, turn summaries, goal, descendant, and
@@ -81,10 +79,6 @@ normal plugin enablement and reliable lifecycle/background fields. OpenCode
 currently supports only v1; installation rejects v2 before changing config
 because its plugin API changed. Future adapters should be added from actual
 schemas and fixtures, without guessing compatibility.
-
-The toolbar requires the updated foreground-launch marker before sending a command.
-A target with an old observer must be explicitly updated; it never falls back to
-creating another backend. Arguments following `launch codex` are passed to the TUI.
 
 ## Validation
 

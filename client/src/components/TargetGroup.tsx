@@ -249,7 +249,7 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
             <button onClick={() => setShowForm((v) => !v)}>{t.newSession}</button>
           </div>
           {target.kind !== 'winlocal' && <NativeObserverPanel targetId={target.id}
-            observers={observers} sessions={sessions ?? []} refresh={refresh} />}
+            observers={observers} refresh={refresh} />}
 
           {showForm && (
             <div className="create-form" onClick={(e) => e.stopPropagation()}>
