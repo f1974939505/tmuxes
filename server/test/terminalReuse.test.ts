@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
-vi.mock('node-pty', () => ({ spawn }));
+vi.mock('../src/ptyProcess.js', () => ({ spawnPty: spawn }));
 vi.mock('../src/exe.js', () => ({ resolveExecutable: (file: string) => file }));
 import { TerminalSession, track, existingTerminal, disposeAll } from '../src/ws/terminalSession.js';
 
@@ -32,4 +32,22 @@ describe('terminal reuse without additional SSH logins', () => {
     expect(existingTerminal('ssh-test', 'work')).toBeUndefined();
     expect(existingTerminal('ssh-test', 'renamed')).toBe(session);
   });
+  it('a slow viewer cannot pause the PTY or block a healthy viewer', () => {
+    let output: (s: string) => void = () => {};
+    const proc = { onData: (cb: typeof output) => { output = cb; }, onExit: vi.fn(), resize: vi.fn(), kill: vi.fn(), write: vi.fn(), pause: vi.fn() };
+    spawn.mockReturnValue(proc);
+    const slow = browser(), healthy = browser();
+    const session = new TerminalSession(slow, { id: 'local', kind: 'local', label: 'local' }, 'work', 80, 24);
+    track(session); session.attach(healthy, 80, 24);
+    slow.bufferedAmount = 5 * 1024 * 1024;
+    output('fresh output');
+    expect(slow.terminate).toHaveBeenCalledOnce();
+    expect(proc.pause).not.toHaveBeenCalled();
+    expect(proc.kill).not.toHaveBeenCalled();
+    expect(proc.resize).not.toHaveBeenCalled();
+    healthy.emit('message', Buffer.from('input'), true);
+    expect(proc.write).toHaveBeenCalledWith('input');
+    expect(healthy.send.mock.calls.some((args: any[]) => Buffer.isBuffer(args[0]) && args[0].toString() === 'fresh output')).toBe(true);
+  });
+
 });

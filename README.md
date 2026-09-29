@@ -281,6 +281,12 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 
 </details>
 
+### 终端卡顿诊断
+
+Windows 的每个 PTY 都在独立子进程中运行。原生缩放或关闭卡住时，只隔离该本地终端连接，不阻塞其他窗口；操作超时后不会自动重连 SSH。慢浏览器连接会被单独断开，PTY 继续读取输出。正常情况下按一次 Ctrl+C 即可退出；关闭阻塞时父进程限时清理自己创建的本地 PTY 进程树，不终止远端 tmux 会话。
+
+启动日志显示进程 PID 和日志文件路径。Windows 默认保存在 `%LOCALAPPDATA%\tmuxes\logs\server-<PID>.log`，其他平台为 `~/.local/state/tmuxes/logs/`；可用 `TMUXES_LOG_DIR` 指定目录。每进程日志约 1 MiB 轮换，保留一个 `.1` 备份；只记录连接、超时、退出等诊断，不记录终端输出。请在报告卡顿时提供该文件。
+
 ## 📋 更新日志
 
 ### 0.1.21

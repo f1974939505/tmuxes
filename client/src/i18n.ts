@@ -4,6 +4,7 @@ import type { AttentionReason, SessionInfo } from './types';
 
 export const TEXT = {
   zh: {
+    terminalOutputOverflow: '终端输出积压，已断开当前显示连接。任务继续运行，请手动重新连接。',
     nativeObservers: 'Agent 状态接入',
     nativeInstall: '安装 / 更新',
     nativeInstallHint: '在此目标安装原生 hooks / 插件，保留已有配置。之后可直接在终端输入原命令。Codex 需在 /hooks 信任，Hermes 需启用插件。',
@@ -171,6 +172,7 @@ export const TEXT = {
     justNow: '刚刚',
   },
   en: {
+    terminalOutputOverflow: 'Terminal output backlog: this viewer was disconnected. Work continues; reconnect manually.',
     nativeObservers: 'Agent status integration',
     nativeInstall: 'Install / update',
     nativeInstallHint: 'Install native hooks / plugins on this target, preserving existing configuration. Then type the usual agent command. Review Codex hooks in /hooks; enable the Hermes plugin.',

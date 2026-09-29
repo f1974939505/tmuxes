@@ -282,6 +282,12 @@ That machine's login locale isn't UTF-8 (common on HPC login nodes — `LANG=C` 
 
 </details>
 
+### Diagnosing terminal freezes
+
+On Windows, each PTY runs in a separate child process. A blocked native resize or close is isolated to that local terminal connection, rather than freezing other windows; operation timeouts never trigger automatic SSH reconnection. Slow browser viewers are detached individually while PTY output continues draining. One Ctrl+C normally exits; if cleanup blocks, the parent applies a deadline to its own local PTY process trees without terminating remote tmux sessions.
+
+Startup prints the process PID and diagnostic log path. Windows defaults to `%LOCALAPPDATA%\tmuxes\logs\server-<PID>.log`; other platforms use `~/.local/state/tmuxes/logs/`. Override the directory with `TMUXES_LOG_DIR`. Each process rotates its log at approximately 1 MiB with one `.1` backup. Logs contain connection, timeout, and shutdown diagnostics, never terminal output. Include this file when reporting a freeze.
+
 ## 📋 Changelog
 
 ### 0.1.21

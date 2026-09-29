@@ -49,6 +49,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
     let lastCols = initial.cols;
     let lastRows = initial.rows;
     let exited = false;
+    let pendingOutput = 0;
 
     const socket = createTmuxSocket(
       terminalSocketUrl(targetId, session, initial.cols, initial.rows),
@@ -57,7 +58,13 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           /* wait for bytes before declaring connected */
         },
         onOutput: (bytes) => {
-          handle.term.write(bytes);
+          pendingOutput += bytes.byteLength;
+          if (pendingOutput > 4 * 1024 * 1024) {
+            socket.close();
+            setStatus({ kind: 'error', message: tRef.current.terminalOutputOverflow });
+            return;
+          }
+          handle.term.write(bytes, () => { pendingOutput -= bytes.byteLength; });
           setStatus((s) => (s.kind === 'connecting' || s.kind === 'ssh' ? { kind: 'connected' } : s));
         },
         onControl: (msg) => {

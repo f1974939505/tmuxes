@@ -1,4 +1,4 @@
-import * as pty from 'node-pty';
+import { spawnPty, type PtyProcess } from '../ptyProcess.js';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -46,7 +46,7 @@ export class WinShellSession {
   constructor(
     public name: string,
     readonly shell: ShellDef,
-    private readonly ptyProc: pty.IPty,
+    private readonly ptyProc: PtyProcess,
     private readonly onClosed: (name: string) => void,
   ) {
     this.ptyProc.onData((d) => this.onData(d));
@@ -60,9 +60,10 @@ export class WinShellSession {
   private onData(data: string): void {
     this.lastActivity = nowEpoch();
     const buf = Buffer.from(data, 'utf8');
-    this.scroll.push(buf);
-    this.scrollBytes += buf.length;
-    while (this.scrollBytes > SCROLLBACK_CAP && this.scroll.length > 1) {
+    const tail = buf.length > SCROLLBACK_CAP ? Buffer.from(buf.subarray(-SCROLLBACK_CAP)) : buf;
+    this.scroll.push(tail);
+    this.scrollBytes += tail.length;
+    while ((this.scrollBytes > SCROLLBACK_CAP || this.scroll.length > 2048) && this.scroll.length > 1) {
       this.scrollBytes -= this.scroll.shift()!.length;
     }
     for (const c of this.clients) if (c.isOpen()) c.sendBinary(buf);
@@ -187,9 +188,9 @@ export class WinShellManager {
 
     const cols = opts.cols ?? 80;
     const rows = opts.rows ?? 24;
-    let proc: pty.IPty;
+    let proc: PtyProcess;
     try {
-      proc = pty.spawn(shell.file, shell.args, {
+      proc = spawnPty(shell.file, shell.args, {
         name: 'xterm-256color',
         cols,
         rows,

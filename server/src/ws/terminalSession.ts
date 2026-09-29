@@ -1,4 +1,4 @@
-import * as pty from 'node-pty';
+import { spawnPty, type PtyProcess } from '../ptyProcess.js';
 import { homedir } from 'node:os';
 import type { WebSocket } from 'ws';
 import type { Target } from '../targets.js';
@@ -6,23 +6,24 @@ import { attachArgv } from '../tmux/builder.js';
 import { resolveExecutable } from '../exe.js';
 import { classifySsh } from './sshState.js';
 import type { ClientControl, ServerControl } from './protocol.js';
+import { log } from '../logger.js';
 import { blockSshTarget } from '../sshManagement.js';
 
 const HEARTBEAT_MS = 30_000;
-const HIGH_WATER = 1 << 20; // 1 MiB buffered → pause the PTY
-const LOW_WATER = 1 << 18; // 256 KiB → resume
+const HIGH_WATER = 1 << 20; // bounded replay; slow viewers never pause the PTY
 const KILL_GRACE_MS = 2_000;
 
 /** One persistent PTY per target/session, shared across browser connections. */
 export class TerminalSession {
-  private readonly ptyProc: pty.IPty;
+  private readonly ptyProc: PtyProcess;
   private disposed = false;
   private clients = new Map<WebSocket, boolean>();
-  private replay: Buffer = Buffer.alloc(0);
+  private replay: Buffer[] = [];
+  private replayBytes = 0;
+  private cols: number;
+  private rows: number;
   key: string;
-  private paused = false;
   private heartbeat?: NodeJS.Timeout;
-  private drainTimer?: NodeJS.Timeout;
   private killTimer?: NodeJS.Timeout;
   /** Scan ssh output for failure/prompt states until the link looks healthy. */
   private sshScanBudget: number;
@@ -35,11 +36,12 @@ export class TerminalSession {
     rows: number,
   ) {
     this.key = `${target.id}/${session}`;
+    this.cols = cols; this.rows = rows;
     this.sshScanBudget = target.kind === 'ssh' ? 8192 : 0;
 
     const { file, args } = attachArgv(target, session);
     // node-pty on Windows needs a full exe path (no PATH/.exe resolution).
-    this.ptyProc = pty.spawn(resolveExecutable(file), args, {
+    this.ptyProc = spawnPty(resolveExecutable(file), args, {
       name: 'xterm-256color',
       cols,
       rows,
@@ -62,8 +64,8 @@ export class TerminalSession {
     ws.on('close', () => this.clients.delete(ws));
     ws.on('error', () => this.clients.delete(ws));
     ws.on('pong', () => this.clients.set(ws, true));
-    if (this.replay.length) ws.send(this.replay, { binary: true });
-    this.ptyProc.resize(cols, rows);
+    if (this.replay.length) ws.send(Buffer.concat(this.replay), { binary: true });
+    this.resize(cols, rows);
     ws.send(JSON.stringify({ type: 'ready', target: this.target.id, session: this.session }));
   }
 
@@ -106,7 +108,7 @@ export class TerminalSession {
       const rows = clampDim(msg.rows);
       if (cols && rows) {
         try {
-          this.ptyProc.resize(cols, rows);
+          this.resize(cols, rows);
         } catch {
           /* pty may have exited */
         }
@@ -116,24 +118,29 @@ export class TerminalSession {
     }
   }
 
-  private sendBinary(buf: Buffer): void {
-    if (this.disposed) return;
-    this.replay = Buffer.concat([this.replay, buf]).subarray(-HIGH_WATER);
-    for (const ws of this.clients.keys()) if (ws.readyState === ws.OPEN) ws.send(buf, { binary: true });
-    if (!this.paused && [...this.clients.keys()].some(ws => ws.bufferedAmount > HIGH_WATER)) {
-      this.paused = true;
-      this.ptyProc.pause();
-      this.drainTimer = setInterval(() => this.checkDrain(), 50);
-    }
+  private resize(cols: number, rows: number): void {
+    if (this.cols === cols && this.rows === rows) return;
+    this.cols = cols; this.rows = rows;
+    this.ptyProc.resize(cols, rows);
   }
 
-  private checkDrain(): void {
+  private sendBinary(buf: Buffer): void {
     if (this.disposed) return;
-    if ([...this.clients.keys()].every(ws => ws.bufferedAmount < LOW_WATER)) {
-      this.paused = false;
-      if (this.drainTimer) clearInterval(this.drainTimer);
-      this.drainTimer = undefined;
-      this.ptyProc.resume();
+    // Keep whole recent chunks, without copying 1 MiB for every small PTY write.
+    const tail = buf.length > HIGH_WATER ? Buffer.from(buf.subarray(-HIGH_WATER)) : buf;
+    this.replay.push(tail); this.replayBytes += tail.length;
+    while ((this.replayBytes > HIGH_WATER || this.replay.length > 2048) && this.replay.length > 1) {
+      this.replayBytes -= this.replay.shift()!.length;
+    }
+    for (const ws of this.clients.keys()) {
+      if (ws.readyState !== ws.OPEN) { this.clients.delete(ws); continue; }
+      if (ws.bufferedAmount + buf.length > 4 * HIGH_WATER) {
+        log.warn(`Slow terminal viewer detached from ${this.key}; PTY kept alive`);
+        this.clients.delete(ws);
+        ws.terminate();
+        continue;
+      }
+      ws.send(buf, { binary: true }, error => { if (error) this.clients.delete(ws); });
     }
   }
 
@@ -169,7 +176,6 @@ export class TerminalSession {
     this.disposed = true;
 
     if (this.heartbeat) clearInterval(this.heartbeat);
-    if (this.drainTimer) clearInterval(this.drainTimer);
 
     try {
       this.ptyProc.kill(); // SIGHUP → tmux client detaches; session keeps running
@@ -179,7 +185,7 @@ export class TerminalSession {
     // Force-kill if it lingers.
     this.killTimer = setTimeout(() => {
       try {
-        this.ptyProc.kill('SIGKILL');
+        if (process.platform !== 'win32') this.ptyProc.kill('SIGKILL');
       } catch {
         /* already gone */
       }

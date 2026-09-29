@@ -5,13 +5,15 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from './config.js';
-import { log } from './logger.js';
+import { log, logPath, flushLogs } from './logger.js';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { apiRouter } from './rest/router.js';
 import { attachWebSocket } from './ws/wsServer.js';
 import { disposeAll } from './ws/terminalSession.js';
 import { refreshTargets } from './targets.js';
 import { winShell } from './winshell/manager.js';
 import { openBrowser } from './openBrowser.js';
+import { stopPtyHosts } from './ptyProcess.js';
 import { disposeSshTargets } from './sshManagement.js';
 
 const app = express();
@@ -32,12 +34,20 @@ if (clientDist) {
   log.info(`serving client from ${clientDist}`);
 }
 
+const eventLoop = monitorEventLoopDelay({ resolution: 100 });
+eventLoop.enable();
+const diagnosticTimer = setInterval(() => {
+  const lag = eventLoop.max / 1e6;
+  if (lag > 2000) log.warn(`event loop stalled for ${Math.round(lag)}ms; rss=${process.memoryUsage().rss}`);
+  eventLoop.reset();
+}, 15_000);
+diagnosticTimer.unref();
 const server = createServer(app);
 attachWebSocket(server);
 
 server.listen(config.port, config.host, () => {
   const url = `http://${config.host}:${config.port}`;
-  log.info(`tmuxes listening on ${url}`);
+  log.info(`tmuxes listening on ${url}; pid=${process.pid}; log=${logPath}`);
   // Warm the target cache (discovers WSL distros on Windows) ahead of any WS.
   void refreshTargets().catch((e) => log.warn(`initial target discovery failed: ${e}`));
   // One-click launchers set TMUXES_OPEN=1 to pop the browser open.
@@ -48,7 +58,11 @@ let shuttingDown = false;
 function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
+  clearInterval(diagnosticTimer); eventLoop.disable();
   log.info(`received ${signal}, shutting down`);
+  // Arm first: native cleanup must never prevent the deadline from existing.
+  const deadline = setTimeout(() => process.exit(1), 8000);
+  deadline.unref();
   // Restore the console we put into raw mode (Windows Ctrl+C handling).
   try {
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
@@ -58,9 +72,13 @@ function shutdown(signal: string): void {
   disposeAll();
   disposeSshTargets();
   winShell.disposeAll();
-  server.close(() => process.exit(0));
-  // Don't wait forever for lingering sockets.
-  setTimeout(() => process.exit(0), 3000).unref();
+  server.close();
+  server.closeAllConnections();
+  void stopPtyHosts().then(async () => {
+    log.info('PTY hosts stopped; shutdown complete');
+    await flushLogs();
+    process.exit(0);
+  });
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));

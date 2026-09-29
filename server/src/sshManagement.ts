@@ -125,7 +125,7 @@ class SshManagementSession {
     this.child = spawn('ssh', connectArgsFor(target), { shell: false, windowsHide: true });
     this.child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk.toString('utf8')));
     this.child.stderr.on('data', (chunk: Buffer) => {
-      this.sshStderr += chunk.toString('utf8');
+      this.sshStderr = (this.sshStderr + chunk.toString('utf8')).slice(-65536);
     });
     this.child.on('error', (err) => {
       this.closed = true;
@@ -141,6 +141,7 @@ class SshManagementSession {
 
   dispose(): void {
     this.closed = true;
+    this.finishPending(255, null, 'ssh management channel closed');
     if (sessions.get(this.key) === this) failures.set(this.key, Date.now());
     try {
       this.child.kill('SIGKILL');
@@ -178,7 +179,7 @@ class SshManagementSession {
       }
 
       this.child.stdin.write(scriptFor(id, command, input), (err) => {
-        if (err) this.finishPending(null, null, err.message);
+        if (err) { this.finishPending(null, null, err.message); this.dispose(); }
       });
     });
   }
@@ -186,7 +187,11 @@ class SshManagementSession {
   private onStdout(chunk: string): void {
     this.stdout += chunk;
     const pending = this.pending;
-    if (!pending) return;
+    if (!pending) { this.stdout = this.stdout.slice(-65536); return; }
+    if (this.stdout.length > 16 * 1024 * 1024) {
+      this.finishPending(255, null, 'ssh response exceeded size limit');
+      this.dispose(); return;
+    }
 
     const begin = `__TMUXES_BEGIN_${pending.id}__\n`;
     const stderr = `\n__TMUXES_STDERR_${pending.id}__\n`;

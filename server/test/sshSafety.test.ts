@@ -58,4 +58,25 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     await ssh.runSshManagementCommand(target, 'ssh', argv);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
+  it('shutdown resolves pending reads without waiting for a child close event', async () => {
+    const child = fakeSsh(); spawn.mockReturnValue(child);
+    const ssh = await import('../src/sshManagement.js');
+    await ssh.connectSshTarget(target);
+    child.stdin.write.mockImplementation(() => true);
+    const pending = ssh.runSshManagementCommand(target, 'ssh', argv);
+    await Promise.resolve();
+    ssh.disposeSshTargets();
+    expect((await pending).code).toBe(255);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+  it('a failed channel write latches offline without another login', async () => {
+    const child = fakeSsh(); spawn.mockReturnValue(child);
+    const ssh = await import('../src/sshManagement.js');
+    await ssh.connectSshTarget(target);
+    child.stdin.write.mockImplementation((_script: string, callback: (error: Error) => void) => callback(new Error('broken pipe')));
+    await ssh.runSshManagementCommand(target, 'ssh', argv);
+    expect(ssh.sshTargetConnected(target)).toBe(false);
+    expect((await ssh.connectSshTarget(target)).stderr).toContain('locked');
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
 });

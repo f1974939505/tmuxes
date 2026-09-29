@@ -32,7 +32,12 @@ function attachWinShell(ws: WebSocket, target: Target, session: string, cols: nu
   const client: ShellClient = {
     id: nextClientId++,
     sendBinary: (buf) => {
-      if (ws.readyState === ws.OPEN) ws.send(buf, { binary: true });
+      if (ws.readyState !== ws.OPEN) return;
+      if (ws.bufferedAmount + buf.length > 4 * 1024 * 1024) {
+        log.warn('Slow native-shell viewer detached; PTY kept alive');
+        ws.terminate(); return;
+      }
+      ws.send(buf, { binary: true });
     },
     sendControl: (msg) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg), { binary: false });
@@ -106,7 +111,7 @@ function attachWinShell(ws: WebSocket, target: Target, session: string, cols: nu
 
 /** Attach the single /ws interactive-attach endpoint to the HTTP server. */
 export function attachWebSocket(server: HttpServer): void {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     let url: URL;
