@@ -71,6 +71,15 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(native.restore(data["state"]).snapshot(), ("unknown", ""))
         self.assertEqual(data["candidate"], "t")
 
+    def test_new_hook_invalidates_previous_completion_verification(self):
+        native.report("codex", {"session_id": "root", "hook_event_name": "Stop", "turn_id": "t"})
+        path = next(self.base.glob("*.json"))
+        data = json.loads(path.read_text())
+        data["verified"] = {"turn": "t", "at": 1}
+        path.write_text(json.dumps(data))
+        native.report("codex", {"session_id": "root", "hook_event_name": "Stop", "turn_id": "t"})
+        self.assertNotIn("verified", json.loads(path.read_text()))
+
     def test_direct_codex_completion_reaches_green_without_daemon(self):
         from types import SimpleNamespace
         transcript = self.base / "rollout.jsonl"

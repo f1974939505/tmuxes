@@ -91,7 +91,7 @@ function scriptFor(id: string, command: string, input?: string): string {
   const stderr = `__TMUXES_STDERR_${id}__`;
   const end = `__TMUXES_END_${id}__`;
   const run = input === undefined
-    ? `( ${command} )`
+    ? `( ${command} ) < /dev/null`
     : `base64 -d <<'${inputMarker}' | ( ${command} )\n${encodeInput(input)}\n${inputMarker}`;
 
   return [
@@ -123,6 +123,7 @@ class SshManagementSession {
     target: Target,
   ) {
     this.child = spawn('ssh', connectArgsFor(target), { shell: false, windowsHide: true });
+    this.child.stdin.on('error', () => this.dispose());
     this.child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk.toString('utf8')));
     this.child.stderr.on('data', (chunk: Buffer) => {
       this.sshStderr = (this.sshStderr + chunk.toString('utf8')).slice(-65536);
@@ -241,6 +242,7 @@ export function connectSshTarget(target: Target): Promise<CommandResult> {
   sessions.set(key, session);
   return session.run('true', undefined, { timeoutMs: 10_000 }).then(result => {
     session.ready = result.code === 0 && !session.closed;
+    if (!session.ready) session.dispose();
     return result;
   });
 }

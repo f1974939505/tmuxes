@@ -44,6 +44,8 @@ try {
   await until(async () => { try { return (await fetch(base, { signal: AbortSignal.timeout(500) })).ok; } catch { return false; } }, 'HTTP not ready');
   for (const name of ['smoke_one', 'smoke_two']) await request('/api/targets/winlocal/sessions', { name, shell: 'powershell' });
   const one = await attach('smoke_one'), two = await attach('smoke_two');
+  // Legal JSON with an invalid control shape must not crash the shared server.
+  for (const data of ['null', 'false', '[]', '"resize"']) one.ws.send(data);
   one.ws.send(Buffer.from("Write-Output ('MARK'+'ONE')\r"));
   two.ws.send(Buffer.from("Write-Output ('MARK'+'TWO')\r"));
   await until(() => one.output().includes('MARKONE') && two.output().includes('MARKTWO'), 'Input failed');

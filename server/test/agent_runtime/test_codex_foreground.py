@@ -74,6 +74,11 @@ class ForegroundTests(unittest.TestCase):
         self.event("task_complete")
         self.assertEqual(self.inspect(), ("running", ""))
 
+    def test_unmatched_child_stop_is_not_evidence_that_no_child_is_running(self):
+        self.hook("SubagentStop", agent_id="unseen", agent_transcript_path=None)
+        self.finish()
+        self.assertEqual(self.inspect(), ("background", ""))
+
     def test_active_paused_and_failed_goal_update_never_finish(self):
         self.hook("PreToolUse", tool_name="create_goal", tool_use_id="goal-call")
         self.hook("PostToolUse", tool_name="create_goal", tool_use_id="goal-call", tool_response={"status": "active"})

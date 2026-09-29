@@ -133,7 +133,7 @@ export async function createSession(
   if (opts.command && opts.command.length > 0) {
     const augmented = await prepareAgentCommand(target, opts.command);
     if (augmented.kind) {
-      await run(target, [
+      const marked = await run(target, [
         'set-option',
         '-t',
         name,
@@ -141,11 +141,14 @@ export async function createSession(
         AGENT_OPTION,
         agentInitialValue(augmented.kind),
       ]);
+      if (marked.code !== 0) throw new TmuxError(502, firstStderrLine(marked.stderr));
     }
     // Type the command literally, then press Enter. Two send-keys calls so the
     // command text can never be misparsed as a key name.
-    await run(target, ['send-keys', '-t', name, '-l', augmented.command]);
-    await run(target, ['send-keys', '-t', name, 'Enter']);
+    const sent = await run(target, ['send-keys', '-t', name, '-l', augmented.command]);
+    if (sent.code !== 0) throw new TmuxError(502, firstStderrLine(sent.stderr));
+    const entered = await run(target, ['send-keys', '-t', name, 'Enter']);
+    if (entered.code !== 0) throw new TmuxError(502, firstStderrLine(entered.stderr));
   }
 
   return { name };

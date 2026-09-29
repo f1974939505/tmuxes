@@ -232,6 +232,9 @@ def report(kind, payload):
         record = json.loads(path.read_text()) if path.exists() else {
             "key": key, "kind": kind, "id": sid, "scope": scope, "since": time.time(), "state": {}}
         state = restore(record["state"])
+        # Any newer hook invalidates the previous two-refresh completion proof,
+        # even when a continuation happens to reuse the same turn identifier.
+        record.pop("verified", None)
         if kind == "codex":
             record["endpoint"] = claim.get("endpoint") if claim else None
             record["backend"] = claim.get("backend") if claim else None

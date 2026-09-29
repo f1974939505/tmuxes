@@ -41,7 +41,8 @@ function sshControlDir(): string | null {
 export function sshControlPath(t: Target): string | null {
   const dir = sshControlDir();
   if (!dir) return null;
-  const key = `${sshDestination(t)}:${t.port ?? 22}:${t.id}`;
+  // Match the management channel's destination identity, not a UI entry ID.
+  const key = `${sshDestination(t)}:${t.port ?? 22}`;
   return join(dir, createHash('sha1').update(key).digest('hex'));
 }
 

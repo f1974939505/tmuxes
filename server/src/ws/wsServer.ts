@@ -73,6 +73,7 @@ function attachWinShell(ws: WebSocket, target: Target, session: string, cols: nu
     } catch {
       return;
     }
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return;
     if (msg.type === 'resize' && isValidDimension(msg.cols) && isValidDimension(msg.rows)) {
       shellSession.resize(msg.cols, msg.rows);
     } else if (msg.type === 'ping') {

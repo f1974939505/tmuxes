@@ -142,7 +142,7 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 Codex 前台完成绿灯由原生 hooks 跟踪工具、子 agent 和 goal，并在正常刷新时核对本机会话文件中同一回合的完成事件；`Stop` 本身不会直接报完成。未返回的后台 shell、尚未确认结束的子 agent、活动或暂停的 goal 会阻止绿灯。会话文件只读取末尾最多 256 KiB，不保存对话正文，不连接 daemon，也不增加 SSH 登录。文件格式变化、缺少事件或读取失败时保持未知。更新后在目标「Agent 状态接入」选择 Codex，点击「安装 / 更新」，在 `/hooks` 信任后重启 Codex，使采集覆盖完整生命周期；仅重启 tmuxes 不会更新目标 hooks。
 
-Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。暂停的 goal、后台工作、分页不完整或不可验证的结束均不会报完成。这是当前旁路方案的明确能力边界。
+Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。已观测到的暂停 goal、后台工作、分页不完整或不可验证的结束均不会报完成。前台采集只覆盖受支持 hooks 实际报告的工作，不发 hook 的特殊工具路径及手动 goal 变更不保证完整覆盖；绿灯不是对所有外部后台进程的证明。这是当前旁路方案的明确能力边界。
 
 采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。
 
@@ -288,6 +288,8 @@ npm test   # vitest：输入校验、列表解析、ssh/tmux/wsl 的 argv 形状
 Windows 的每个 PTY 都在独立子进程中运行。原生缩放或关闭卡住时，只隔离该本地终端连接，不阻塞其他窗口；操作超时后不会自动重连 SSH。慢浏览器连接会被单独断开，PTY 继续读取输出。正常情况下按一次 Ctrl+C 即可退出；关闭阻塞时父进程限时清理自己创建的本地 PTY 进程树，不终止远端 tmux 会话。
 
 启动日志显示进程 PID 和日志文件路径。Windows 默认保存在 `%LOCALAPPDATA%\tmuxes\logs\server-<PID>.log`，其他平台为 `~/.local/state/tmuxes/logs/`；可用 `TMUXES_LOG_DIR` 指定目录。每进程日志约 1 MiB 轮换，保留一个 `.1` 备份；只记录连接、超时、退出等诊断，不记录终端输出。请在报告卡顿时提供该文件。
+
+创建会话后，初始命令的发送或执行按键失败会明确报错，已创建的会话会保留。SSH 管理通道失败后保持离线，只有冷却期结束后的手动连接才会再次尝试；配置中目的地、用户和端口相同的条目共享连接标识。
 
 ## 📋 更新日志
 

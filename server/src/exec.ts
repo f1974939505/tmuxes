@@ -37,12 +37,10 @@ export function runCommand(file: string, args: string[], opts: RunOptions = {}):
     child.stdout.on('data', (d: Buffer) => outChunks.push(d));
     child.stderr.on('data', (d: Buffer) => errChunks.push(d));
 
-    if (opts.input !== undefined) {
-      child.stdin.on('error', () => {
-        /* ignore EPIPE if the child exits early */
-      });
-      child.stdin.end(opts.input);
-    }
+    child.stdin.on('error', () => {
+      /* ignore EPIPE if the child exits early */
+    });
+    child.stdin.end(opts.input);
 
     const done = (code: number | null, signal: NodeJS.Signals | null, extraErr?: string) => {
       if (settled) return;

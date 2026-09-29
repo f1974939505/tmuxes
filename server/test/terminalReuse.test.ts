@@ -46,6 +46,9 @@ describe('terminal reuse without additional SSH logins', () => {
     expect(proc.kill).not.toHaveBeenCalled();
     expect(proc.resize).not.toHaveBeenCalled();
     healthy.emit('message', Buffer.from('input'), true);
+    for (const frame of ['null', 'false', '[]', '"resize"']) {
+      expect(() => healthy.emit('message', Buffer.from(frame), false)).not.toThrow();
+    }
     expect(proc.write).toHaveBeenCalledWith('input');
     expect(healthy.send.mock.calls.some((args: any[]) => Buffer.isBuffer(args[0]) && args[0].toString() === 'fresh output')).toBe(true);
   });

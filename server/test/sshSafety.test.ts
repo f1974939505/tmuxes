@@ -8,10 +8,11 @@ vi.mock('node:child_process', () => ({ spawn }));
 function fakeSsh() {
   const child = new EventEmitter() as any;
   child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-  child.stdin = { write: vi.fn((script: string) => {
+  child.stdin = new EventEmitter();
+  child.stdin.write = vi.fn((script: string) => {
     const id = script.match(/__TMUXES_BEGIN_([a-f0-9]+)__/)! [1];
     queueMicrotask(() => child.stdout.emit('data', Buffer.from(`\n__TMUXES_BEGIN_${id}__\n0\n\n__TMUXES_STDERR_${id}__\n\n__TMUXES_END_${id}__\n`)));
-  }) };
+  });
   child.kill = vi.fn();
   return child;
 }
@@ -21,6 +22,23 @@ const argv = ['-o', 'BatchMode=yes', 'cluster', "'tmux'", "'list-sessions'"];
 beforeEach(() => { vi.resetModules(); spawn.mockReset(); });
 
 describe('SSH cluster iron rule (mock processes, no network)', () => {
+  it('stream errors latch offline even without a write callback', async () => {
+    const child = fakeSsh(); spawn.mockReturnValue(child);
+    const ssh = await import('../src/sshManagement.js');
+    await ssh.connectSshTarget(target);
+    expect(() => child.stdin.emit('error', new Error('EPIPE'))).not.toThrow();
+    expect(ssh.sshTargetConnected(target)).toBe(false);
+    expect((await ssh.connectSshTarget(target)).stderr).toContain('locked');
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+  it('commands cannot consume the shared management protocol as stdin', async () => {
+    const child = fakeSsh(); spawn.mockReturnValue(child);
+    const ssh = await import('../src/sshManagement.js');
+    await ssh.connectSshTarget(target);
+    await ssh.runSshManagementCommand(target, 'ssh', ['cluster', 'cat']);
+    expect(child.stdin.write.mock.calls.at(-1)[0]).toContain('( cat ) < /dev/null');
+    ssh.disposeSshTargets();
+  });
   it('ordinary reads never initiate SSH, even from many callers', async () => {
     const ssh = await import('../src/sshManagement.js');
     await Promise.all(Array.from({ length: 30 }, () => ssh.runSshManagementCommand(target, 'ssh', argv)));

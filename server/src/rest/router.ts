@@ -94,6 +94,21 @@ async function requireSessionScopedPath(
 
 export const apiRouter = Router();
 
+// Invalidate after mutations too: a concurrent GET may have repopulated the
+// cache while a create/rename/install operation was still running.
+apiRouter.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    const match = /^\/targets\/([^/]+)/.exec(req.path);
+    if (match) {
+      try {
+        const id = decodeURIComponent(match[1]);
+        res.once('finish', () => invalidateSessionSnapshot(id));
+      } catch { /* malformed paths are rejected by the route parser */ }
+    }
+  }
+  next();
+});
+
 apiRouter.post('/targets/:id/connect', wrap(async (req, res) => {
   const target = requireTarget(req);
   if (target.kind !== 'ssh') throw new TmuxError(400, 'Not an SSH target');

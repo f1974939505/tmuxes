@@ -92,6 +92,7 @@ def hook(record, state, p):
         state.apply({"type": "task.start", "id": "child:" + child})
     elif event == "SubagentStop":
         child = str(p.get("agent_id"))
+        state.apply({"type": "task.start", "id": "child:" + child})
         tracker["children"][child] = p.get("agent_transcript_path")
         # SubagentStop itself can be blocked by another hook too.
     elif event == "Stop":

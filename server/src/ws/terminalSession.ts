@@ -103,6 +103,7 @@ export class TerminalSession {
     } catch {
       return; // ignore malformed control frames
     }
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return;
     if (msg.type === 'resize') {
       const cols = clampDim(msg.cols);
       const rows = clampDim(msg.rows);
