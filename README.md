@@ -140,6 +140,8 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 右上角 Codex 按钮直接向当前 pane 输入 `codex --no-daemon`，由当前交互 shell 执行。启动无需 Python、接入安装或额外后端；tmux 保持界面常驻。左侧接入面板只管理可选的状态采集，不再提供启动入口。原有 daemon 不会被自动停止。
 
+Codex 前台完成绿灯由原生 hooks 跟踪工具、子 agent 和 goal，并在正常刷新时核对本机会话文件中同一回合的完成事件；`Stop` 本身不会直接报完成。未返回的后台 shell、尚未确认结束的子 agent、活动或暂停的 goal 会阻止绿灯。会话文件只读取末尾最多 256 KiB，不保存对话正文，不连接 daemon，也不增加 SSH 登录。文件格式变化、缺少事件或读取失败时保持未知。更新后在目标「Agent 状态接入」选择 Codex，点击「安装 / 更新」，在 `/hooks` 信任后重启 Codex，使采集覆盖完整生命周期；仅重启 tmuxes 不会更新目标 hooks。
+
 Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。暂停的 goal、后台工作、分页不完整或不可验证的结束均不会报完成。这是当前旁路方案的明确能力边界。
 
 采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。

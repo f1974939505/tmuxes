@@ -71,6 +71,25 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(native.restore(data["state"]).snapshot(), ("unknown", ""))
         self.assertEqual(data["candidate"], "t")
 
+    def test_direct_codex_completion_reaches_green_without_daemon(self):
+        from types import SimpleNamespace
+        transcript = self.base / "rollout.jsonl"
+        bound = {"proof": "foreground-direct-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "direct_codex_binding", return_value=bound):
+            for event in ("SessionStart", "UserPromptSubmit", "Stop"):
+                native.report("codex", {"session_id": "root", "hook_event_name": event,
+                    "turn_id": "t", "transcript_path": str(transcript)})
+        transcript.write_text(json.dumps({"type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t"}}) + "\n")
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True), \
+             patch.object(native, "ReadOnlyCodex") as daemon:
+            self.assertEqual(native.snapshot()["observers"][0]["state"], "settling")
+            with patch.object(native.time, "time", return_value=native.time.time() + 2):
+                observation = native.snapshot()["observers"][0]
+            daemon.assert_not_called()
+        self.assertEqual((observation["state"], observation["reason"]), ("idle", "done"))
+
     def test_shared_codex_never_binds_even_with_plausible_ancestry(self):
         with patch.object(native, "binding", return_value={"pid": 10, "pane": "%1"}):
             native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})

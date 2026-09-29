@@ -19,6 +19,7 @@ import secrets
 from claude import Claude
 from state import State
 from websocket import WebSocket
+import codex_foreground
 
 KINDS = ("claude", "codex", "opencode", "hermes")
 STORE = Path.home() / ".cache/tmuxes/observations"
@@ -252,7 +253,9 @@ def report(kind, payload):
             observer.children = {x[6:] for x in state.tasks if x.startswith("child:")}
             observer.handle(clean(payload))
         elif kind == "codex":
-            if event == "SessionStart":
+            if bound and bound.get("proof") in ("foreground-codex-v1", "foreground-direct-v1"):
+                codex_foreground.hook(record, state, payload)
+            elif event == "SessionStart":
                 state.apply({"type": "reset"})
                 record.pop("candidate", None)
                 record.pop("turn", None)
@@ -420,6 +423,9 @@ def snapshot():
                 state = restore(record["state"])
                 capability = "events"
                 foreground = (record.get("binding") or {}).get("proof") in ("foreground-codex-v1", "foreground-direct-v1")
+                if record["kind"] == "codex" and foreground:
+                    state = codex_foreground.inspect(record, state)
+                    capability = "foreground hooks + completion record"
                 if record["kind"] == "codex" and not foreground:
                     try:
                         home = record["scope"]
