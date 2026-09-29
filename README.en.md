@@ -296,6 +296,14 @@ If typing an initial command or sending Enter fails after session creation, the 
 
 ## 📋 Changelog
 
+### 0.1.22
+
+- **Terminal stability:** isolate Windows PTYs in child processes, bound output queues, and complete shutdown cleanup so one terminal cannot freeze all windows; add rotating local diagnostic logs.
+- **Codex completion:** combine foreground hooks with matching turn-complete records while retaining background-task and subagent checks. Update the target Codex integration, trust `/hooks`, and restart Codex.
+- **Logic consistency:** fix control-message validation, management stdin, SSH stream errors, connection identity, stale completion evidence, command-launch errors, and session-cache races.
+- **Manual SSH retry:** remove the long cooldown while keeping automatic reconnect disabled; coalesce concurrent clicks and ignore late failures from old connections.
+- **Collapsed by default:** all sidebar target groups start collapsed, including Windows Local and WSL Ubuntu.
+
 ### 0.1.21
 
 - **Direct foreground Codex:** the toolbar types `codex --no-daemon` into the interactive shell. Launching requires neither Python nor an extra app-server; the duplicate sidebar launch control is removed.
@@ -305,7 +313,7 @@ If typing an initial command or sending Enter fails after session creation, the 
 - **SSH constraints preserved:** management requests reuse an explicitly established connection; no automatic connection, reconnection, or per-refresh SSH login.
 
 ### 0.1.20
-- **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches prevent polling and other browsers from automatically reconnecting. The original ten-minute manual-retry cooldown is removed in the current development version; concurrent clicks still coalesce.
+- **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches prevent polling and other browsers from automatically reconnecting. The original ten-minute manual-retry cooldown is removed in the 0.1.22; concurrent clicks still coalesce.
 - **Reuse terminal connections:** refreshes, tab switches and multiple browsers share the existing target/session terminal; session snapshots are coalesced and cached across browsers.
 - **Verified Codex ownership:** shared-daemon environment/process guesses no longer bind panes. Launch bound Codex uses a private official backend with verified launch identity and ancestry. TUI exit unbinds the pane while preserving background work. Install / update the integration again to deploy the new runtime.
 - **Exact pane display:** the panel identifies session/window/pane; sidebar state follows the active pane instead of mixing other windows.
