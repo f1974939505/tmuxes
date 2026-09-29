@@ -22,10 +22,7 @@ function isAttentionReason(v: string | undefined): v is AttentionReason {
 }
 
 export function TargetGroup({ target, selection, nowMs, select }: Props) {
-  // Expand the "local-ish" targets by default (local tmux, WSL, native shells).
-  const [expanded, setExpanded] = useState(
-    target.kind === 'local' || target.kind === 'wsl' || target.kind === 'winlocal',
-  );
+  const [expanded, setExpanded] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [observers, setObservers] = useState<NativeObserver[]>([]);
   const [loading, setLoading] = useState(false);

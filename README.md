@@ -118,6 +118,8 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 ## 🔔 Agent 状态与提醒
 
+打开或刷新页面时，左侧所有目标栏默认收缩，包括 Windows Local、WSL Ubuntu、本地 tmux 和 SSH 目标；点击栏标题后展开。
+
 在目标的「Agent 状态接入」面板选择 agent，点击「安装 / 更新」一次。目标需要 **Python 3.9+ (`python3`)**、tmux 和已安装的 agent。安装保留已有配置并备份被修改的 hooks 文件；重启 agent 后，可以直接在 tmux pane 输入 `claude`、`codex`、`opencode` 或 `hermes`，不需要通过右上角按钮启动。按钮现在也只输入原始命令，不注入 `--remote`、`-c` 或启动包装器。
 
 - **运行中 / 后台工作**：根任务仍执行，或关联的后台 shell、monitor、子 agent、goal、定时唤醒尚未结束。

@@ -118,6 +118,8 @@ npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-
 
 ## 🔔 Agent status and notifications
 
+On page load or refresh, all sidebar target groups start collapsed, including Windows Local, WSL Ubuntu, local tmux, and SSH targets. Click a group header to expand it.
+
 Open **Agent status integration** on a target, select an agent, and click **Install / update** once. The target needs **Python 3.9+ (`python3`)**, tmux, and the installed agent. Installation preserves existing configuration and backs up modified hook files. Restart the agent, then type ordinary `claude`, `codex`, `opencode`, or `hermes` commands in a tmux pane. Toolbar buttons also enter the original command, without injected `--remote`, `-c`, or a launch wrapper.
 
 - **Running / background**: the root is working, or associated shells, monitors, subagents, goals, or scheduled wakeups remain.
