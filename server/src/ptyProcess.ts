@@ -53,7 +53,10 @@ export class IsolatedPty implements PtyProcess {
     this.events.on('exit', listener);
     return { dispose: () => { this.events.off('exit', listener); } };
   };
-  write(data: string): void { this.enqueue('write', { data }); }
+  write(data: string | Buffer): void {
+    this.enqueue('write', { data: Buffer.isBuffer(data) ? data.toString('base64') : data,
+      binary: Buffer.isBuffer(data), bytes: Buffer.byteLength(data) });
+  }
   resize(cols: number, rows: number): void {
     // One pending resize at most; input ordering is otherwise preserved.
     this.queue = this.queue.filter(x => x.type !== 'resize');
@@ -61,7 +64,7 @@ export class IsolatedPty implements PtyProcess {
   }
   private enqueue(type: string, fields: Record<string, unknown>): void {
     if (this.closing) return;
-    if (type === 'write') this.queuedBytes += Buffer.byteLength(fields.data as string);
+    if (type === 'write') this.queuedBytes += fields.bytes as number;
     if (this.queuedBytes > 256 * 1024 || this.queue.length > 1024) {
       log.warn(`PTY host ${this.child.pid} input queue overflow; detaching local client`);
       this.kill(); return;
@@ -71,7 +74,7 @@ export class IsolatedPty implements PtyProcess {
   private flush(): void {
     if (this.closing || this.pending || !this.queue.length) return;
     const request = this.queue.shift()!;
-    if (request.type === 'write') this.queuedBytes -= Buffer.byteLength(request.data as string);
+    if (request.type === 'write') this.queuedBytes -= request.bytes as number;
     this.pending = { id: request.id, timer: setTimeout(() => {
       log.warn(`PTY host ${this.child.pid} ${request.type} timed out; no automatic reconnect`);
       this.kill();

@@ -1,3 +1,4 @@
+import { rawInput } from './rawInput.js';
 import { spawnPty, type PtyProcess } from '../ptyProcess.js';
 import { homedir } from 'node:os';
 import type { WebSocket } from 'ws';
@@ -7,10 +8,11 @@ import { resolveExecutable } from '../exe.js';
 import { classifySsh } from './sshState.js';
 import type { ClientControl, ServerControl } from './protocol.js';
 import { log } from '../logger.js';
+import { TerminalScreen } from '../terminalScreen.js';
 import { blockSshTarget, sshConnectionGeneration } from '../sshManagement.js';
 
 const HEARTBEAT_MS = 30_000;
-const HIGH_WATER = 1 << 20; // bounded replay; slow viewers never pause the PTY
+const HIGH_WATER = 1 << 20; // slow viewers never pause the PTY
 const KILL_GRACE_MS = 2_000;
 
 /** One persistent PTY per target/session, shared across browser connections. */
@@ -18,8 +20,8 @@ export class TerminalSession {
   private readonly ptyProc: PtyProcess;
   private disposed = false;
   private clients = new Map<WebSocket, boolean>();
-  private replay: Buffer[] = [];
-  private replayBytes = 0;
+  private pendingClients = new Set<WebSocket>();
+  private readonly screen: TerminalScreen;
   private cols: number;
   private rows: number;
   key: string;
@@ -39,6 +41,7 @@ export class TerminalSession {
     this.key = `${target.id}/${session}`;
     this.sshGeneration = sshConnectionGeneration(target);
     this.cols = cols; this.rows = rows;
+    this.screen = new TerminalScreen(cols, rows);
     this.sshScanBudget = target.kind === 'ssh' ? 8192 : 0;
 
     const { file, args } = attachArgv(target, session);
@@ -61,14 +64,21 @@ export class TerminalSession {
   /** Browser remounts and tab switches reuse the PTY instead of reopening SSH. */
   attach(ws: WebSocket, cols: number, rows: number): void {
     if (this.disposed) { ws.close(); return; }
-    this.clients.set(ws, true);
-    ws.on('message', (data, isBinary) => this.onClientMessage(data, isBinary));
-    ws.on('close', () => this.clients.delete(ws));
-    ws.on('error', () => this.clients.delete(ws));
-    ws.on('pong', () => this.clients.set(ws, true));
-    if (this.replay.length) ws.send(Buffer.concat(this.replay), { binary: true });
+    ws.on('message', (data, isBinary) => { if (this.clients.has(ws)) this.onClientMessage(data, isBinary); });
+    this.pendingClients.add(ws);
+    const detach = () => { this.clients.delete(ws); this.pendingClients.delete(ws); };
+    ws.on('close', detach);
+    ws.on('error', detach);
+    ws.on('pong', () => { if (this.clients.has(ws)) this.clients.set(ws, true); });
     this.resize(cols, rows);
-    ws.send(JSON.stringify({ type: 'ready', target: this.target.id, session: this.session }));
+    this.screen.snapshot(screen => {
+      if (this.disposed) return;
+      if (!this.pendingClients.delete(ws) || ws.readyState !== ws.OPEN) return;
+      if (!screen) { ws.close(1011, 'Terminal snapshot unavailable'); return; }
+      ws.send(JSON.stringify({ type: 'restore', ...screen }));
+      this.clients.set(ws, true);
+      ws.send(JSON.stringify({ type: 'ready', target: this.target.id, session: this.session }));
+    });
   }
 
   rename(session: string): void {
@@ -82,7 +92,10 @@ export class TerminalSession {
       const ssh = classifySsh(data);
       if (ssh) this.sendControl({ type: 'ssh', state: ssh.state, message: ssh.message });
     }
-    this.sendBinary(Buffer.from(data, 'utf8'));
+    if (!this.screen.write(data, () => this.sendBinary(Buffer.from(data, 'utf8')))) {
+      log.warn(`Terminal parser overloaded: ${this.key}; no automatic reconnect`);
+      this.dispose();
+    }
   }
 
   private onPtyExit(exitCode: number | null): void {
@@ -96,7 +109,7 @@ export class TerminalSession {
     if (this.disposed) return;
     if (isBinary) {
       // Raw keystrokes → straight into the PTY.
-      this.ptyProc.write(toBufferString(data));
+      this.ptyProc.write(rawInput(data));
       return;
     }
     let msg: ClientControl;
@@ -124,17 +137,14 @@ export class TerminalSession {
   private resize(cols: number, rows: number): void {
     if (this.cols === cols && this.rows === rows) return;
     this.cols = cols; this.rows = rows;
-    this.ptyProc.resize(cols, rows);
+    this.screen.resize(cols, rows, () => {
+      this.sendControl({ type: 'geometry', cols, rows });
+      try { this.ptyProc.resize(cols, rows); } catch { /* PTY may have exited */ }
+    });
   }
 
   private sendBinary(buf: Buffer): void {
     if (this.disposed) return;
-    // Keep whole recent chunks, without copying 1 MiB for every small PTY write.
-    const tail = buf.length > HIGH_WATER ? Buffer.from(buf.subarray(-HIGH_WATER)) : buf;
-    this.replay.push(tail); this.replayBytes += tail.length;
-    while ((this.replayBytes > HIGH_WATER || this.replay.length > 2048) && this.replay.length > 1) {
-      this.replayBytes -= this.replay.shift()!.length;
-    }
     for (const ws of this.clients.keys()) {
       if (ws.readyState !== ws.OPEN) { this.clients.delete(ws); continue; }
       if (ws.bufferedAmount + buf.length > 4 * HIGH_WATER) {
@@ -166,7 +176,8 @@ export class TerminalSession {
 
   private closeWs(code: number, reason: string): void {
     try {
-      for (const ws of this.clients.keys()) if (ws.readyState === ws.OPEN) ws.close(code, reason);
+      for (const ws of [...this.clients.keys(), ...this.pendingClients]) if (ws.readyState === ws.OPEN) ws.close(code, reason);
+      this.pendingClients.clear();
       this.clients.clear();
     } catch {
       /* ignore */
@@ -177,6 +188,7 @@ export class TerminalSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.screen.dispose();
 
     if (this.heartbeat) clearInterval(this.heartbeat);
 

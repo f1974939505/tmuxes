@@ -244,6 +244,8 @@ npm test   # vitest: input validation, list parsing, ssh/tmux/wsl argv shapes
 
 ### Scroll & copy (most used)
 
+When switching or reopening sessions, tmuxes restores the screen, cursor, full-screen and mouse modes from retained terminal state instead of replaying a raw output tail. Geometry changes are applied in output order, and mouse input preserves its original protocol bytes. Restoration reuses the existing connection without another SSH login. Scrolling inside full-screen applications is controlled by the application or tmux mouse settings.
+
 **Copy to your system clipboard:** click **Select text** above the terminal, drag to select, then click **Copy** or press `Ctrl+C` / `Ctrl+Shift+C` (`⌘C` on macOS). No Shift-drag is needed. This view is a snapshot of the current terminal buffer when opened; the task keeps running. Click **Return to terminal** or press `Esc` to return to the live terminal; reopen it for a fresh snapshot. It is not full session history: full-screen programs may expose only their current screen, and tmux history not loaded into the browser is not included.
 
 In interactive mode, `Ctrl+C` copies when text is selected and still interrupts the program otherwise; `Ctrl+Shift+C` is reserved for copying. Enable **Automatically copy mouse selections** in Settings if desired (off by default). A failed copy displays a message; the right-click menu remains available. For tmux's own scrolling and copy buffer, use the table below:

@@ -15,7 +15,7 @@ function flush(): void {
   send({ type: 'data', data }, () => { sending = false; flush(); });
 }
 process.on('message', (raw: unknown) => {
-  const msg = raw as { id: number; type: string; file: string; args: string[]; options: pty.IPtyForkOptions; data: string; cols: number; rows: number };
+  const msg = raw as { id: number; type: string; file: string; args: string[]; options: pty.IPtyForkOptions; data: string; binary?: boolean; cols: number; rows: number };
   try {
     if (msg.type === 'spawn') {
       terminal = pty.spawn(msg.file, msg.args, msg.options);
@@ -30,7 +30,7 @@ process.on('message', (raw: unknown) => {
       terminal.onExit(({ exitCode }) => {
         if (!ended) { ended = true; send({ type: 'exit', code: exitCode }, () => process.exit(0)); }
       });
-    } else if (msg.type === 'write') terminal?.write(msg.data);
+    } else if (msg.type === 'write') terminal?.write(msg.binary ? Buffer.from(msg.data, 'base64') : msg.data);
     else if (msg.type === 'resize') terminal?.resize(msg.cols, msg.rows);
     else if (msg.type === 'kill') { terminal?.kill(); process.exit(0); }
     send({ type: 'ack', id: msg.id });

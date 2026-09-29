@@ -5,8 +5,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 export interface TerminalHandle {
   term: Terminal;
   fit: FitAddon;
-  /** Fit to the container and return the resulting geometry (or null if size 0). */
-  refit(): { cols: number; rows: number } | null;
+  /** Measure geometry; apply only before connecting, then wait for ordered server geometry. */
+  refit(apply?: boolean): { cols: number; rows: number } | null;
   dispose(): void;
 }
 
@@ -42,9 +42,10 @@ export function createTerminal(container: HTMLElement, fontSize: number): Termin
   term.loadAddon(new WebLinksAddon());
   term.open(container);
 
-  function refit(): { cols: number; rows: number } | null {
+  function refit(apply = true): { cols: number; rows: number } | null {
     if (container.clientWidth === 0 || container.clientHeight === 0) return null;
     try {
+      if (!apply) return fit.proposeDimensions() ?? null;
       fit.fit();
     } catch {
       return null;

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { IsolatedPty, stopPtyHosts } from '../src/ptyProcess.js';
 const fixture = new URL('./fixtures/pty-stall.mjs', import.meta.url);
-function output(pty: IsolatedPty, message: string): Promise<string> {
+function output(pty: IsolatedPty, message: string | Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { listener.dispose(); reject(new Error('output timed out')); }, 4000);
     const listener = pty.onData(data => { clearTimeout(timer); listener.dispose(); resolve(data); });
@@ -16,6 +16,7 @@ describe('PTY host isolation (real child processes, no SSH)', () => {
     expect(await output(broken, 'ready')).toBe('ready');
     broken.resize(100, 30);
     expect(await output(healthy, 'still interactive')).toBe('still interactive');
+    expect(await output(healthy, Buffer.from([27, 91, 77, 96, 200, 240]))).toBe('1b5b4d60c8f0');
     const begin = Date.now();
     broken.kill();
     await broken.stopped;

@@ -191,6 +191,8 @@ export interface Selection {
 export type SshState = 'hostkey' | 'authfail' | 'refused' | 'timeout';
 
 export type ServerControl =
+  | { type: 'restore'; cols: number; rows: number; data: string }
+  | { type: 'geometry'; cols: number; rows: number }
   | { type: 'ready'; target: string; session: string }
   | { type: 'ssh'; state: SshState; message: string }
   | { type: 'error'; message: string }

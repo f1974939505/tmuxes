@@ -68,9 +68,15 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           setStatus((s) => (s.kind === 'connecting' || s.kind === 'ssh' ? { kind: 'connected' } : s));
         },
         onControl: (msg) => {
-          if (msg.type === 'ready') {
-            // Re-assert geometry now that the PTY exists (matters for ssh).
-            socket.resize(handle.term.cols, handle.term.rows);
+          if (msg.type === 'restore') {
+            // Geometry changes must stay ordered with xterm's asynchronous
+            // parser; resizing before older bytes parse corrupts TUI layout.
+            handle.term.write('', () => handle.term.resize(msg.cols, msg.rows));
+            handle.term.write(msg.data);
+          } else if (msg.type === 'geometry') {
+            handle.term.write('', () => handle.term.resize(msg.cols, msg.rows));
+          } else if (msg.type === 'ready') {
+            setStatus({ kind: 'connected' });
           } else if (msg.type === 'ssh') {
             setStatus((s) => (s.kind === 'connecting' ? { kind: 'ssh', message: msg.message } : s));
           } else if (msg.type === 'error') {
@@ -102,6 +108,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
     socketRef.current = socket;
     const dataSub = handle.term.onData((d) => socket.sendInput(d));
+    const binarySub = handle.term.onBinary((d) => socket.sendBinaryInput(d));
     handle.term.focus();
 
     // Debounced fit on container resize → push new geometry to the PTY.
@@ -109,7 +116,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
     const observer = new ResizeObserver(() => {
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
-        const geo = handle.refit();
+        const geo = handle.refit(false);
         if (geo && (geo.cols !== lastCols || geo.rows !== lastRows)) {
           lastCols = geo.cols;
           lastRows = geo.rows;
@@ -123,6 +130,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
       window.clearTimeout(resizeTimer);
       observer.disconnect();
       dataSub.dispose();
+      binarySub.dispose();
       socket.close();
       handle.dispose();
       handleRef.current = null;
@@ -136,7 +144,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
     if (!handle) return;
     if (handle.term.options.fontSize === fontSize) return;
     handle.term.options.fontSize = fontSize;
-    const geo = handle.refit();
+    const geo = handle.refit(false);
     if (geo) socketRef.current?.resize(geo.cols, geo.rows);
   }, [fontSize]);
 

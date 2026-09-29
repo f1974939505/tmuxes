@@ -3,6 +3,7 @@ import type { ServerControl } from '../types';
 export interface TmuxSocket {
   /** Send raw keystrokes (as a binary frame, per the server protocol). */
   sendInput(data: string): void;
+  sendBinaryInput(data: string): void;
   resize(cols: number, rows: number): void;
   close(): void;
 }
@@ -44,6 +45,9 @@ export function createTmuxSocket(url: string, cb: TmuxSocketCallbacks): TmuxSock
     sendInput(data) {
       // Binary frame so the server routes it straight to the PTY.
       if (ws.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
+    },
+    sendBinaryInput(data) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(Uint8Array.from(data, c => c.charCodeAt(0) & 255));
     },
     resize(cols, rows) {
       sendJson({ type: 'resize', cols, rows });

@@ -1,3 +1,4 @@
+import { rawInput } from './rawInput.js';
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -54,17 +55,17 @@ function attachWinShell(ws: WebSocket, target: Target, session: string, cols: nu
 
   let shellSession;
   try {
-    shellSession = winShell.attachOrCreate(session, cols, rows, client);
+    shellSession = winShell.attachOrCreate(session, cols, rows, client,
+      () => client.sendControl({ type: 'ready', target: target.id, session }));
   } catch (e) {
     client.sendControl({ type: 'error', message: e instanceof Error ? e.message : 'failed to start shell' });
     client.close(1011, 'shell error');
     return;
   }
-  client.sendControl({ type: 'ready', target: target.id, session });
 
   ws.on('message', (data, isBinary) => {
     if (isBinary) {
-      shellSession.write(rawToString(data));
+      shellSession.write(rawInput(data));
       return;
     }
     let msg: ClientControl;

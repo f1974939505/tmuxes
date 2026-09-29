@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { isWindows } from '../platform.js';
 import { log } from '../logger.js';
+import { TerminalScreen } from '../terminalScreen.js';
 import type { ServerControl } from '../ws/protocol.js';
 import type { SessionInfo, WindowInfo } from '../tmux/formats.js';
 
@@ -25,8 +26,6 @@ export interface ShellClient {
   close(code: number, reason: string): void;
 }
 
-const SCROLLBACK_CAP = 256 * 1024; // bytes of history replayed to a new client
-
 function nowEpoch(): number {
   return Math.floor(Date.now() / 1000);
 }
@@ -37,8 +36,8 @@ function nowEpoch(): number {
 export class WinShellSession {
   readonly created = nowEpoch();
   private clients = new Set<ShellClient>();
-  private scroll: Buffer[] = [];
-  private scrollBytes = 0;
+  private pendingClients = new Set<ShellClient>();
+  private readonly screen: TerminalScreen;
   private disposed = false;
   /** epoch seconds of last pty output — drives idle/attention detection */
   private lastActivity = nowEpoch();
@@ -48,7 +47,9 @@ export class WinShellSession {
     readonly shell: ShellDef,
     private readonly ptyProc: PtyProcess,
     private readonly onClosed: (name: string) => void,
+    cols = 80, rows = 24,
   ) {
+    this.screen = new TerminalScreen(cols, rows);
     this.ptyProc.onData((d) => this.onData(d));
     this.ptyProc.onExit(({ exitCode }) => this.onExit(exitCode));
   }
@@ -60,46 +61,51 @@ export class WinShellSession {
   private onData(data: string): void {
     this.lastActivity = nowEpoch();
     const buf = Buffer.from(data, 'utf8');
-    const tail = buf.length > SCROLLBACK_CAP ? Buffer.from(buf.subarray(-SCROLLBACK_CAP)) : buf;
-    this.scroll.push(tail);
-    this.scrollBytes += tail.length;
-    while ((this.scrollBytes > SCROLLBACK_CAP || this.scroll.length > 2048) && this.scroll.length > 1) {
-      this.scrollBytes -= this.scroll.shift()!.length;
-    }
-    for (const c of this.clients) if (c.isOpen()) c.sendBinary(buf);
+    if (!this.screen.write(data, () => {
+      for (const c of this.clients) if (c.isOpen()) c.sendBinary(buf);
+    })) this.dispose();
   }
 
   private onExit(code: number | null): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const c of this.clients) {
+    this.screen.dispose();
+    for (const c of [...this.clients, ...this.pendingClients]) {
       c.sendControl({ type: 'exit', code });
       c.close(1000, 'shell exited');
     }
     this.clients.clear();
+    this.pendingClients.clear();
     this.onClosed(this.name);
   }
 
-  /** Add a client: replay history, then it's live. Caller sends `ready` after. */
-  attach(client: ShellClient): void {
-    if (this.scroll.length) client.sendBinary(Buffer.concat(this.scroll));
-    this.clients.add(client);
+  /** Restore terminal state before streaming live output and sending ready. */
+  attach(client: ShellClient, ready?: () => void): void {
+    this.pendingClients.add(client);
+    this.screen.snapshot(screen => {
+      if (this.disposed) return;
+      if (!this.pendingClients.delete(client) || !client.isOpen()) return;
+      if (!screen) { this.detach(client); client.close(1011, 'Terminal snapshot unavailable'); return; }
+      client.sendControl({ type: 'restore', ...screen });
+      this.clients.add(client);
+      ready?.();
+    });
   }
 
   detach(client: ShellClient): void {
+    this.pendingClients.delete(client);
     this.clients.delete(client); // pty stays alive — persistence across reconnects
   }
 
-  write(data: string): void {
+  write(data: string | Buffer): void {
     if (!this.disposed) this.ptyProc.write(data);
   }
 
   resize(cols: number, rows: number): void {
-    try {
-      this.ptyProc.resize(cols, rows);
-    } catch {
-      /* pty may have exited */
-    }
+    this.screen.resize(cols, rows, () => {
+      for (const c of this.clients) if (c.isOpen()) c.sendControl({ type: 'geometry', cols, rows });
+      try { this.ptyProc.resize(cols, rows); } catch { /* pty exited */ }
+    });
   }
 
   info(): SessionInfo {
@@ -118,13 +124,15 @@ export class WinShellSession {
       return;
     }
     this.disposed = true;
+    this.screen.dispose();
     try {
       this.ptyProc.kill();
     } catch {
       /* already gone */
     }
-    for (const c of this.clients) c.close(1000, 'killed');
+    for (const c of [...this.clients, ...this.pendingClients]) c.close(1000, 'killed');
     this.clients.clear();
+    this.pendingClients.clear();
     this.onClosed(this.name);
   }
 }
@@ -201,7 +209,7 @@ export class WinShellManager {
       throw new ManagerError(502, `failed to start ${shell.label}: ${(e as Error).message}`);
     }
 
-    const session = new WinShellSession(name, shell, proc, (n) => this.sessions.delete(n));
+    const session = new WinShellSession(name, shell, proc, (n) => this.sessions.delete(n), cols, rows);
     this.sessions.set(name, session);
     if (opts.command && opts.command.length > 0) session.write(`${opts.command}\r`);
     log.info(`winshell created ${name} (${shell.label})`);
@@ -226,7 +234,7 @@ export class WinShellManager {
   }
 
   /** Attach a client to an existing session, creating it (default shell) if missing. */
-  attachOrCreate(name: string, cols: number, rows: number, client: ShellClient): WinShellSession {
+  attachOrCreate(name: string, cols: number, rows: number, client: ShellClient, ready?: () => void): WinShellSession {
     let s = this.sessions.get(name);
     if (!s) {
       this.create({ name, cols, rows });
@@ -234,7 +242,7 @@ export class WinShellManager {
     } else {
       s.resize(cols, rows);
     }
-    s.attach(client);
+    s.attach(client, ready);
     return s;
   }
 
