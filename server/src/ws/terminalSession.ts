@@ -7,7 +7,7 @@ import { resolveExecutable } from '../exe.js';
 import { classifySsh } from './sshState.js';
 import type { ClientControl, ServerControl } from './protocol.js';
 import { log } from '../logger.js';
-import { blockSshTarget } from '../sshManagement.js';
+import { blockSshTarget, sshConnectionGeneration } from '../sshManagement.js';
 
 const HEARTBEAT_MS = 30_000;
 const HIGH_WATER = 1 << 20; // bounded replay; slow viewers never pause the PTY
@@ -27,6 +27,7 @@ export class TerminalSession {
   private killTimer?: NodeJS.Timeout;
   /** Scan ssh output for failure/prompt states until the link looks healthy. */
   private sshScanBudget: number;
+  private readonly sshGeneration?: number;
 
   constructor(
     ws: WebSocket,
@@ -36,6 +37,7 @@ export class TerminalSession {
     rows: number,
   ) {
     this.key = `${target.id}/${session}`;
+    this.sshGeneration = sshConnectionGeneration(target);
     this.cols = cols; this.rows = rows;
     this.sshScanBudget = target.kind === 'ssh' ? 8192 : 0;
 
@@ -84,7 +86,7 @@ export class TerminalSession {
   }
 
   private onPtyExit(exitCode: number | null): void {
-    if (!this.disposed && this.target.kind === 'ssh' && exitCode !== 0) blockSshTarget(this.target);
+    if (!this.disposed && this.target.kind === 'ssh' && exitCode !== 0) blockSshTarget(this.target, this.sshGeneration);
     this.sendControl({ type: 'exit', code: exitCode });
     this.closeWs(1000, 'pty exited');
     this.dispose();

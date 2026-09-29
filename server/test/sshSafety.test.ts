@@ -28,7 +28,7 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     await ssh.connectSshTarget(target);
     expect(() => child.stdin.emit('error', new Error('EPIPE'))).not.toThrow();
     expect(ssh.sshTargetConnected(target)).toBe(false);
-    expect((await ssh.connectSshTarget(target)).stderr).toContain('locked');
+    expect((await ssh.runSshManagementCommand(target, 'ssh', argv)).code).toBe(255);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
   it('commands cannot consume the shared management protocol as stdin', async () => {
@@ -55,7 +55,7 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     expect(spawn).toHaveBeenCalledTimes(1);
     ssh.disposeSshTargets();
   });
-  it('failure latches every API offline and repeated manual retries respect cooldown', async () => {
+  it('failure latches every read offline; immediate concurrent manual retries share one connection', async () => {
     const child = fakeSsh(); spawn.mockReturnValue(child);
     const ssh = await import('../src/sshManagement.js');
     await ssh.connectSshTarget(target);
@@ -63,7 +63,6 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     child.emit('close', 255, null);
     for (let i = 0; i < 20; i++) {
       expect((await ssh.runSshManagementCommand(target, 'ssh', argv)).code).toBe(255);
-      expect((await ssh.connectSshTarget(target)).stderr).toContain('locked');
     }
     expect(spawn).toHaveBeenCalledTimes(1);
   });
@@ -75,6 +74,13 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     expect(ssh.sshTargetConnected(target)).toBe(false);
     await ssh.runSshManagementCommand(target, 'ssh', argv);
     expect(spawn).toHaveBeenCalledTimes(1);
+    const replacement = fakeSsh(); spawn.mockReturnValue(replacement);
+    const results = await Promise.all(Array.from({ length: 30 }, (_, i) =>
+      ssh.connectSshTarget({ ...target, id: `browser-${i}` })));
+    expect(results.every(result => result.code === 0)).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(ssh.sshTargetConnected(target)).toBe(true);
+    ssh.disposeSshTargets();
   });
   it('shutdown resolves pending reads without waiting for a child close event', async () => {
     const child = fakeSsh(); spawn.mockReturnValue(child);
@@ -94,7 +100,33 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     child.stdin.write.mockImplementation((_script: string, callback: (error: Error) => void) => callback(new Error('broken pipe')));
     await ssh.runSshManagementCommand(target, 'ssh', argv);
     expect(ssh.sshTargetConnected(target)).toBe(false);
-    expect((await ssh.connectSshTarget(target)).stderr).toContain('locked');
+    expect((await ssh.runSshManagementCommand(target, 'ssh', argv)).code).toBe(255);
     expect(spawn).toHaveBeenCalledTimes(1);
+  });
+  it('time passing after failure never schedules another login', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = fakeSsh(); spawn.mockReturnValue(child);
+      const ssh = await import('../src/sshManagement.js');
+      await ssh.connectSshTarget(target);
+      child.emit('close', 255, null);
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      expect(ssh.sshTargetConnected(target)).toBe(false);
+      expect(spawn).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+  it('late failures from an old terminal cannot block a successful manual retry', async () => {
+    const old = fakeSsh(); spawn.mockReturnValue(old);
+    const ssh = await import('../src/sshManagement.js');
+    await ssh.connectSshTarget(target);
+    const generation = ssh.sshConnectionGeneration(target);
+    old.emit('close', 255, null);
+    spawn.mockImplementation(fakeSsh);
+    await ssh.connectSshTarget(target);
+    ssh.blockSshTarget(target, generation);
+    old.emit('error', new Error('late failure'));
+    expect(ssh.sshTargetConnected(target)).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(2);
+    ssh.disposeSshTargets();
   });
 });

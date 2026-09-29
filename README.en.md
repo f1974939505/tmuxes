@@ -170,7 +170,7 @@ Switch the sidebar bottom from `Files` to `Git`. The Git panel is scoped to the 
   set TMUXES_HOSTS=alice@web1,bob@db2:2222 && npm run dev # Windows cmd
   ```
 
-  **Cluster iron rule: no repeated SSH logins.** Expanding targets, page refreshes and polling cannot open SSH connections; click Connect / Reconnect explicitly. All platforms reuse one persistent management connection per destination and coalesce/cache session snapshots across browsers, without per-refresh SSH processes. A terminal connects on its first explicit opening per target/session; subsequent tab switches, page refreshes and browsers reuse that terminal. Transport failures, timeouts and authentication failures latch the destination offline on the server across all APIs. No automatic retries occur. A failure imposes a minimum ten-minute cooldown, after which reconnect still requires a manual click; cooldown expiry never initiates a connection. Terminal attachments reuse OpenSSH ControlMaster/ControlPersist where supported. No forced short keepalives or host scans. Configure keys and host-key trust in a normal terminal beforehand.
+  **Cluster iron rule: no repeated SSH logins.** Expanding targets, page refreshes and polling cannot open SSH connections; click Connect / Reconnect explicitly. All platforms reuse one persistent management connection per destination and coalesce/cache session snapshots across browsers, without per-refresh SSH processes. A terminal connects on its first explicit opening per target/session; subsequent tab switches, page refreshes and browsers reuse that terminal. Transport failures, timeouts and authentication failures latch the destination offline on the server across all APIs. No automatic retries occur. Manual reconnect is allowed immediately without a long cooldown. Concurrent clicks across browsers share one attempt; elapsed time never initiates a connection. Terminal attachments reuse OpenSSH ControlMaster/ControlPersist where supported. No forced short keepalives or host scans. Configure keys and host-key trust in a normal terminal beforehand.
 
 ## 💻 Requirements
 
@@ -290,7 +290,7 @@ On Windows, each PTY runs in a separate child process. A blocked native resize o
 
 Startup prints the process PID and diagnostic log path. Windows defaults to `%LOCALAPPDATA%\tmuxes\logs\server-<PID>.log`; other platforms use `~/.local/state/tmuxes/logs/`. Override the directory with `TMUXES_LOG_DIR`. Each process rotates its log at approximately 1 MiB with one `.1` backup. Logs contain connection, timeout, and shutdown diagnostics, never terminal output. Include this file when reporting a freeze.
 
-If typing an initial command or sending Enter fails after session creation, the API reports the error and preserves the created session. A failed SSH management channel stays offline until an explicit connection after the cooldown; entries with the same configured destination, user, and port share the connection identity.
+If typing an initial command or sending Enter fails after session creation, the API reports the error and preserves the created session. A failed SSH management channel stays offline until an explicit connection, without a long cooldown; entries with the same configured destination, user, and port share the connection identity.
 
 ## 📋 Changelog
 
@@ -303,7 +303,7 @@ If typing an initial command or sending Enter fails after session creation, the 
 - **SSH constraints preserved:** management requests reuse an explicitly established connection; no automatic connection, reconnection, or per-refresh SSH login.
 
 ### 0.1.20
-- **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches enforce at least a ten-minute cooldown before manual reconnect; polling and other browsers cannot bypass it.
+- **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches prevent polling and other browsers from automatically reconnecting. The original ten-minute manual-retry cooldown is removed in the current development version; concurrent clicks still coalesce.
 - **Reuse terminal connections:** refreshes, tab switches and multiple browsers share the existing target/session terminal; session snapshots are coalesced and cached across browsers.
 - **Verified Codex ownership:** shared-daemon environment/process guesses no longer bind panes. Launch bound Codex uses a private official backend with verified launch identity and ancestry. TUI exit unbinds the pane while preserving background work. Install / update the integration again to deploy the new runtime.
 - **Exact pane display:** the panel identifies session/window/pane; sidebar state follows the active pane instead of mixing other windows.

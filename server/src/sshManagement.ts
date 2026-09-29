@@ -41,8 +41,8 @@ const SENSITIVE_SSH_OPTIONS = new Set([
 ]);
 
 const sessions = new Map<string, SshManagementSession>();
-const failures = new Map<string, number>();
-const FAILURE_COOLDOWN = 10 * 60_000;
+const connecting = new Map<string, Promise<CommandResult>>();
+let nextGeneration = 0;
 
 function targetKey(target: Target): string {
   return `${sshDestination(target)}:${target.port ?? 22}`;
@@ -110,6 +110,7 @@ function scriptFor(id: string, command: string, input?: string): string {
 }
 
 class SshManagementSession {
+  readonly generation = ++nextGeneration;
   private readonly child: ChildProcessWithoutNullStreams;
   private queue: Promise<void> = Promise.resolve();
   private stdout = '';
@@ -118,10 +119,7 @@ class SshManagementSession {
   ready = false;
   private pending?: PendingCommand;
 
-  constructor(
-    private readonly key: string,
-    target: Target,
-  ) {
+  constructor(target: Target) {
     this.child = spawn('ssh', connectArgsFor(target), { shell: false, windowsHide: true });
     this.child.stdin.on('error', () => this.dispose());
     this.child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk.toString('utf8')));
@@ -130,12 +128,10 @@ class SshManagementSession {
     });
     this.child.on('error', (err) => {
       this.closed = true;
-      failures.set(this.key, Date.now());
       this.finishPending(null, null, err.message);
     });
     this.child.on('close', (code, signal) => {
       this.closed = true;
-      if (sessions.get(this.key) === this) failures.set(this.key, Date.now());
       this.finishPending(code, signal, this.sshStderr || 'ssh connection closed');
     });
   }
@@ -143,7 +139,6 @@ class SshManagementSession {
   dispose(): void {
     this.closed = true;
     this.finishPending(255, null, 'ssh management channel closed');
-    if (sessions.get(this.key) === this) failures.set(this.key, Date.now());
     try {
       this.child.kill('SIGKILL');
     } catch {
@@ -231,20 +226,24 @@ class SshManagementSession {
 /** Called only by the explicit Connect/Reconnect endpoint. Never from reads. */
 export function connectSshTarget(target: Target): Promise<CommandResult> {
   const key = targetKey(target);
+  const pending = connecting.get(key);
+  if (pending) return pending;
   const existing = sessions.get(key);
   if (existing && !existing.closed && existing.ready) return Promise.resolve({ code: 0, signal: null, stdout: '', stderr: '' });
   if (existing && !existing.closed) return Promise.resolve(offline('SSH connection is already being established; no new connection attempted.'));
-  const failed = failures.get(key);
-  if (failed !== undefined && Date.now() - failed < FAILURE_COOLDOWN) {
-    return Promise.resolve(offline(`SSH reconnect is locked for ${Math.ceil((FAILURE_COOLDOWN - Date.now() + failed) / 1000)}s after failure; no connection attempted.`));
-  }
-  const session = new SshManagementSession(key, target);
-  sessions.set(key, session);
-  return session.run('true', undefined, { timeoutMs: 10_000 }).then(result => {
+  // Coalesce clicks across all browsers/aliases before starting a child.
+  // Failures stay offline for ordinary reads; only another explicit call here
+  // may retry. No timer, scheduler or cooldown expiry ever opens SSH.
+  const attempt = Promise.resolve().then(async () => {
+    const session = new SshManagementSession(target);
+    sessions.set(key, session);
+    const result = await session.run('true', undefined, { timeoutMs: 10_000 });
     session.ready = result.code === 0 && !session.closed;
     if (!session.ready) session.dispose();
     return result;
-  });
+  }).finally(() => { if (connecting.get(key) === attempt) connecting.delete(key); });
+  connecting.set(key, attempt);
+  return attempt;
 }
 
 function offline(message = 'SSH offline. Use Connect / Reconnect explicitly; automatic logins are disabled.'): CommandResult {
@@ -256,9 +255,15 @@ export function sshTargetConnected(target: Target): boolean {
   return !!session && !session.closed && session.ready;
 }
 
-export function blockSshTarget(target: Target): void {
-  failures.set(targetKey(target), Date.now());
-  sessions.get(targetKey(target))?.dispose();
+export function sshConnectionGeneration(target: Target): number | undefined {
+  return sessions.get(targetKey(target))?.generation;
+}
+
+export function blockSshTarget(target: Target, generation?: number): void {
+  const session = sessions.get(targetKey(target));
+  // A delayed exit from an old terminal must not take a manual retry offline.
+  if (generation !== undefined && session?.generation !== generation) return;
+  session?.dispose();
 }
 
 export function disposeSshTargets(): void {

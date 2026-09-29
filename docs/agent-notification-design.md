@@ -45,7 +45,7 @@ output. No extra listener or collector daemon is started. The normal session
 refresh reads these files on the target using the existing management transport.
 SSH management uses one explicitly opened persistent connection on all platforms.
 Reads never create or retry it. Failure state lives on the server, across APIs
-and browser clients. Reconnect is manual only with a ten-minute failure cooldown.
+and browser clients. Reconnect is manual only and may be requested immediately; concurrent manual requests share one attempt. No timer initiates retries.
 Session snapshots are coalesced across browsers; terminal PTYs survive browser
 remounts and are reused per target/session. The browser never auto-retries a
 terminal connection. These rules are mandatory in AGENTS.md. Validation uses
