@@ -133,7 +133,7 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 | Agent | 接入方式与边界 |
 | --- | --- |
-| Codex | 合并 `CODEX_HOME/hooks.json`（默认 `~/.codex/hooks.json`），在 `/hooks` 审查并信任。前台启动使用 `--no-daemon`，hooks 单向写入元数据，按启动身份关联 pane。缺少后台任务完成证据时显示未知，不响应审批。以 0.158.0 为验证基线。 |
+| Codex | 合并 `CODEX_HOME/hooks.json`（默认 `~/.codex/hooks.json`），在 `/hooks` 审查并信任。前台启动使用 `--no-daemon`，hooks 单向写入元数据，按启动身份关联 pane。缺少后台任务完成证据时显示未知，不响应审批。本地 hook 契约验证版本：0.159.0。 |
 | Claude Code | 合并 `CLAUDE_CONFIG_DIR/settings.json`（默认 `~/.claude/settings.json`）。读取生命周期、问题、失败和后台任务字段；缺少后台字段或 Stop hook 继续运行时不宣称完成。其他 Stop hook 的首次继续决定可能不可见，确认期只能缓解竞态。 |
 | OpenCode | 安装全局 v1 插件，遵循 `XDG_CONFIG_HOME`。当前适配器仅支持 v1；v2 改变了插件 API，安装器会拒绝并保留原配置，尚不支持 v2 状态采集。 |
 | Hermes | 在 `HERMES_HOME/plugins/tmuxes-native-observer`（默认 `~/.hermes`）安装插件；执行 `hermes plugins enable tmuxes-native-observer` 后重启。缺少生命周期字段或后台任务计数时降级未知。命名 profile 需在相应环境分别安装。 |
@@ -143,6 +143,8 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 右上角 Codex 按钮直接向当前 pane 输入 `codex --no-daemon`，由当前交互 shell 执行。启动无需 Python、接入安装或额外后端；tmux 保持界面常驻。左侧接入面板只管理可选的状态采集，不再提供启动入口。原有 daemon 不会被自动停止。
 
 Codex 前台完成绿灯由原生 hooks 跟踪工具、子 agent 和 goal，并在正常刷新时核对本机会话文件中同一回合的完成事件；`Stop` 本身不会直接报完成。未返回的后台 shell、尚未确认结束的子 agent、活动或暂停的 goal 会阻止绿灯。会话文件只读取末尾最多 256 KiB，不保存对话正文，不连接 daemon，也不增加 SSH 登录。文件格式变化、缺少事件或读取失败时保持未知。更新后在目标「Agent 状态接入」选择 Codex，点击「安装 / 更新」，在 `/hooks` 信任后重启 Codex，使采集覆盖完整生命周期；仅重启 tmuxes 不会更新目标 hooks。
+
+Codex 的命令在启动阶段失败或被另一个 `PreToolUse` hook 拒绝时，可能没有 `PostToolUse`。采集器核对会话文件中同一工具调用、同一回合的明确未启动结果，解除这条待执行记录，避免结束后一直显示后台工作；其他 monitor、子 agent 和 goal 不受影响。hook 输入上限为 8 MiB，避免长工具结果或回答在原有 256 KiB 上限处被整条丢弃；正文仍不会写入状态记录。
 
 Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。已观测到的暂停 goal、后台工作、分页不完整或不可验证的结束均不会报完成。前台采集只覆盖受支持 hooks 实际报告的工作，不发 hook 的特殊工具路径及手动 goal 变更不保证完整覆盖；绿灯不是对所有外部后台进程的证明。这是当前旁路方案的明确能力边界。
 

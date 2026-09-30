@@ -23,7 +23,10 @@ import codex_foreground
 
 KINDS = ("claude", "codex", "opencode", "hermes")
 STORE = Path.home() / ".cache/tmuxes/observations"
-LIMIT = 256 * 1024
+# Hooks include tool input/output and the final answer, even though none of
+# that text is persisted. The former 256 KiB cap silently dropped lifecycle
+# events (including Stop/PostToolUse) from otherwise ordinary long turns.
+LIMIT = 8 * 1024 * 1024
 KEYS = ("hook_event_name", "session_id", "agent_id", "source", "turn_id",
         "tool_name", "tool_use_id", "notification_type", "stop_hook_active",
         "background_tasks", "session_crons")
@@ -480,10 +483,26 @@ def snapshot():
                                 "capability": capability, "bindingKey":
                                 binding_key})
                 collected[record["key"]] = (path, record.get("updated"), record.get("since"))
-                # Only verification metadata is written, and never over a newer event.
+                # Persist verification/resolved-task metadata, never over a
+                # newer event or a newer foreground observation revision.
                 with locked():
                     latest = json.loads(path.read_text())
-                    if latest.get("updated") == record.get("updated"):
+                    if (latest.get("updated") == record.get("updated")
+                            and (not foreground or latest.get("state", {}).get("revision") == record.get("state", {}).get("revision"))):
+                        if record["kind"] == "codex" and foreground:
+                            # Retain resolved failed launches after their rows
+                            # move outside the bounded transcript tail. A newer
+                            # hook always wins this guarded write.
+                            foreground_state = record.get("foreground", {})
+                            tasks = sorted(state.tasks)
+                            if (latest.get("foreground") != foreground_state
+                                    or latest["state"].get("tasks", []) != tasks):
+                                latest["foreground"] = foreground_state
+                                latest["state"]["tasks"] = tasks
+                                latest["state"]["revision"] = latest["state"].get("revision", 0) + 1
+                            # Never persist derived known/complete_at: every
+                            # refresh must revalidate the ending. Otherwise a
+                            # missing/changed transcript could inherit green.
                         if "verified" in record:
                             latest["verified"] = record["verified"]
                         else:

@@ -71,6 +71,35 @@ no unresolved work, a second root-state check, and stable confirmation across
 refreshes. Paused goals and incomplete pagination cannot count as completion.
 Missing interfaces and older unsupported histories degrade to unknown.
 
+## Foreground completion correction — 2026-09-30
+
+An isolated official Codex 0.159.0 executable with a loopback Responses fixture
+reproduced `PreToolUse` without `PostToolUse` when unified exec was rejected before
+process launch. The turn then completed normally, but the unmatched tool entry
+kept tmuxes in background state indefinitely. A second fixture reproduced the
+same missing post hook when another `PreToolUse` hook denied the command.
+
+The foreground collector now recognizes only the explicit runtime failure
+envelopes observed in those fixtures, within structured `function_call_output`
+rows. Tool call ID and turn identity must match the pending shell. It does not
+infer completion from arbitrary command output, silence, or a yielded terminal
+session. A successful root completion still requires Stop, the matching final
+turn record, complete tracking, no remaining tasks/decisions, and confirmation
+across refreshes. Resolved tool metadata survives bounded-tail eviction; writes
+are guarded against newer hooks and concurrent snapshots.
+
+The hook receiver's old 256 KiB cap also discarded entire long PostToolUse/Stop
+payloads. Its bounded input cap is now 8 MiB; it still persists only metadata.
+This is not an unlimited input contract. Changed transcript formats and missing
+or oversized evidence still cannot establish completion.
+
+`python scripts/test-codex-hooks.py [codex-executable]` validates a plain ending;
+append `goal` for paired goal-read hooks or `shell` for a deliberately denied
+command without a post hook. The generated hook trust bypass applies only to
+the isolated, vetted fixture. No account, external model, user configuration,
+SSH or real cluster is used. The tests check the official hook/transcript
+contract, not a live tmux TUI on a target cluster.
+
 `waitingOnApproval` cannot identify the reviewer. It therefore remains unknown
 rather than falsely announcing a human decision during automatic review.
 `waitingOnUserInput` can announce a decision. Shared-daemon pane binding is disabled; use explicit foreground launch. These limits mean native observation is not

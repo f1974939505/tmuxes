@@ -57,6 +57,59 @@ class ForegroundTests(unittest.TestCase):
         self.hook("PostToolUse", tool_name="Bash", tool_use_id="shell")
         self.assertEqual(self.inspect(), ("settling", ""))
 
+    def tool_result(self, output, call="shell", turn="turn"):
+        with self.path.open("a") as f:
+            f.write(json.dumps({"type": "response_item", "payload": {
+                "type": "function_call_output", "call_id": call, "output": output,
+                "internal_chat_message_metadata_passthrough": {"turn_id": turn}}}) + "\n")
+
+    def test_failed_launch_without_post_hook_can_finish_root(self):
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="shell")
+        self.tool_result('exec_command failed: CreateProcess { message: "Rejected by policy" }')
+        self.finish()
+        self.assertEqual(self.inspect(), ("settling", ""))
+        self.assertEqual(self.record["foreground"]["tools"], {})
+        self.assertNotIn("Rejected", json.dumps(self.record))
+
+    def test_failed_launch_alone_does_not_finish_a_running_root(self):
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="shell")
+        self.tool_result('exec_command failed: CreateProcess { message: "Rejected by policy" }')
+        self.assertEqual(self.inspect(), ("running", ""))
+        self.assertFalse(self.state.tasks)
+
+    def test_other_pre_hook_rejection_without_post_hook_can_finish_root(self):
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="shell")
+        self.tool_result("Command blocked by PreToolUse hook: Fixture rejection. Command: echo fixture")
+        self.finish()
+        self.assertEqual(self.inspect(), ("settling", ""))
+
+    def test_failed_launch_requires_matching_call_and_turn(self):
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="shell")
+        output = 'exec_command failed: CreateProcess { message: "Rejected by policy" }'
+        self.tool_result(output, call="different")
+        self.tool_result(output, turn="older")
+        self.finish()
+        self.assertEqual(self.inspect(), ("background", ""))
+
+    def test_yielded_command_or_command_output_cannot_clear_background_work(self):
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="shell")
+        for output in ('Process running with session ID 123\nOutput:\n',
+                       'Output:\nexec_command failed: CreateProcess { message: "user output" }'):
+            self.tool_result(output)
+        self.finish()
+        self.assertEqual(self.inspect(), ("background", ""))
+
+    def test_failed_launch_does_not_clear_unrelated_monitor_child_or_goal(self):
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="monitor")
+        self.hook("SubagentStart", agent_id="child")
+        self.hook("PreToolUse", tool_name="create_goal", tool_use_id="goal-call")
+        self.hook("PostToolUse", tool_name="create_goal", tool_use_id="goal-call", tool_response={"status": "active"})
+        self.hook("PreToolUse", tool_name="Bash", tool_use_id="shell")
+        self.tool_result('exec_command failed: CreateProcess { message: "Rejected by policy" }')
+        self.finish()
+        self.assertEqual(self.inspect(), ("background", ""))
+        self.assertEqual(self.state.tasks, {"tool:monitor", "child:child", "goal"})
+
     def test_child_stop_requires_actual_child_completion(self):
         child = Path(self.temp.name) / "child.jsonl"
         child.write_text(json.dumps({"type": "event_msg", "payload": {"type": "task_started", "turn_id": "child-turn"}}) + "\n")

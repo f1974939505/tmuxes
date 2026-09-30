@@ -105,6 +105,88 @@ class NativeTests(unittest.TestCase):
         data = json.loads(next(self.base.glob("*.json")).read_text())
         self.assertNotIn("binding", data)
 
+    def test_failed_launch_resolution_survives_leaving_transcript_tail(self):
+        from types import SimpleNamespace
+        transcript = self.base / "rollout.jsonl"
+        bound = {"proof": "foreground-direct-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "direct_codex_binding", return_value=bound):
+            for event in ("SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"):
+                native.report("codex", {"session_id": "root", "hook_event_name": event,
+                    "turn_id": "t", "tool_name": "Bash", "tool_use_id": "failed", "transcript_path": str(transcript)})
+        complete = json.dumps({"type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t"}}) + "\n"
+        transcript.write_text(json.dumps({"type": "response_item", "payload": {"type": "function_call_output",
+            "call_id": "failed", "output": 'exec_command failed: CreateProcess { message: "private failure" }',
+            "internal_chat_message_metadata_passthrough": {"turn_id": "t"}}}) + "\n" + complete)
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True):
+            self.assertEqual(native.snapshot()["observers"][0]["state"], "settling")
+            persisted = next(self.base.glob("*.json")).read_text()
+            self.assertEqual(json.loads(persisted)["state"]["tasks"], [])
+            self.assertNotIn("private failure", persisted)
+            transcript.write_text(json.dumps({"ignored": "x" * native.codex_foreground.TAIL_BYTES}) + "\n" + complete)
+            with patch.object(native.time, "time", return_value=native.time.time() + 2):
+                observation = native.snapshot()["observers"][0]
+            self.assertEqual((observation["state"], observation["reason"]), ("idle", "done"))
+
+    def test_large_hook_reaches_receiver_without_persisting_content(self):
+        import io
+        bound = {"proof": "foreground-direct-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "direct_codex_binding", return_value=bound):
+            for event in ("SessionStart", "PreToolUse", "PostToolUse", "Stop"):
+                payload = {"hook_event_name": event, "session_id": "root", "turn_id": "t",
+                    "tool_name": "Bash", "tool_use_id": "long", "last_assistant_message": "private" * 50000,
+                    "tool_response": "private" * 50000}
+                stdin = io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode()))
+                with patch.object(native.sys, "argv", ["native.py", "codex"]), \
+                     patch.object(native.sys, "stdin", stdin), patch.object(native.sys, "stdout", io.StringIO()):
+                    native.main()
+        persisted = next(self.base.glob("*.json")).read_text()
+        record = json.loads(persisted)
+        self.assertEqual(record["candidate"], "t")
+        self.assertEqual(record["state"]["tasks"], [])
+        self.assertNotIn("private", persisted)
+        self.assertLess(len(persisted), 2048)
+
+    def test_stale_snapshot_cannot_overwrite_newer_state_revision(self):
+        from types import SimpleNamespace
+        bound = {"proof": "foreground-direct-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "direct_codex_binding", return_value=bound):
+            native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
+        path = next(self.base.glob("*.json"))
+        def interleave(record, state):
+            latest = json.loads(path.read_text())
+            latest["state"].update(revision=latest["state"]["revision"] + 1, tasks=["tool:monitor"])
+            path.write_text(json.dumps(latest))
+            return state
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True), \
+             patch.object(native.codex_foreground, "inspect", side_effect=interleave):
+            observation = native.snapshot()["observers"][0]
+        self.assertEqual(observation["state"], "unknown")
+        self.assertEqual(json.loads(path.read_text())["state"]["tasks"], ["tool:monitor"])
+
+    def test_completion_evidence_must_still_exist_on_confirmation_refresh(self):
+        from types import SimpleNamespace
+        transcript = self.base / "rollout.jsonl"
+        bound = {"proof": "foreground-direct-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "direct_codex_binding", return_value=bound):
+            for event in ("SessionStart", "UserPromptSubmit", "Stop"):
+                native.report("codex", {"session_id": "root", "hook_event_name": event,
+                    "turn_id": "t", "transcript_path": str(transcript)})
+        transcript.write_text(json.dumps({"type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t"}}) + "\n")
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True):
+            self.assertEqual(native.snapshot()["observers"][0]["state"], "settling")
+            persisted = json.loads(next(self.base.glob("*.json")).read_text())
+            self.assertIsNone(persisted["state"]["complete_at"])
+            transcript.unlink()
+            with patch.object(native.time, "time", return_value=native.time.time() + 2):
+                observation = native.snapshot()["observers"][0]
+            self.assertEqual((observation["state"], observation["reason"]), ("unknown", ""))
+
     def test_ended_claude_record_cannot_be_rebound_to_new_process(self):
         native.report("claude", {"session_id": "old", "hook_event_name": "SessionEnd"})
         key = next(self.base.glob("*.json")).stem
