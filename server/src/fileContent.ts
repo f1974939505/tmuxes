@@ -5,6 +5,7 @@ import type { Target } from './targets.js';
 import { commandArgv } from './tmux/builder.js';
 import { runTargetCommand } from './targetCommand.js';
 import { TmuxError } from './tmux/sessions.js';
+import { readFilePreview } from './files.js';
 
 export const FILE_BLOCK = 512 * 1024;
 const reads = new Map<string, Promise<Buffer>>();
@@ -29,13 +30,20 @@ export function byteRange(header: string | undefined, size: number): { start: nu
 
 async function remote(target: Target, script: string, args: string[]) {
   const r = await runTargetCommand(target, opts => commandArgv(target, ['sh', '-c', script, 'tmuxes-file', ...args], opts), { timeoutMs: 15_000, memoryOnly: true });
-  if (r.code !== 0) throw new TmuxError(r.code === 255 ? 503 : 502, 'Cannot read file; check the target connection and file permissions.');
+  if (r.code !== 0) throw new TmuxError(r.code === 255 ? 503 : r.code === 66 ? 404 : 502, 'Cannot read file; check the target connection and file permissions.');
   return r.stdout;
 }
 
 export async function fileIdentity(target: Target, path: string) {
   if (target.kind === 'local') {
-    const st = await fs.stat(path);
+    let st;
+    try { st = await fs.stat(path); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') throw new TmuxError(404, 'File temporarily unavailable.');
+      if (code === 'EACCES') throw new TmuxError(403, 'Permission denied.');
+      throw error;
+    }
     if (!st.isFile()) throw new TmuxError(400, 'path is not a regular file');
     return { size: st.size, identity: `${st.dev}|${st.ino}|${st.size}|${st.mtimeMs}|${st.ctimeMs}` };
   }
@@ -44,6 +52,28 @@ export async function fileIdentity(target: Target, path: string) {
   const size = Number(identity.split('|')[0]);
   if (identity.split('|').length !== 3 || !Number.isSafeInteger(size) || size < 0) throw new TmuxError(502, 'invalid file size');
   return { size, identity };
+}
+
+export function fileEtag(identity: string): string {
+  return '"' + createHash('sha256').update(identity).digest('hex') + '"';
+}
+
+export async function requireFileVersion(target: Target, path: string, version: string | undefined): Promise<void> {
+  if (version && version !== fileEtag((await fileIdentity(target, path)).identity)) {
+    throw new TmuxError(412, 'File changed externally; reload or explicitly confirm overwriting it.');
+  }
+}
+
+/** Conditional text reads and metadata-only checks share existing transport. */
+export async function serveFilePreview(target: Target, path: string, req: Request, res: Response): Promise<void> {
+  const meta = await fileIdentity(target, path);
+  const etag = fileEtag(meta.identity);
+  res.set({ 'Cache-Control': 'private, no-store', ETag: etag });
+  if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+  if (req.method === 'HEAD') { res.status(200).end(); return; }
+  const preview = await readFilePreview(target, path);
+  if ((await fileIdentity(target, path)).identity !== meta.identity) throw new TmuxError(409, 'File is changing; try again shortly.');
+  res.json(preview);
 }
 
 /** Coalesce concurrent browsers, with no disk cache or additional transport. */
@@ -101,9 +131,10 @@ export async function serveFileContent(target: Target, path: string, req: Reques
     const encoded = encodeURIComponent(name).replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
     res.set('Content-Disposition', `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`);
   }
-  const etag = '"' + createHash('sha256').update(meta.identity).digest('hex') + '"';
+  const etag = fileEtag(meta.identity);
   res.set({ 'Accept-Ranges': 'bytes', 'Content-Type': mime, 'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'private, no-store', ETag: etag });
+  if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
   if (req.headers['if-range'] && req.headers['if-range'] !== etag) throw new TmuxError(409, 'File changed; reopen the preview.');
   let range;
   try { range = byteRange(req.headers.range, meta.size); }

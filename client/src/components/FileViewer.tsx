@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FilePreview, OpenFile } from '../types';
 import { api, ApiError, fileContentUrl } from '../api';
 import { useSettings } from '../settings';
@@ -7,6 +7,7 @@ import { previewKind } from '../util';
 import { MarkdownView } from './LazyMarkdownView';
 import { ImageViewer } from './ImageViewer';
 import { FileDownload } from './FileDownload';
+import { startFileRefresh } from '../fileRefresh';
 const PdfViewer = lazy(() => import('./PdfViewer'));
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   onClose: () => void;
   onOpenFile?: (file: OpenFile) => void;
   sourceLabel?: string;
+  active?: boolean;
 }
 
 /** New undo checkpoint after this idle gap, so a burst of typing collapses
@@ -22,11 +24,13 @@ const COALESCE_MS = 500;
 
 /** Read-only preview + editor for a text file. Editable only when the file is
  *  text and was not truncated (saving a truncated preview would lose data). */
-export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
+export function FileViewer({ file, onClose, onOpenFile, sourceLabel, active = true }: Props) {
   const { settings } = useSettings();
   const { t } = useI18n();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const lastEditRef = useRef(0);
+  const markdownRef = useRef<HTMLDivElement>(null);
+  const restorePosition = useRef<{ top: number; left: number; start?: number; end?: number } | null>(null);
 
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -38,6 +42,13 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
   const [future, setFuture] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [externalChange, setExternalChange] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
+  const loadedVersion = useRef<string | null>(null);
+  const editRevision = useRef(0), forceReload = useRef(false);
+  const refreshRef = useRef<() => void>(() => {});
+  const latest = useRef({ text, baseline, saving });
+  latest.current = { text, baseline, saving };
   const kind = previewKind(file.name);
   const media = kind === 'image' || kind === 'pdf';
   const [rendered, setRendered] = useState(kind === 'markdown');
@@ -45,9 +56,8 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
   const editable = !!preview && !preview.binary && !preview.truncated;
   const dirty = editable && text !== baseline;
 
-  // Load (or reload) the file.
+  // The source stays fixed across tmux switches; only its visible tab polls.
   useEffect(() => {
-    let cancelled = false;
     setLoading(true);
     setLoadError(null);
     setSaveError(null);
@@ -55,26 +65,73 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
     setPast([]);
     setFuture([]);
     lastEditRef.current = 0;
+    loadedVersion.current = null; setVersion(null); setExternalChange(false);
+    editRevision.current = 0;
     setRendered(kind === 'markdown');
-    if (media) { setLoading(false); return; }
-    api
-      .getFile(file.targetId, file.session, file.path)
-      .then((p) => {
-        if (cancelled) return;
-        setPreview(p);
-        setText(p.content);
-        setBaseline(p.content);
-      })
-      .catch((e) => {
-        if (!cancelled) setLoadError(e instanceof ApiError ? e.message : t.failedReadFile);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
+  }, [file.targetId, file.session, file.path, kind]);
+
+  useEffect(() => {
+    if (!active) return;
+    const loop = startFileRefresh({
+      visible: () => !document.hidden,
+      read: async (signal) => {
+        const force = forceReload.current; forceReload.current = false;
+        const revision = editRevision.current;
+        const mode = media ? 'media' : latest.current.saving || !force && latest.current.text !== latest.current.baseline ? 'metadata' : 'text';
+        return { ...await api.getFileUpdate(file, force ? null : loadedVersion.current, mode, signal), force, revision };
+      },
+      result: ({ version: next, preview: p, force, revision }) => {
+        setLoadError(null); setLoading(false);
+        if (latest.current.saving) return;
+        const changed = loadedVersion.current !== next;
+        if (!media && (latest.current.text !== latest.current.baseline) && !(force && revision === editRevision.current)) {
+          if (changed) setExternalChange(true);
+          return; // never replace edits that began while a read was in flight
+        }
+        if (!media && changed && !p) return; // an undo during HEAD needs a fresh body on the next check
+        if (p) {
+          if (force) setSaveError(null);
+          if (p.content !== latest.current.text) {
+            const element = renderedRef.current ? markdownRef.current : taRef.current;
+            if (element) restorePosition.current = { top: element.scrollTop, left: element.scrollLeft,
+              ...(element instanceof HTMLTextAreaElement ? { start: element.selectionStart, end: element.selectionEnd } : {}) };
+            setPast([]); setFuture([]); lastEditRef.current = 0;
+          }
+          setPreview(p); setText(p.content); setBaseline(p.content);
+          latest.current.text = latest.current.baseline = p.content;
+        }
+        loadedVersion.current = next; setVersion(next); setExternalChange(false);
+      },
+      error: (error) => {
+        setLoading(false); setLoadError(error instanceof Error ? error.message : String(error));
+        return !(error instanceof ApiError && (error.status === 409 || error.status === 404));
+      },
+    });
+    refreshRef.current = loop.refresh;
+    const shown = () => loop.wake();
+    const connected = (event: Event) => {
+      if ((event as CustomEvent).detail.targetId === file.targetId) loop.refresh();
     };
-  }, [file.targetId, file.session, file.path, t.failedReadFile, kind, media]);
+    document.addEventListener('visibilitychange', shown);
+    window.addEventListener('tmuxes:target-connected', connected);
+    return () => { loop.dispose(); refreshRef.current = () => {}; document.removeEventListener('visibilitychange', shown); window.removeEventListener('tmuxes:target-connected', connected); };
+  }, [active, file.targetId, file.session, file.path, media]);
+  const renderedRef = useRef(rendered); renderedRef.current = rendered;
+
+  useLayoutEffect(() => {
+    const saved = restorePosition.current, element = rendered ? markdownRef.current : taRef.current;
+    if (!saved || !element) return;
+    restorePosition.current = null;
+    if (element instanceof HTMLTextAreaElement && saved.start !== undefined) {
+      element.setSelectionRange(Math.min(saved.start, text.length), Math.min(saved.end ?? saved.start, text.length));
+    }
+    element.scrollTop = saved.top; element.scrollLeft = saved.left;
+  }, [text, preview, rendered]);
+
+  const refresh = () => {
+    if (dirty && !confirm(t.discardUnsaved)) return;
+    forceReload.current = true; refreshRef.current();
+  };
 
   const onType = (next: string) => {
     const now = Date.now();
@@ -83,6 +140,7 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
       setFuture([]);
     }
     lastEditRef.current = now;
+    latest.current.text = next; editRevision.current++;
     setText(next);
   };
 
@@ -94,6 +152,7 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
     setFuture((f) => [...f, text]);
     setPast((p) => p.slice(0, -1));
     setText(prev);
+    latest.current.text = prev; editRevision.current++;
     lastEditRef.current = 0;
   };
 
@@ -103,20 +162,27 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
     setPast((p) => [...p, text]);
     setFuture((f) => f.slice(0, -1));
     setText(next);
+    latest.current.text = next; editRevision.current++;
     lastEditRef.current = 0;
   };
 
   const save = async () => {
     if (!editable || !dirty || saving) return;
+    if (externalChange && !confirm(t.overwriteExternalChanges)) return;
+    latest.current.saving = true;
     setSaving(true);
     setSaveError(null);
     try {
-      await api.saveFile(file.targetId, file.session, file.path, text);
+      await api.saveFile(file.targetId, file.session, file.path, text, externalChange ? null : loadedVersion.current);
       setBaseline(text);
+      latest.current.baseline = text;
+      setExternalChange(false);
     } catch (e) {
-      setSaveError(e instanceof ApiError ? e.message : t.saveFailed);
+      if (e instanceof ApiError && e.status === 412) { setExternalChange(true); setSaveError(t.fileChangedUnsaved); }
+      else setSaveError(e instanceof ApiError ? e.message : t.saveFailed);
     } finally {
       setSaving(false);
+      latest.current.saving = false;
     }
   };
 
@@ -160,6 +226,7 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
         <span className="viewer-path" title={`${sourceLabel ?? file.session} · ${file.path}`}>{sourceLabel ?? file.session} · {file.path}</span>
         <div className="viewer-head-spacer" />
         <FileDownload file={file} />
+        <button onClick={refresh} disabled={saving} title={t.refreshFile}>{t.refreshFile}</button>
         {kind === 'markdown' && <button aria-pressed={rendered} onClick={() => setRendered(v => !v)}>{rendered ? t.source : t.preview}</button>}
         {editable && (
           <>
@@ -181,14 +248,15 @@ export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
       </div>
 
       {saveError && <div className="viewer-msg error">{saveError}</div>}
+      {externalChange && <div className="viewer-msg" role="status">{t.fileChangedUnsaved}</div>}
 
       <div className="viewer-body">
-        {kind === 'image' && <ImageViewer key={file.path} url={fileContentUrl(file.targetId, file.session, file.path)} />}
-        {kind === 'pdf' && <Suspense fallback={<div className="viewer-msg">{t.loading}</div>}><PdfViewer key={file.path} url={fileContentUrl(file.targetId, file.session, file.path)} /></Suspense>}
+        {version && kind === 'image' && <ImageViewer key={file.path} url={`${fileContentUrl(file.targetId, file.session, file.path)}&version=${encodeURIComponent(version)}`} />}
+        {version && kind === 'pdf' && <Suspense fallback={<div className="viewer-msg">{t.loading}</div>}><PdfViewer key={file.path} url={`${fileContentUrl(file.targetId, file.session, file.path)}&version=${encodeURIComponent(version)}`} /></Suspense>}
         {loading && <div className="viewer-msg">{t.loading}</div>}
         {loadError && <div className="viewer-msg error">{loadError}</div>}
         {preview && preview.binary && <div className="viewer-msg">{t.binaryNotShown}</div>}
-        {preview && !preview.binary && rendered && <div className="markdown-scroll" style={{ fontSize: settings.viewerFontSize }}><MarkdownView text={text} context={file} onOpenFile={onOpenFile} /></div>}
+        {preview && !preview.binary && rendered && <div ref={markdownRef} tabIndex={0} aria-label={t.preview} className="markdown-scroll" style={{ fontSize: settings.viewerFontSize }}><MarkdownView text={text} context={file} onOpenFile={onOpenFile} /></div>}
         {preview && !preview.binary && editable && !rendered && (
           <textarea
             ref={taRef}

@@ -1,5 +1,6 @@
 import headless, { type ITerminalAddon } from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
+import unicode11 from '@xterm/addon-unicode11';
 
 export interface ScreenSnapshot { cols: number; rows: number; data: string }
 
@@ -14,6 +15,8 @@ export class TerminalScreen {
   constructor(cols: number, rows: number) {
     this.term = new headless.Terminal({ cols, rows, scrollback: 1000, allowProposedApi: true });
     this.term.loadAddon(this.serializer as unknown as ITerminalAddon);
+    this.term.loadAddon(new unicode11.Unicode11Addon() as unknown as ITerminalAddon);
+    this.term.unicode.activeVersion = '11';
     // Never wire onData back to the PTY: only the real browser answers queries.
   }
 

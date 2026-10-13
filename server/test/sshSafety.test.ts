@@ -27,6 +27,7 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
     const reader = await import('../src/agentMessages.js');
     await Promise.all(Array.from({ length: 12 }, async () => {
       await expect(media.fileIdentity(target, '/project/a.png')).rejects.toMatchObject({ status: 503 });
+      await expect(media.serveFilePreview(target, '/project/a.md', { headers: {}, method: 'HEAD' } as any, {} as any)).rejects.toMatchObject({ status: 503 });
       await expect(media.serveFileContent(target, '/project/a.bin', { headers: {} } as any, {} as any, true)).rejects.toMatchObject({ status: 503 });
       await expect(reader.readAgentMessages(target, 'session', undefined, 'newer')).rejects.toMatchObject({ status: 503 });
     }));
@@ -52,6 +53,15 @@ describe('SSH cluster iron rule (mock processes, no network)', () => {
       const res = { destroyed: false, set: vi.fn(), status: vi.fn(), write: vi.fn(() => true), end: vi.fn() };
       return media.serveFileContent({ ...target, id: `download-browser-${i}` }, '/project/a.bin', { headers: {}, method: 'GET' } as any, res as any, true)
         .then(() => expect(res.write).toHaveBeenCalledWith(Buffer.from([0, 255, 128, 12])));
+    }));
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const version = media.fileEtag((await media.fileIdentity(target, '/project/notes.md')).identity);
+    await Promise.all(Array.from({ length: 12 }, (_, i) => {
+      const res = { set: vi.fn(), status: vi.fn(), end: vi.fn(), json: vi.fn() };
+      res.status.mockReturnValue(res);
+      return media.serveFilePreview({ ...target, id: `file-browser-${i}` }, '/project/notes.md',
+        { headers: { 'if-none-match': version }, method: 'GET' } as any, res as any)
+        .then(() => { expect(res.status).toHaveBeenCalledWith(304); expect(res.json).not.toHaveBeenCalled(); });
     }));
     expect(spawn).toHaveBeenCalledTimes(1);
     for (const [script] of child.stdin.write.mock.calls.slice(1)) {

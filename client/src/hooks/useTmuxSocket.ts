@@ -22,23 +22,29 @@ const encoder = new TextEncoder();
 export function createTmuxSocket(url: string, cb: TmuxSocketCallbacks): TmuxSocket {
   const ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
+  let ready = false;
+  let pendingResize: { cols: number; rows: number } | undefined;
+  const flushResize = () => {
+    if (!ready || ws.readyState !== WebSocket.OPEN || !pendingResize) return;
+    ws.send(JSON.stringify({ type: 'resize', ...pendingResize }));
+    pendingResize = undefined;
+  };
 
   ws.onopen = () => cb.onOpen();
   ws.onclose = (ev) => cb.onClose(ev);
   ws.onmessage = (ev) => {
     if (typeof ev.data === 'string') {
       try {
-        cb.onControl(JSON.parse(ev.data) as ServerControl);
+        const message = JSON.parse(ev.data) as ServerControl;
+        if (message.type === 'ready') ready = true;
+        cb.onControl(message);
+        flushResize();
       } catch {
         /* ignore malformed control frame */
       }
     } else {
       cb.onOutput(new Uint8Array(ev.data as ArrayBuffer));
     }
-  };
-
-  const sendJson = (obj: unknown) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   };
 
   return {
@@ -50,11 +56,14 @@ export function createTmuxSocket(url: string, cb: TmuxSocketCallbacks): TmuxSock
       if (ws.readyState === WebSocket.OPEN) ws.send(Uint8Array.from(data, c => c.charCodeAt(0) & 255));
     },
     resize(cols, rows) {
-      sendJson({ type: 'resize', cols, rows });
+      pendingResize = { cols, rows };
+      flushResize(); // the server accepts controls only after restoring the screen
     },
     close() {
       // Drop handlers so a deliberate close doesn't surface as "disconnected".
       ws.onclose = null;
+      ws.onopen = null;
+      ready = false; pendingResize = undefined;
       ws.onmessage = null;
       ws.onerror = null;
       try {

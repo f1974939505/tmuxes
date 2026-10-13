@@ -180,9 +180,24 @@ export const api = {
       `/api/targets/${encodeURIComponent(targetId)}/file?session=${encodeURIComponent(session)}&path=${encodeURIComponent(path)}`,
     );
   },
-  saveFile(targetId: string, session: string, path: string, content: string): Promise<{ ok: true }> {
+  async getFileUpdate(file: OpenFile, version: string | null, mode: 'text' | 'metadata' | 'media', signal: AbortSignal): Promise<{ version: string; preview?: FilePreview }> {
+    const url = mode === 'media' ? fileContentUrl(file.targetId, file.session, file.path) :
+      `/api/targets/${encodeURIComponent(file.targetId)}/file?${new URLSearchParams({ session: file.session, path: file.path })}`;
+    const res = await fetch(url, { method: mode === 'text' ? 'GET' : 'HEAD', cache: 'no-store', signal,
+      headers: version ? { 'If-None-Match': version } : undefined });
+    if (!res.ok && res.status !== 304) {
+      let message = `${res.status} ${res.statusText}`;
+      if (mode === 'text') { try { message = (await res.json()).error || message; } catch { /* empty response */ } }
+      throw new ApiError(res.status, message);
+    }
+    const etag = res.headers.get('etag');
+    if (!etag) throw new Error('File version missing; update the tmuxes server.');
+    return { version: etag, preview: res.status !== 304 && mode === 'text' ? await res.json() as FilePreview : undefined };
+  },
+  saveFile(targetId: string, session: string, path: string, content: string, version?: string | null): Promise<{ ok: true }> {
     return request(`/api/targets/${encodeURIComponent(targetId)}/file`, {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...(version ? { 'If-Match': version } : {}) },
       body: JSON.stringify({ session, path, content }),
     });
   },

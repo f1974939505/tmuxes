@@ -38,9 +38,16 @@ export function App() {
   const [readingOpen, setReadingOpen] = useState(false);
   const [tab, setTab] = useState<'file' | 'reading'>('file');
   const workspace = useRef<HTMLDivElement>(null);
+  const [workspaceWidth, setWorkspaceWidth] = useState(() => window.innerWidth - 320);
+  const layout = dock.layout === 'right' && workspaceWidth < 600 ? 'bottom' : dock.layout;
   const dragCleanup = useRef<(() => void) | null>(null);
   useEffect(() => { try { localStorage.setItem('tmuxes.previewDock', JSON.stringify(dock)); } catch { /* storage disabled */ } }, [dock]);
   useEffect(() => () => dragCleanup.current?.(), []);
+  useEffect(() => {
+    const observer = new ResizeObserver(entries => setWorkspaceWidth(entries[0].contentRect.width));
+    if (workspace.current) observer.observe(workspace.current);
+    return () => observer.disconnect();
+  }, []);
 
   const loadTargets = useCallback(async () => {
     try {
@@ -79,11 +86,11 @@ export function App() {
     (e: React.MouseEvent) => {
       e.preventDefault();
       dragCleanup.current?.();
-      const start = dock.layout === 'right' ? e.clientX : e.clientY;
-      const size = dock.layout === 'right' ? dock.width : dock.height;
+      const start = layout === 'right' ? e.clientX : e.clientY;
+      const size = layout === 'right' ? dock.width : dock.height;
       const onMove = (ev: MouseEvent) => {
-        const right = dock.layout === 'right';
-        const max = right ? (workspace.current?.clientWidth ?? window.innerWidth) - 160 : window.innerHeight - 160;
+        const right = layout === 'right';
+        const max = right ? (workspace.current?.clientWidth ?? window.innerWidth) - 326 : window.innerHeight - 160;
         const value = Math.max(right ? 240 : 120, Math.min(max, size + start - (right ? ev.clientX : ev.clientY)));
         setDock(d => ({ ...d, [right ? 'width' : 'height']: value }));
       };
@@ -96,7 +103,7 @@ export function App() {
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [dock],
+    [dock, layout],
   );
 
   const selectedTarget = selection ? targets.find((t) => t.id === selection.targetId) : undefined;
@@ -138,7 +145,7 @@ export function App() {
         onOpenText={handleOpenText}
       />
 
-      <div ref={workspace} className={`workspace dock-${dock.layout}`}>
+      <div ref={workspace} className={`workspace dock-${layout}`}>
         <div className="term-region">
           {selection && selectedTarget ? (
             <TerminalPanel
@@ -165,13 +172,14 @@ export function App() {
         {openViewer && (
           <>
             <div className="hdivider" onMouseDown={onViewerDividerDown} title={t.dragResize} />
-            <div className="viewer-slot" style={dock.layout === 'right' ? { width: dock.width } : { height: dock.height }}>
+            <div className="viewer-slot" style={layout === 'right' ? { width: dock.width } : { height: dock.height }}>
             <div className={`viewer-region preview-dock${maximized ? ' maximized' : ''}`}>
               <div className="dock-toolbar">
                 {(openFiles.length > 0 || openText) && <button aria-pressed={activeTab === 'file'} onClick={() => setTab('file')}>{t.fileViewer}</button>}
                 {readingOpen && <button aria-pressed={activeTab === 'reading'} onClick={() => setTab('reading')}>{t.reading}</button>}
                 <div className="viewer-head-spacer" />
-                <button onClick={() => setDock(d => ({ ...d, layout: d.layout === 'right' ? 'bottom' : 'right' }))}>{dock.layout === 'right' ? t.dockBottom : t.dockRight}</button>
+                <button disabled={workspaceWidth < 600} title={workspaceWidth < 600 ? t.narrowPreviewDock : undefined}
+                  onClick={() => setDock(d => ({ ...d, layout: layout === 'right' ? 'bottom' : 'right' }))}>{layout === 'right' ? t.dockBottom : t.dockRight}</button>
                 <button onClick={() => setMaximized(v => !v)}>{maximized ? t.restore : t.maximize}</button>
                 {activeTab === 'reading' && <button onClick={() => { setReadingOpen(false); setTab('file'); setMaximized(false); }}>✕</button>}
               </div>
@@ -183,7 +191,7 @@ export function App() {
                   {openText && <button role="tab" aria-selected={activeFileKey === null} onClick={() => setActiveFileKey(null)}>{openText.title}</button>}
                 </div>}
                 {openFiles.map(file => <div key={fileKey(file)} className={`file-preview${activeFileKey !== fileKey(file) ? ' dock-hidden' : ''}`}>
-                  <FileViewer file={file} sourceLabel={`${targets.find(target => target.id === file.targetId)?.label ?? file.targetId} / ${file.session}`}
+                  <FileViewer file={file} active={activeTab === 'file' && activeFileKey === fileKey(file)} sourceLabel={`${targets.find(target => target.id === file.targetId)?.label ?? file.targetId} / ${file.session}`}
                     onClose={() => closeFile(file)} onOpenFile={handleOpenFile} />
                 </div>)}
                 {openText && <div className={`file-preview${activeFileKey !== null ? ' dock-hidden' : ''}`}>

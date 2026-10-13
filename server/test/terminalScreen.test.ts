@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
 import headless from '@xterm/headless';
+import unicode11 from '@xterm/addon-unicode11';
 import { TerminalScreen, type ScreenSnapshot } from '../src/terminalScreen.js';
 const cleanup: (() => void)[] = [];
 afterEach(() => cleanup.splice(0).forEach(fn => fn()));
@@ -8,10 +9,20 @@ function write(s: TerminalScreen, text: string) { return new Promise<void>(r => 
 function snapshot(s: TerminalScreen) { return new Promise<ScreenSnapshot | null>(r => s.snapshot(r)); }
 async function restore(s: ScreenSnapshot) {
   const t = new headless.Terminal({ cols: s.cols, rows: s.rows, allowProposedApi: true });
+  t.loadAddon(new unicode11.Unicode11Addon()); t.unicode.activeVersion = '11';
   cleanup.push(() => t.dispose());
   await new Promise<void>(r => t.write(s.data, r));
   return t;
 }
+it('restores Chinese, modern emoji and combining accents with matching cursor cells', async () => {
+  const s = screen(); await write(s, 'abc中🧪e\u0301!');
+  const t = await restore((await snapshot(s))!);
+  const line = t.buffer.active.getLine(0)!;
+  expect(line.getCell(3)?.getWidth()).toBe(2);
+  expect(line.getCell(5)?.getChars()).toBe('🧪'); expect(line.getCell(5)?.getWidth()).toBe(2);
+  expect(line.getCell(7)?.getChars()).toBe('e\u0301'); expect(line.getCell(8)?.getChars()).toBe('!');
+  expect(t.buffer.active.cursorX).toBe(9);
+});
 it('preserves fullscreen, SGR mouse and scroll margins after over 1 MiB of updates', async () => {
   const s = screen();
   await write(s, '\x1b[?1049h\x1b[?1000h\x1b[?1006h\x1b[?2004h\x1b[?25l');

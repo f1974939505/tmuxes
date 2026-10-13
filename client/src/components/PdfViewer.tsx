@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy, type PDFDocumentLoadingTask } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import 'pdfjs-dist/web/pdf_viewer.css';
@@ -7,9 +7,9 @@ import { useI18n } from '../i18n';
 GlobalWorkerOptions.workerSrc = workerUrl;
 // Build/start scripts copy CMaps/fonts/wasm beside the app, never to a CDN.
 
-function Page({ doc, number, scale, width, root }: { doc: PDFDocumentProxy; number: number; scale: number | null; width: number; root: HTMLElement | null }) {
+function Page({ doc, number, scale, width, root, heights }: { doc: PDFDocumentProxy; number: number; scale: number | null; width: number; root: HTMLElement | null; heights: Map<number, number> }) {
   const ref = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null), text = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false), [height, setHeight] = useState(1000), [error, setError] = useState('');
+  const [visible, setVisible] = useState(false), [height, setHeight] = useState(() => heights.get(number) ?? 1000), [error, setError] = useState('');
   useEffect(() => {
     const observer = new IntersectionObserver(entries => setVisible(entries[0].isIntersecting), { root, rootMargin: '600px' });
     if (ref.current) observer.observe(ref.current);
@@ -22,9 +22,10 @@ function Page({ doc, number, scale, width, root }: { doc: PDFDocumentProxy; numb
       if (cancelled) return;
       const viewport = page.getViewport({ scale: scale ?? Math.max(0.1, (width - 32) / page.getViewport({ scale: 1 }).width) });
       setHeight(viewport.height);
+      heights.set(number, viewport.height);
     }).catch(e => { if (!cancelled) setError(String(e?.message ?? e)); });
     return () => { cancelled = true; };
-  }, [doc, number, scale, width, visible]);
+  }, [doc, number, scale, width, visible, heights]);
   useEffect(() => {
     if (!visible || !canvas.current || !text.current) return;
     let cancelled = false;
@@ -59,6 +60,8 @@ function Page({ doc, number, scale, width, root }: { doc: PDFDocumentProxy; numb
 export default function PdfViewer({ url }: { url: string }) {
   const { t } = useI18n();
   const host = useRef<HTMLDivElement>(null);
+  const heights = useRef(new Map<number, number>());
+  const position = useRef<{ number: number; fraction: number } | null>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null), [error, setError] = useState('');
   const [scale, setScale] = useState<number | null>(null), [page, setPage] = useState(1), [width, setWidth] = useState(600);
   const [inverted, setInverted] = useState(() => {
@@ -66,6 +69,15 @@ export default function PdfViewer({ url }: { url: string }) {
   });
   useEffect(() => { try { localStorage.setItem('tmuxes.pdfInverted', String(inverted)); } catch { /* storage disabled */ } }, [inverted]);
   useEffect(() => {
+    const element = host.current;
+    if (element) {
+      const top = element.getBoundingClientRect().top;
+      const pages = Array.from(element.querySelectorAll<HTMLElement>('[data-page]'));
+      const current = pages.find(item => item.getBoundingClientRect().bottom > top) ?? pages.at(-1);
+      if (current) position.current = { number: Number(current.dataset.page),
+        fraction: Math.max(0, (top - current.getBoundingClientRect().top) / Math.max(1, current.clientHeight)) };
+    }
+    setDoc(null); setError('');
     let cancelled = false;
     let loading: PDFDocumentLoadingTask | undefined;
     const abort = new AbortController();
@@ -87,6 +99,15 @@ export default function PdfViewer({ url }: { url: string }) {
     })().catch(e => { if (!cancelled) setError(String(e?.message ?? e)); });
     return () => { cancelled = true; abort.abort(); void loading?.destroy(); };
   }, [url, t.pdfPassword]);
+  useLayoutEffect(() => {
+    if (!doc || !host.current || !position.current) return;
+    const saved = position.current; position.current = null;
+    const number = Math.min(doc.numPages, saved.number);
+    const current = host.current.querySelector<HTMLElement>(`[data-page="${number}"]`);
+    if (current) host.current.scrollTop += current.getBoundingClientRect().top - host.current.getBoundingClientRect().top +
+      Math.min(0.99, saved.fraction) * current.clientHeight;
+    setPage(number);
+  }, [doc]);
   useEffect(() => {
     const observer = new ResizeObserver(entries => { if (entries[0].contentRect.width) setWidth(entries[0].contentRect.width); });
     if (host.current) observer.observe(host.current);
@@ -103,10 +124,10 @@ export default function PdfViewer({ url }: { url: string }) {
       <label>{t.pageNumber} <input type="number" min={1} max={doc?.numPages ?? 1} value={page} onChange={e => setPage(Number(e.target.value))} onKeyDown={e => { if (e.key === 'Enter') jump(); }} /></label>
       <button onClick={jump}>↵</button><span>/ {doc?.numPages ?? '…'}</span>
     </div>
-    <div className={`pdf-surface${inverted ? ' inverted' : ''}`} ref={host}>
+    <div className={`pdf-surface${inverted ? ' inverted' : ''}`} ref={host} tabIndex={0} aria-label={t.preview}>
       {error && <div className="viewer-msg error">{error}</div>}
       {!doc && !error && <div className="viewer-msg">{t.loading}</div>}
-      {doc && Array.from({ length: doc.numPages }, (_, i) => <Page key={i} doc={doc} number={i + 1} scale={scale} width={width} root={host.current} />)}
+      {doc && Array.from({ length: doc.numPages }, (_, i) => <Page key={i} doc={doc} number={i + 1} scale={scale} width={width} root={host.current} heights={heights.current} />)}
     </div>
   </div>;
 }

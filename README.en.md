@@ -184,6 +184,8 @@ The file browser opens PNG, JPG/JPEG, GIF, WebP and PDF files. Images support fi
 
 Markdown opens in rendered preview mode. Switch to Source to edit, save and undo; Preview renders the current editor content. Tables, code blocks, `$...$` / `$$...$$` math and `\(...\)` / `\[...\]` outside code are supported. Invalid formulas retain their source with an error hint. Raw HTML is disabled; external images load only after a click. Relative image, Markdown and PDF links stay within the current session's working directory.
 
+The visible file checks for changes about every 3 seconds; hidden file tabs and background pages stop checking. Unsaved edits are preserved and external changes show a conflict. Reload confirms discarding edits, and save checks the version previously read. Image and PDF updates retain zoom, page and inverted colors. Changing or temporarily missing files retry on the next check; connection and permission errors pause reads. Remote reads reuse existing management connections, and only manual connection opens SSH again. Narrow windows temporarily place right previews at the bottom and restore the layout when widened.
+
 Click Agent reading above the terminal to automatically view recent user prompts and complete replies from the active pane, with earlier-message pagination. Files and reading have separate tabs. Dock the preview at the bottom or right, resize it, or maximize it. Maximizing preserves the mounted terminal and its geometry; dock position and size are stored in the browser. Reading follows the bottom while preserving your position when scrolling up.
 
 Automatic reading supports **Codex 0.160** and verified Claude Code JSONL message shapes through the target's native integration. After upgrading tmuxes, click Install / Update once for each agent in the target's Agent integration panel, then wait for a new hook event to record its transcript path. Existing trust and other configuration are preserved. Missing bindings and unsupported formats show an explicit hint. As a fallback, select terminal output (including through Select text) and click Render selection. Terminal snapshots may contain wrapping or missing content.
@@ -339,18 +341,15 @@ If typing an initial command or sending Enter fails after session creation, the 
 
 ## 📋 Changelog
 
-### 0.1.26 (2026-10-13)
+### 0.1.27 (2026-10-13)
 
-- **Codex completion:** replay 0.160 native records incrementally to recover missed tool and subagent events. Green requires the current turn to finish with no pending background tasks, decisions or goals.
-- **File previews & downloads:** image, PDF and Markdown math previews, plus original file downloads. PDFs support continuous scrolling, text selection and inverted colors.
-- **Persistent file tabs:** retain files, PDF pages, image zoom and unsaved edits across sessions, windows and targets, with bottom / right / maximized layouts.
-- **Agent reading:** complete Codex 0.160 / Claude Code messages, incremental updates and history paging, with rendered selections as a fallback. Reading is independent of status collection.
-- **Clickable paths:** open files from terminal output, reply prose and code while retaining their original target and session.
-- **Sidebar & reminders:** Files / Git use half the height; arrows locate offscreen alerts and collapsed groups summarize unread reminders.
-- **Preview style fixes:** isolate the main sidebar class from PDF.js so loading a PDF cannot narrow it; file toolbar buttons stay on one line.
-- **Documentation:** new screenshots use entirely fictional data; both READMEs reflect the current UI and retain only the latest entry, with older logs archived separately.
+- **Live files:** check only the visible file about every 3 seconds; unchanged content is not retransmitted, and returning to a tab checks immediately. Text / Markdown update automatically; images and PDFs reload only on changes while retaining zoom, page and reading positions.
+- **Edit protection:** external updates preserve unsaved edits and show a conflict. Saving checks the file version; overwriting external changes requires confirmation. A toolbar button also reloads manually.
+- **Terminal display:** retain the latest resize until ready and remeasure after font loading, browser zoom and visibility changes. Browser and server use matching Unicode 11 widths to prevent cursor offsets from modern emoji.
+- **Stable layout:** keep terminal controls on one line and reserve at least 320 pixels for the terminal beside a right preview. Limited space temporarily docks previews at the bottom; widening restores the preferred layout.
+- **Connection safety:** file checks reuse existing management connections. Hidden tabs stop polling; connection and permission errors pause until manual refresh or connection. No additional SSH logins.
 
-See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.25 and earlier.
+See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.26 and earlier.
 
 <div align="center">
 <sub>Built with React, TypeScript, node-pty &amp; xterm.js — plus a lot of tmux. Happy babysitting. 🤖</sub>

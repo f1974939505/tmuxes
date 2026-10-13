@@ -4,6 +4,17 @@
 
 [Current features and latest source changes](./README.en.md#-changelog). Entries below describe their original versions; use the README for current connection, safety and integration behavior.
 
+### 0.1.26 (2026-10-13)
+
+- **Codex completion:** replay 0.160 native records incrementally to recover missed tool and subagent events. Green requires the current turn to finish with no pending background tasks, decisions or goals.
+- **File previews & downloads:** image, PDF and Markdown math previews, plus original file downloads. PDFs support continuous scrolling, text selection and inverted colors.
+- **Persistent file tabs:** retain files, PDF pages, image zoom and unsaved edits across sessions, windows and targets, with bottom / right / maximized layouts.
+- **Agent reading:** complete Codex 0.160 / Claude Code messages, incremental updates and history paging, with rendered selections as a fallback. Reading is independent of status collection.
+- **Clickable paths:** open files from terminal output, reply prose and code while retaining their original target and session.
+- **Sidebar & reminders:** Files / Git use half the height; arrows locate offscreen alerts and collapsed groups summarize unread reminders.
+- **Preview style fixes:** isolate the main sidebar class from PDF.js so loading a PDF cannot narrow it; file toolbar buttons stay on one line.
+- **Documentation:** new screenshots use entirely fictional data; both READMEs reflect the current UI and retain only the latest entry, with older logs archived separately.
+
 ### 0.1.25
 
 - **Codex 0.160 completion:** rebuild status from structured execution records, including nested subagents, code cells, and read-only goal checks. Fix permanently red status caused by missing callbacks, failed image reads, and waits on commands that already exited.

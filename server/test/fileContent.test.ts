@@ -3,11 +3,42 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import express from 'express';
-import { byteRange, fileIdentity, readFileBlock, serveFileContent } from '../src/fileContent.js';
+import { byteRange, fileIdentity, fileEtag, requireFileVersion, readFileBlock, serveFileContent, serveFilePreview } from '../src/fileContent.js';
 import type { Target } from '../src/targets.js';
 
 const target: Target = { kind: 'local', id: 'local', label: 'Local' };
 describe('binary file previews', () => {
+  it('checks text metadata without a body, detects external updates and rejects stale save versions', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tmuxes-refresh-'));
+    const path = join(dir, 'notes.md');
+    await writeFile(path, '## 初始内容\n$x^2$');
+    const app = express();
+    app.get('/file', (req, res, next) => { void serveFilePreview(target, path, req, res).catch(next); });
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise<void>(resolve => server.once('listening', resolve));
+    const url = `http://127.0.0.1:${(server.address() as any).port}/file`;
+    try {
+      const first = await fetch(url), version = first.headers.get('etag')!;
+      expect((await first.json() as any).content).toBe('## 初始内容\n$x^2$');
+      const unchanged = await fetch(url, { headers: { 'If-None-Match': version } });
+      expect(unchanged.status).toBe(304); expect(await unchanged.text()).toBe('');
+      expect(unchanged.headers.get('etag')).toBe(version);
+      await requireFileVersion(target, path, version);
+      await writeFile(path, '## 外部更新内容\n$x^3$');
+      const head = await fetch(url, { method: 'HEAD', headers: { 'If-None-Match': version } });
+      expect(head.status).toBe(200); expect(await head.text()).toBe('');
+      expect(head.headers.get('etag')).not.toBe(version);
+      const latest = await fetch(url, { headers: { 'If-None-Match': version } });
+      expect((await latest.json() as any).content).toBe('## 外部更新内容\n$x^3$');
+      await expect(requireFileVersion(target, path, version)).rejects.toMatchObject({ status: 412 });
+      await requireFileVersion(target, path, fileEtag((await fileIdentity(target, path)).identity));
+      await rm(path);
+      await expect(fileIdentity(target, path)).rejects.toMatchObject({ status: 404 });
+      await writeFile(path, 'Recreated file');
+      const recreated = await fetch(url, { headers: { 'If-None-Match': version } });
+      expect((await recreated.json() as any).content).toBe('Recreated file');
+    } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(dir, { recursive: true }); }
+  });
   it('downloads arbitrary files unchanged across blocks with a Unicode filename, HEAD and ranges', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tmuxes-download-'));
     const path = join(dir, '数据 (v1).bin');
@@ -58,6 +89,12 @@ describe('binary file previews', () => {
       const head = await fetch(url, { method: 'HEAD' });
       expect(head.headers.get('content-length')).toBe('9');
       expect(await head.text()).toBe('');
+      const unchanged = await fetch(url, { method: 'HEAD', headers: { 'If-None-Match': head.headers.get('etag')! } });
+      expect(unchanged.status).toBe(304); expect(await unchanged.text()).toBe('');
+      await writeFile(path, Buffer.concat([bytes, Buffer.from([1])]));
+      const changed = await fetch(url, { method: 'HEAD', headers: { 'If-None-Match': head.headers.get('etag')! } });
+      expect(changed.status).toBe(200); expect(changed.headers.get('etag')).not.toBe(head.headers.get('etag'));
+      await writeFile(path, bytes);
       const range = await fetch(url, { headers: { Range: 'bytes=3-6' } });
       expect(range.status).toBe(206);
       expect(range.headers.get('content-range')).toBe('bytes 3-6/9');

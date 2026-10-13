@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
 import type { Terminal } from '@xterm/xterm';
 import { fileReference, fileReferenceHref, findFileReferences, resolveFileReference } from '../src/fileLinks';
 import { terminalFileLinks } from '../src/terminalFileLinks';
@@ -26,18 +27,18 @@ describe('file paths reported by agents', () => {
 });
 
 describe('terminal hyperlink cell ranges', () => {
-  async function links(text: string, cols: number) {
+  async function links(text: string, cols: number, version = '11') {
     const term = new HeadlessTerminal({ cols, rows: 80, allowProposedApi: true, scrollback: 100 });
+    if (version === '11') { term.loadAddon(new Unicode11Addon()); term.unicode.activeVersion = '11'; }
     await new Promise<void>(resolve => term.write(text, resolve));
     return term;
   }
   it('maps CJK, emoji, combining characters and soft wraps to actual xterm columns', async () => {
     const cases = [
-      // The installed xterm Unicode 6 provider gives emoji one cell, whereas
-      // supplementary CJK occupies two (UnicodeV6.wcwidth); use those actual
-      // renderer conventions, not JavaScript string length or modern wcwidth.
-      { text: '图 /p/😀.png', cols: 12, range: { start: { x: 4, y: 1 }, end: { x: 11, y: 1 } } },
-      { text: '图 /p/中😀.png', cols: 12, range: { start: { x: 4, y: 1 }, end: { x: 1, y: 2 } } },
+      // Chinese and emoji each occupy two cells under the app's Unicode 11
+      // provider. Combining accents occupy no extra column.
+      { text: '图 /p/😀.png', cols: 12, range: { start: { x: 4, y: 1 }, end: { x: 12, y: 1 } } },
+      { text: '图 /p/中😀.png', cols: 12, range: { start: { x: 4, y: 1 }, end: { x: 2, y: 2 } } },
       { text: '图 /p/𠀀.png', cols: 12, range: { start: { x: 4, y: 1 }, end: { x: 12, y: 1 } } },
       { text: 'xx /abcd/中文.pdf', cols: 10, range: { start: { x: 4, y: 1 }, end: { x: 8, y: 2 } } },
       { text: '图 /p/e\u0301.png', cols: 12, range: { start: { x: 4, y: 1 }, end: { x: 11, y: 1 } } },
@@ -53,6 +54,11 @@ describe('terminal hyperlink cell ranges', () => {
         }
       } finally { term.dispose(); }
     }
+  });
+  it('still maps a legacy one-cell emoji provider without guessing its width', async () => {
+    const term = await links('图 /p/😀.png', 12, '6');
+    try { expect(terminalFileLinks(term as unknown as Pick<Terminal, 'buffer' | 'cols'>, 1)[0].range).toEqual({ start: { x: 4, y: 1 }, end: { x: 11, y: 1 } }); }
+    finally { term.dispose(); }
   });
   it('bounds hover work and does not link a fragment of a huge wrapped line', async () => {
     const term = await links('x'.repeat(1000) + ' /work/a.pdf', 12);

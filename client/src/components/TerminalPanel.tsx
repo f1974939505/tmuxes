@@ -29,6 +29,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
   const hostRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<TerminalHandle | null>(null);
   const socketRef = useRef<TmuxSocket | null>(null);
+  const refitRef = useRef<() => void>(() => {});
   const [status, setStatus] = useState<ConnStatus>({ kind: 'connecting' });
   const [generation, setGeneration] = useState(0);
   const [startingAgent, setStartingAgent] = useState<LaunchAgent | null>(null);
@@ -88,12 +89,13 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           if (msg.type === 'restore') {
             // Geometry changes must stay ordered with xterm's asynchronous
             // parser; resizing before older bytes parse corrupts TUI layout.
-            handle.term.write('', () => handle.term.resize(msg.cols, msg.rows));
+            handle.term.write('', () => { if (!disposed) handle.term.resize(msg.cols, msg.rows); });
             handle.term.write(msg.data);
           } else if (msg.type === 'geometry') {
-            handle.term.write('', () => handle.term.resize(msg.cols, msg.rows));
+            handle.term.write('', () => { if (!disposed) handle.term.resize(msg.cols, msg.rows); });
           } else if (msg.type === 'ready') {
             setStatus({ kind: 'connected' });
+            refitRef.current();
           } else if (msg.type === 'ssh') {
             setStatus((s) => (s.kind === 'connecting' ? { kind: 'ssh', message: msg.message } : s));
           } else if (msg.type === 'error') {
@@ -130,23 +132,38 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
     // Debounced fit on container resize → push new geometry to the PTY.
     let resizeTimer: number | undefined;
-    const observer = new ResizeObserver(() => {
+    const refit = () => {
+      if (disposed) return;
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
+        if (disposed || document.hidden) return;
         const geo = handle.refit(false);
         if (geo && (geo.cols !== lastCols || geo.rows !== lastRows)) {
           lastCols = geo.cols;
           lastRows = geo.rows;
           socket.resize(geo.cols, geo.rows);
         }
+        handle.term.refresh(0, handle.term.rows - 1);
       }, RESIZE_DEBOUNCE_MS);
-    });
+    };
+    refitRef.current = refit;
+    const observer = new ResizeObserver(refit);
     observer.observe(host);
+    // Browser zoom/DPR, font readiness and returning from a hidden tab can
+    // change character metrics without changing the host's CSS dimensions.
+    window.addEventListener('resize', refit);
+    document.addEventListener('visibilitychange', refit);
+    document.fonts?.addEventListener('loadingdone', refit);
+    void document.fonts?.ready.then(refit);
 
     return () => {
       disposed = true; fileRequest?.abort();
       window.clearTimeout(resizeTimer);
       observer.disconnect();
+      window.removeEventListener('resize', refit);
+      document.removeEventListener('visibilitychange', refit);
+      document.fonts?.removeEventListener('loadingdone', refit);
+      refitRef.current = () => {};
       dataSub.dispose();
       binarySub.dispose();
       socket.close();
@@ -162,8 +179,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
     if (!handle) return;
     if (handle.term.options.fontSize === fontSize) return;
     handle.term.options.fontSize = fontSize;
-    const geo = handle.refit(false);
-    if (geo) socketRef.current?.resize(geo.cols, geo.rows);
+    refitRef.current();
   }, [fontSize]);
 
   const launchAgent = async (agent: LaunchAgent) => {

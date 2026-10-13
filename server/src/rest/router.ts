@@ -17,7 +17,6 @@ import {
   getSessionCwd,
   listDirectory,
   listSessionDirectory,
-  readFilePreview,
   resolveScopedPath,
   writeFile,
 } from '../files.js';
@@ -38,7 +37,7 @@ import { installNativeObserver } from '../agentHooks.js';
 import { commandArgv } from '../tmux/builder.js';
 import { runTargetCommand } from '../targetCommand.js';
 import { connectSshTarget } from '../sshManagement.js';
-import { serveFileContent } from '../fileContent.js';
+import { requireFileVersion, serveFileContent, serveFilePreview } from '../fileContent.js';
 import { readAgentMessages } from '../agentMessages.js';
 
 /** Cap on a saved file's size (matches the editor's text-only use). */
@@ -288,7 +287,7 @@ apiRouter.get(
     const target = requireTarget(req);
     rejectIfWinlocal(target);
     const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
-    res.json(await readFilePreview(target, path));
+    await serveFilePreview(target, path, req, res);
   }),
 );
 
@@ -323,6 +322,7 @@ apiRouter.put(
     if (Buffer.byteLength(body.content, 'utf8') > MAX_WRITE_BYTES) {
       throw new TmuxError(413, 'file too large to save');
     }
+    await requireFileVersion(target, path, req.headers['if-match']);
     await writeFile(target, path, body.content);
     res.json({ ok: true });
   }),

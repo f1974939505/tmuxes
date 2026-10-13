@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { fileReference } from '../fileLinks';
 import { fileLinkProvider } from '../terminalFileLinks';
 
@@ -41,6 +42,8 @@ export function createTerminal(container: HTMLElement, fontSize: number, onOpenP
   const term = new Terminal({
     fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
     fontSize,
+    letterSpacing: 0,
+    lineHeight: 1.1,
     theme: THEME,
     scrollback: 5000,
     cursorBlink: true,
@@ -57,6 +60,8 @@ export function createTerminal(container: HTMLElement, fontSize: number, onOpenP
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = '11';
   term.loadAddon(new WebLinksAddon());
   term.open(container);
   const links = onOpenPath ? term.registerLinkProvider(fileLinkProvider(term, activate, path => { hovered = path; })) : undefined;
