@@ -11,7 +11,11 @@ import type {
   SessionInfo,
   Target,
   WindowInfo,
+  AgentMessages,
+  OpenFile,
+  Selection,
 } from './types';
+import { fileReference, resolveFileReference } from './fileLinks';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -43,8 +47,16 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  getMessages(targetId: string, session: string, cursor?: string, direction: 'newer' | 'older' = 'newer', signal?: AbortSignal): Promise<AgentMessages> {
+    const qs = new URLSearchParams({ direction });
+    if (cursor) qs.set('cursor', cursor);
+    return request(`/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(session)}/messages?${qs}`, { signal });
+  },
   connectTarget(targetId: string): Promise<{ ok: true }> {
-    return request(`/api/targets/${encodeURIComponent(targetId)}/connect`, { method: 'POST' });
+    return request<{ ok: true }>(`/api/targets/${encodeURIComponent(targetId)}/connect`, { method: 'POST' }).then(result => {
+      window.dispatchEvent(new CustomEvent('tmuxes:target-connected', { detail: { targetId } }));
+      return result;
+    });
   },
   getTargets(): Promise<{ targets: Target[] }> {
     return request('/api/targets');
@@ -94,9 +106,10 @@ export const api = {
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/windows`,
     );
   },
-  getCwd(targetId: string, name: string): Promise<{ cwd: string }> {
+  getCwd(targetId: string, name: string, signal?: AbortSignal): Promise<{ cwd: string }> {
     return request(
       `/api/targets/${encodeURIComponent(targetId)}/sessions/${encodeURIComponent(name)}/cwd`,
+      { signal },
     );
   },
   listFiles(targetId: string, session: string, path: string): Promise<{ path: string; entries: FileEntry[] }> {
@@ -186,6 +199,25 @@ export const api = {
     });
   },
 };
+
+/** Resolve only on a user's click, preserving the originating session. All
+ *  file reads still go through the existing server-side workspace checks. */
+export async function linkedFile(source: Selection, value: string, directory?: string, signal?: AbortSignal): Promise<OpenFile> {
+  if (!fileReference(value)) throw new Error('Unsupported file path.');
+  let path = resolveFileReference(value, directory);
+  if (!path) {
+    const { cwd } = await api.getCwd(source.targetId, source.session, signal);
+    path = resolveFileReference(value, cwd);
+  }
+  if (!path) throw new Error('Cannot resolve file path.');
+  return { ...source, path, name: path.split('/').pop()! };
+}
+
+export function fileContentUrl(targetId: string, session: string, path: string, download = false): string {
+  const query = new URLSearchParams({ session, path });
+  if (download) query.set('download', '1');
+  return `/api/targets/${encodeURIComponent(targetId)}/file/content?${query}`;
+}
 
 /** Build the WebSocket URL for an interactive attach (same-origin). */
 export function terminalSocketUrl(targetId: string, session: string, cols: number, rows: number): string {

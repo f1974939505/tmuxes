@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 const API_TARGET = 'http://127.0.0.1:7420';
 
 export default defineConfig({
+  resolve: { dedupe: ['katex'] },
   plugins: [react()],
   server: {
     port: 5173,

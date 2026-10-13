@@ -1,12 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { FilePreview, OpenFile } from '../types';
-import { api, ApiError } from '../api';
+import { api, ApiError, fileContentUrl } from '../api';
 import { useSettings } from '../settings';
 import { useI18n } from '../i18n';
+import { previewKind } from '../util';
+import { MarkdownView } from './LazyMarkdownView';
+import { ImageViewer } from './ImageViewer';
+import { FileDownload } from './FileDownload';
+const PdfViewer = lazy(() => import('./PdfViewer'));
 
 interface Props {
   file: OpenFile;
   onClose: () => void;
+  onOpenFile?: (file: OpenFile) => void;
+  sourceLabel?: string;
 }
 
 /** New undo checkpoint after this idle gap, so a burst of typing collapses
@@ -15,7 +22,7 @@ const COALESCE_MS = 500;
 
 /** Read-only preview + editor for a text file. Editable only when the file is
  *  text and was not truncated (saving a truncated preview would lose data). */
-export function FileViewer({ file, onClose }: Props) {
+export function FileViewer({ file, onClose, onOpenFile, sourceLabel }: Props) {
   const { settings } = useSettings();
   const { t } = useI18n();
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -31,6 +38,9 @@ export function FileViewer({ file, onClose }: Props) {
   const [future, setFuture] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const kind = previewKind(file.name);
+  const media = kind === 'image' || kind === 'pdf';
+  const [rendered, setRendered] = useState(kind === 'markdown');
 
   const editable = !!preview && !preview.binary && !preview.truncated;
   const dirty = editable && text !== baseline;
@@ -45,6 +55,8 @@ export function FileViewer({ file, onClose }: Props) {
     setPast([]);
     setFuture([]);
     lastEditRef.current = 0;
+    setRendered(kind === 'markdown');
+    if (media) { setLoading(false); return; }
     api
       .getFile(file.targetId, file.session, file.path)
       .then((p) => {
@@ -62,7 +74,7 @@ export function FileViewer({ file, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [file.targetId, file.session, file.path, t.failedReadFile]);
+  }, [file.targetId, file.session, file.path, t.failedReadFile, kind, media]);
 
   const onType = (next: string) => {
     const now = Date.now();
@@ -145,8 +157,10 @@ export function FileViewer({ file, onClose }: Props) {
           {dirty && <span className="dirty-dot" title={t.unsavedChanges}>●</span>}
           {file.name}
         </span>
-        <span className="viewer-path">{file.path}</span>
+        <span className="viewer-path" title={`${sourceLabel ?? file.session} · ${file.path}`}>{sourceLabel ?? file.session} · {file.path}</span>
         <div className="viewer-head-spacer" />
+        <FileDownload file={file} />
+        {kind === 'markdown' && <button aria-pressed={rendered} onClick={() => setRendered(v => !v)}>{rendered ? t.source : t.preview}</button>}
         {editable && (
           <>
             <button onClick={undo} disabled={past.length === 0} title={t.undo}>
@@ -169,10 +183,13 @@ export function FileViewer({ file, onClose }: Props) {
       {saveError && <div className="viewer-msg error">{saveError}</div>}
 
       <div className="viewer-body">
+        {kind === 'image' && <ImageViewer key={file.path} url={fileContentUrl(file.targetId, file.session, file.path)} />}
+        {kind === 'pdf' && <Suspense fallback={<div className="viewer-msg">{t.loading}</div>}><PdfViewer key={file.path} url={fileContentUrl(file.targetId, file.session, file.path)} /></Suspense>}
         {loading && <div className="viewer-msg">{t.loading}</div>}
         {loadError && <div className="viewer-msg error">{loadError}</div>}
         {preview && preview.binary && <div className="viewer-msg">{t.binaryNotShown}</div>}
-        {preview && !preview.binary && editable && (
+        {preview && !preview.binary && rendered && <div className="markdown-scroll" style={{ fontSize: settings.viewerFontSize }}><MarkdownView text={text} context={file} onOpenFile={onOpenFile} /></div>}
+        {preview && !preview.binary && editable && !rendered && (
           <textarea
             ref={taRef}
             className="viewer-editor"
@@ -183,7 +200,7 @@ export function FileViewer({ file, onClose }: Props) {
             onKeyDown={onKeyDown}
           />
         )}
-        {preview && !preview.binary && !editable && (
+        {preview && !preview.binary && !editable && !rendered && (
           <pre className="viewer-pre" style={{ fontSize: settings.viewerFontSize }}>
             {preview.content}
           </pre>

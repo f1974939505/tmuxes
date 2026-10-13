@@ -71,6 +71,50 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(native.restore(data["state"]).snapshot(), ("unknown", ""))
         self.assertEqual(data["candidate"], "t")
 
+    def test_unbound_codex_is_removed_without_contacting_daemon(self):
+        from types import SimpleNamespace
+        native.report("codex", {"session_id": "root", "hook_event_name": "Stop"})
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "ReadOnlyCodex") as daemon:
+            self.assertEqual(native.snapshot()["observers"], [])
+            daemon.assert_not_called()
+        self.assertEqual(list(self.base.glob("*.json")), [])
+
+    def test_live_pane_observation_is_not_expired_by_age(self):
+        from types import SimpleNamespace
+        bound = {"socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "binding", return_value=bound):
+            native.report("claude", {"session_id": "root", "hook_event_name": "UserPromptSubmit"})
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True), \
+             patch.object(native.time, "time", return_value=native.time.time() + 3 * 86400):
+            observation = native.snapshot()["observers"][0]
+        self.assertEqual((observation["session"], observation["state"]), ("current", "running"))
+
+    def test_160_ledger_and_missing_stop_survive_snapshot_persistence(self):
+        from types import SimpleNamespace
+        transcript = self.base / "rollout.jsonl"
+        transcript.write_text(json.dumps({"type": "session_meta", "payload": {"id": "root", "cli_version": "0.160.0"}})
+            + '\n' + json.dumps({"type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t"}}) + '\n')
+        bound = {"proof": "foreground-direct-v1", "socket": "/sock", "pane": "%1", "pid": 20, "stamp": "x"}
+        with patch.object(native, "direct_codex_binding", return_value=bound), \
+             patch.dict(native.os.environ, {"CODEX_HOME": str(self.base)}):
+            native.report("codex", {"session_id": "root", "hook_event_name": "UserPromptSubmit",
+                "turn_id": "t", "transcript_path": str(transcript)})
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True):
+            self.assertEqual(native.snapshot()["observers"][0]["state"], "settling")
+            persisted = json.loads(next(self.base.glob("*.json")).read_text())
+            self.assertTrue(persisted["foreground"]["workLedger"]["root"]["caughtUp"])
+            with patch.object(native.time, "time", return_value=native.time.time() + 2):
+                observation = native.snapshot()["observers"][0]
+            self.assertEqual((observation["state"], observation["reason"]), ("idle", "done"))
+            transcript.unlink()
+            self.assertNotEqual(native.snapshot()["observers"][0]["reason"], "done")
+
     def test_new_hook_invalidates_previous_completion_verification(self):
         native.report("codex", {"session_id": "root", "hook_event_name": "Stop", "turn_id": "t"})
         path = next(self.base.glob("*.json"))
@@ -154,7 +198,7 @@ class NativeTests(unittest.TestCase):
         with patch.object(native, "direct_codex_binding", return_value=bound):
             native.report("codex", {"session_id": "root", "hook_event_name": "SessionStart"})
         path = next(self.base.glob("*.json"))
-        def interleave(record, state):
+        def interleave(record, state, deadline=None):
             latest = json.loads(path.read_text())
             latest["state"].update(revision=latest["state"]["revision"] + 1, tasks=["tool:monitor"])
             path.write_text(json.dumps(latest))

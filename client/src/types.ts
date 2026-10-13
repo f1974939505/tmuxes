@@ -38,6 +38,7 @@ export type AttentionReason = 'decision' | 'done' | 'error';
 export type LaunchAgent = AgentKind;
 
 export interface NativeObserver {
+  completionDiagnostics?: { tracked: boolean; coverage?: 'complete' | 'replaying' | 'limited' };
   lastEvent?: string;
   updated?: number;
   pane?: string | null;
@@ -180,7 +181,15 @@ export interface OpenTextPreview {
   title: string;
   subtitle?: string;
   content: string;
-  mode?: 'text' | 'diff';
+  mode?: 'text' | 'diff' | 'markdown';
+  /** Origin of a rendered terminal selection; stays fixed across switches. */
+  source?: Selection;
+}
+
+export interface AgentMessage { id: string; role: 'user' | 'assistant'; markdown: string; truncated?: boolean; before?: string | null; after?: string }
+export interface AgentMessages {
+  availability: 'ready' | 'unavailable' | 'unsupported'; source: string | null;
+  messages: AgentMessage[]; before?: string | null; after?: string | null; reset?: boolean; limited?: boolean; cwd?: string;
 }
 
 export interface Selection {

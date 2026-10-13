@@ -47,7 +47,7 @@ export function SessionRow({
 
   if (renaming) {
     return (
-      <div className="session-row" style={{ paddingLeft: 8 + depth * 14 }}>
+      <div className="session-row" data-attention={reason} data-attention-label={session.name} style={{ paddingLeft: 8 + depth * 14 }}>
         <input
           autoFocus
           value={draft}
@@ -65,6 +65,8 @@ export function SessionRow({
   return (
     <div
       className={`session-row ${selected ? 'selected' : ''} ${reason ? 'attention' : ''}`}
+      data-attention={reason}
+      data-attention-label={session.name}
       style={{ paddingLeft: 8 + depth * 14 }}
       draggable={!!onDragStart}
       onDragStart={onDragStart}

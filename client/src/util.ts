@@ -51,6 +51,14 @@ export function isTextFile(name: string): boolean {
   return TEXT_EXTENSIONS.has(lower.slice(dot + 1));
 }
 
+export function previewKind(name: string): 'image' | 'pdf' | 'markdown' | 'text' | null {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext && ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  if (ext === 'md' || ext === 'markdown') return 'markdown';
+  return isTextFile(name) ? 'text' : null;
+}
+
 /** Compact relative time, e.g. "刚刚", "5m", "3h", "2d". */
 export function ago(epochSeconds: number, nowMs: number, language: 'zh' | 'en' = 'zh'): string {
   if (!epochSeconds) return '';

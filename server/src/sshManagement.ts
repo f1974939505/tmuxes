@@ -85,7 +85,7 @@ function decodePayload(payload: string): string {
   return Buffer.from(payload.replace(/\s+/g, ''), 'base64').toString('utf8');
 }
 
-function scriptFor(id: string, command: string, input?: string): string {
+function scriptFor(id: string, command: string, input?: string, memoryOnly = false): string {
   const inputMarker = `__TMUXES_INPUT_${id}__`;
   const begin = `__TMUXES_BEGIN_${id}__`;
   const stderr = `__TMUXES_STDERR_${id}__`;
@@ -93,6 +93,20 @@ function scriptFor(id: string, command: string, input?: string): string {
   const run = input === undefined
     ? `( ${command} ) < /dev/null`
     : `base64 -d <<'${inputMarker}' | ( ${command} )\n${encodeInput(input)}\n${inputMarker}`;
+
+  if (memoryOnly && input === undefined) {
+    // New message/media reads have bounded, NUL-free JSON/base64 stdout.
+    // Keep that content in memory even on the remote side. No scratch files
+    // survive a disconnect; shared-channel framing and exit status stay intact.
+    return [
+      `__tmuxes_memory=$( ${run} 2>&1 )`,
+      `__tmuxes_code=$?`,
+      `printf '\\n${begin}\\n%s\\n' "$__tmuxes_code"`,
+      `printf '%s' "$__tmuxes_memory" | base64`,
+      `printf '\\n${stderr}\\n\\n${end}\\n'`,
+      `unset __tmuxes_memory`,
+    ].join('\n') + '\n';
+  }
 
   return [
     `__tmuxes_out=$(mktemp "\${TMPDIR:-/tmp}/tmuxes-out.XXXXXX") || exit 125`,
@@ -174,7 +188,7 @@ class SshManagementSession {
         }, opts.timeoutMs);
       }
 
-      this.child.stdin.write(scriptFor(id, command, input), (err) => {
+      this.child.stdin.write(scriptFor(id, command, input, opts.memoryOnly), (err) => {
         if (err) { this.finishPending(null, null, err.message); this.dispose(); }
       });
     });

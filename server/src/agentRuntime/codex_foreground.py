@@ -7,6 +7,10 @@ Only identifiers/status/path metadata are persisted, never prompts/tool output.
 """
 import json
 from pathlib import Path
+import time
+
+import codex_history
+import codex_rollout
 
 TAIL_BYTES = 256 * 1024
 
@@ -74,6 +78,8 @@ def hook(record, state, p):
         if p.get("source") != "compact":
             state.apply({"type": "reset"})
             tracker.update(tracked=True, children={}, tools={})
+            tracker.pop("toolScan", None)
+            tracker.pop("childScans", None)
             record.pop("candidate", None)
             record.pop("turn", None)
     elif event == "UserPromptSubmit":
@@ -115,7 +121,8 @@ def hook(record, state, p):
                 # Active, paused or unrecognized goals never count as complete.
     elif event == "SubagentStart":
         child = str(p.get("agent_id"))
-        tracker["children"].pop(child, None)
+        tracker["children"][child] = None
+        tracker.get("childScans", {}).pop(child, None)
         state.apply({"type": "task.start", "id": "child:" + child})
     elif event == "SubagentStop":
         child = str(p.get("agent_id"))
@@ -130,8 +137,47 @@ def hook(record, state, p):
         state.apply({"type": "interrupted"})
 
 
-def inspect(record, state):
+def inspect(record, state, deadline=None):
+    deadline = min(deadline or float("inf"), time.monotonic() + 0.25)
     tracker = record.get("foreground", {})
+    ledger = codex_rollout.inspect(record, deadline)
+    if ledger is not None:
+        latest = ledger.get("latest") or {}
+        candidate = record.get("candidate")
+        # A verified native task_complete can recover a missed Stop callback,
+        # including a late background-tool callback that cleared its candidate.
+        # An explicit user interrupt or a newer prompt still revokes the proof.
+        if (not candidate and record.get("turn") == latest.get("turn")
+                and latest.get("type") == "task_complete" and state.event != "interrupted"):
+            candidate = record["candidate"] = latest["turn"]
+        matches = bool(candidate and latest.get("turn") == candidate)
+        if ledger["complete"]:
+            # Replay recovers a missed startup/tool hook without guessing that
+            # silence means completion. Goals/children/shells remain explicit.
+            state.tasks = set(ledger["tasks"])
+            state.requests = {x for x in state.requests if not x.startswith("goal:") and x != "goal"}
+            state.requests.update(ledger["requests"])
+            if ledger.get("error"):
+                state.apply({"type": "error"})
+            elif matches and latest.get("type") == "task_complete":
+                tracker["tools"] = {}
+                state.apply({"type": "stop", "known": True, "preserveRequests": True})
+            elif latest.get("type") == "task_started":
+                state.apply({"type": "activity"})
+        else:
+            # Unknown/replaying history is not evidence of a running monitor.
+            # Hooks still report current foreground activity and user requests.
+            if not state.running:
+                state.tasks = set()
+            state.complete_at = None
+        record["completionDiagnostics"] = {
+            "tracked": ledger["complete"], "coverage": "complete" if ledger["complete"] else "limited" if ledger.get("limited") else "replaying",
+            "candidateTurn": candidate, "completionEvent": latest.get("type"),
+            "completionTurnMatches": matches, "pendingTasks": sorted(state.tasks),
+            "pendingDecisions": sorted(state.requests), "transcript": tracker.get("transcript"),
+            "ledger": ledger,
+        }
+        return state
     observed = evidence(tracker.get("transcript"))
     if observed:
         for call, turn in observed["failed_launches"].items():
@@ -139,12 +185,51 @@ def inspect(record, state):
             if tool and tool.get("name") in ("Bash", "exec_command") and tool.get("turn") == turn:
                 state.apply({"type": "task.end", "id": "tool:" + call})
                 tracker["tools"].pop(call, None)
+    codex_history.resolve_tools(record, state, deadline)
+    # Older observers did not retain a path until SubagentStop. Recover only
+    # the exact UUID's verified child rollout from its dated directories.
+    for task in list(state.tasks):
+        if task.startswith("child:"):
+            child = task[6:]
+            if not tracker.setdefault("children", {}).get(child) and record.get("scope"):
+                tracker["children"][child] = codex_history.find_child(record["scope"], child, record["id"])
+    child_diagnostics = []
     for child, path in tracker.get("children", {}).items():
-        if completed(path):
+        child_observed = evidence(path)
+        child_latest = child_observed.get("latest") if child_observed else None
+        stopped = codex_history.child_stopped(path, child, tracker, deadline)
+        child_diagnostics.append({"id": child, "transcript": path,
+            "completionEvent": child_latest.get("type") if child_latest else None,
+            "stopped": bool(stopped), "scan": tracker.get("childScans", {}).get(child, {})})
+        if stopped:
             state.apply({"type": "task.end", "id": "child:" + child})
+        else:
+            state.apply({"type": "task.start", "id": "child:" + child})
     candidate = record.get("candidate")
     latest = observed.get("latest") if observed else None
+    if (candidate and latest and latest.get("type") == "task_complete"
+            and latest.get("turn_id") == candidate and not state.running):
+        # view_image cannot outlive its calling turn. A missing image throws
+        # after PreToolUse without emitting PostToolUse or an ImageView item in
+        # Codex 0.160 code mode. Retaining it as a monitor makes red permanent.
+        for call, tool in list(tracker.get("tools", {}).items()):
+            if tool.get("name") == "view_image":
+                state.apply({"type": "task.end", "id": "tool:" + call})
+                tracker["tools"].pop(call, None)
     if (candidate and tracker.get("tracked") and not state.running
             and latest and latest.get("type") == "task_complete" and latest.get("turn_id") == candidate):
         state.apply({"type": "stop", "known": True, "preserveRequests": True})
+    # Ephemeral status metadata for diagnostics, never transcript/tool content.
+    record["completionDiagnostics"] = {
+        "tracked": tracker.get("tracked") is True,
+        "candidateTurn": candidate,
+        "completionEvent": latest.get("type") if latest else None,
+        "completionTurnMatches": bool(candidate and latest and latest.get("turn_id") == candidate),
+        "pendingTasks": sorted(state.tasks),
+        "pendingTools": tracker.get("tools", {}),
+        "pendingDecisions": sorted(state.requests),
+        "transcript": tracker.get("transcript"),
+        "children": child_diagnostics,
+        "toolScan": tracker.get("toolScan"),
+    }
     return state

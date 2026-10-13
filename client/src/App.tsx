@@ -8,6 +8,18 @@ import { Sidebar } from './components/Sidebar';
 import { TerminalPanel } from './components/TerminalPanel';
 import { FileViewer } from './components/FileViewer';
 import { TextViewer } from './components/TextViewer';
+import { AgentReader } from './components/AgentReader';
+
+function loadDock(): { layout: 'bottom' | 'right'; height: number; width: number } {
+  try {
+    const value = JSON.parse(localStorage.getItem('tmuxes.previewDock') ?? '{}');
+    return { layout: value.layout === 'right' ? 'right' : 'bottom',
+      height: Math.max(120, Math.min(1000, Number(value.height) || 300)),
+      width: Math.max(240, Math.min(1400, Number(value.width) || window.innerWidth * 0.4)) };
+  } catch { return { layout: 'bottom', height: 300, width: 600 }; }
+}
+
+const fileKey = (file: OpenFile) => JSON.stringify([file.targetId, file.session, file.path]);
 
 export function App() {
   const { settings } = useSettings();
@@ -16,12 +28,19 @@ export function App() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [openFile, setOpenFile] = useState<OpenFile | null>(null);
+  const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
+  const [activeFileKey, setActiveFileKey] = useState<string | null>(null);
   const [openText, setOpenText] = useState<OpenTextPreview | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const [viewerHeight, setViewerHeight] = useState(300);
-  const dragState = useRef<{ startY: number; startH: number } | null>(null);
+  const [dock, setDock] = useState(loadDock);
+  const [maximized, setMaximized] = useState(false);
+  const [readingOpen, setReadingOpen] = useState(false);
+  const [tab, setTab] = useState<'file' | 'reading'>('file');
+  const workspace = useRef<HTMLDivElement>(null);
+  const dragCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => { try { localStorage.setItem('tmuxes.previewDock', JSON.stringify(dock)); } catch { /* storage disabled */ } }, [dock]);
+  useEffect(() => () => dragCleanup.current?.(), []);
 
   const loadTargets = useCallback(async () => {
     try {
@@ -37,10 +56,11 @@ export function App() {
     void loadTargets();
   }, [loadTargets]);
 
-  // Switching sessions changes the file context — close any open file.
+  // Reading follows the active session; file documents retain their original
+  // source and mounted viewer state until the user explicitly closes them.
   useEffect(() => {
-    setOpenFile(null);
-    setOpenText(null);
+    setReadingOpen(false);
+    setTab('file');
   }, [selection?.targetId, selection?.session]);
 
   // Tell the attention tracker which session is in view, so it acknowledges
@@ -58,35 +78,50 @@ export function App() {
   const onViewerDividerDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      dragState.current = { startY: e.clientY, startH: viewerHeight };
+      dragCleanup.current?.();
+      const start = dock.layout === 'right' ? e.clientX : e.clientY;
+      const size = dock.layout === 'right' ? dock.width : dock.height;
       const onMove = (ev: MouseEvent) => {
-        if (!dragState.current) return;
-        const delta = dragState.current.startY - ev.clientY; // drag up → taller viewer
-        const max = window.innerHeight - 160;
-        setViewerHeight(Math.max(100, Math.min(max, dragState.current.startH + delta)));
+        const right = dock.layout === 'right';
+        const max = right ? (workspace.current?.clientWidth ?? window.innerWidth) - 160 : window.innerHeight - 160;
+        const value = Math.max(right ? 240 : 120, Math.min(max, size + start - (right ? ev.clientX : ev.clientY)));
+        setDock(d => ({ ...d, [right ? 'width' : 'height']: value }));
       };
       const onUp = () => {
-        dragState.current = null;
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
+        dragCleanup.current = null;
       };
+      dragCleanup.current = onUp;
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [viewerHeight],
+    [dock],
   );
 
   const selectedTarget = selection ? targets.find((t) => t.id === selection.targetId) : undefined;
-  const openViewer = !!openFile || !!openText;
+  const openFile = openFiles.find(file => fileKey(file) === activeFileKey) ?? null;
+  const openViewer = openFiles.length > 0 || !!openText || readingOpen;
+  const activeTab = tab === 'reading' && readingOpen ? 'reading' : openFiles.length || openText ? 'file' : 'reading';
 
-  const handleOpenFile = (file: OpenFile) => {
+  const handleOpenFile = useCallback((file: OpenFile) => {
     setOpenText(null);
-    setOpenFile(file);
-  };
+    const key = fileKey(file);
+    setOpenFiles(files => files.some(item => fileKey(item) === key) ? files : [...files, file]);
+    setActiveFileKey(key);
+    setTab('file');
+  }, []);
 
   const handleOpenText = (preview: OpenTextPreview) => {
-    setOpenFile(null);
+    setActiveFileKey(null);
     setOpenText(preview);
+    setTab('file');
+  };
+
+  const closeFile = (file: OpenFile) => {
+    const key = fileKey(file), remaining = openFiles.filter(item => fileKey(item) !== key);
+    setOpenFiles(remaining);
+    if (activeFileKey === key) setActiveFileKey(remaining.length ? fileKey(remaining[remaining.length - 1]) : null);
   };
 
   return (
@@ -103,7 +138,7 @@ export function App() {
         onOpenText={handleOpenText}
       />
 
-      <div className="workspace">
+      <div ref={workspace} className={`workspace dock-${dock.layout}`}>
         <div className="term-region">
           {selection && selectedTarget ? (
             <TerminalPanel
@@ -113,6 +148,9 @@ export function App() {
               targetLabel={selectedTarget.label}
               session={selection.session}
               fontSize={settings.terminalFontSize}
+              onRead={() => { setReadingOpen(true); setTab('reading'); }}
+              onRender={content => handleOpenText({ title: t.renderSelection, subtitle: selection.session, content, mode: 'markdown', source: selectedTarget.kind === 'winlocal' ? undefined : selection })}
+              onOpenFile={handleOpenFile}
             />
           ) : (
             <div className="panel">
@@ -127,9 +165,35 @@ export function App() {
         {openViewer && (
           <>
             <div className="hdivider" onMouseDown={onViewerDividerDown} title={t.dragResize} />
-            <div className="viewer-region" style={{ height: viewerHeight }}>
-              {openFile && <FileViewer file={openFile} onClose={() => setOpenFile(null)} />}
-              {openText && <TextViewer preview={openText} onClose={() => setOpenText(null)} />}
+            <div className="viewer-slot" style={dock.layout === 'right' ? { width: dock.width } : { height: dock.height }}>
+            <div className={`viewer-region preview-dock${maximized ? ' maximized' : ''}`}>
+              <div className="dock-toolbar">
+                {(openFiles.length > 0 || openText) && <button aria-pressed={activeTab === 'file'} onClick={() => setTab('file')}>{t.fileViewer}</button>}
+                {readingOpen && <button aria-pressed={activeTab === 'reading'} onClick={() => setTab('reading')}>{t.reading}</button>}
+                <div className="viewer-head-spacer" />
+                <button onClick={() => setDock(d => ({ ...d, layout: d.layout === 'right' ? 'bottom' : 'right' }))}>{dock.layout === 'right' ? t.dockBottom : t.dockRight}</button>
+                <button onClick={() => setMaximized(v => !v)}>{maximized ? t.restore : t.maximize}</button>
+                {activeTab === 'reading' && <button onClick={() => { setReadingOpen(false); setTab('file'); setMaximized(false); }}>✕</button>}
+              </div>
+              <div className={`dock-content file-workspace${activeTab !== 'file' ? ' dock-hidden' : ''}`}>
+                {openFiles.length > 0 && <div className="file-tabs" role="tablist" aria-label={t.openFiles}>
+                  {openFiles.map(file => <button key={fileKey(file)} role="tab" aria-selected={activeFileKey === fileKey(file)}
+                    title={`${targets.find(target => target.id === file.targetId)?.label ?? file.targetId} / ${file.session} · ${file.path}`}
+                    onClick={() => setActiveFileKey(fileKey(file))}>{file.name}</button>)}
+                  {openText && <button role="tab" aria-selected={activeFileKey === null} onClick={() => setActiveFileKey(null)}>{openText.title}</button>}
+                </div>}
+                {openFiles.map(file => <div key={fileKey(file)} className={`file-preview${activeFileKey !== fileKey(file) ? ' dock-hidden' : ''}`}>
+                  <FileViewer file={file} sourceLabel={`${targets.find(target => target.id === file.targetId)?.label ?? file.targetId} / ${file.session}`}
+                    onClose={() => closeFile(file)} onOpenFile={handleOpenFile} />
+                </div>)}
+                {openText && <div className={`file-preview${activeFileKey !== null ? ' dock-hidden' : ''}`}>
+                  <TextViewer preview={openText} onOpenFile={handleOpenFile} onClose={() => { setOpenText(null); setActiveFileKey(openFiles.length ? fileKey(openFiles[openFiles.length - 1]) : null); }} />
+                </div>}
+              </div>
+              {readingOpen && selection && <div className={`dock-content${activeTab !== 'reading' ? ' dock-hidden' : ''}`}>
+                <AgentReader key={`${selection.targetId}/${selection.session}`} selection={selection} active={activeTab === 'reading'} onOpenFile={handleOpenFile} />
+              </div>}
+            </div>
             </div>
           </>
         )}

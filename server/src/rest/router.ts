@@ -38,6 +38,8 @@ import { installNativeObserver } from '../agentHooks.js';
 import { commandArgv } from '../tmux/builder.js';
 import { runTargetCommand } from '../targetCommand.js';
 import { connectSshTarget } from '../sshManagement.js';
+import { serveFileContent } from '../fileContent.js';
+import { readAgentMessages } from '../agentMessages.js';
 
 /** Cap on a saved file's size (matches the editor's text-only use). */
 const MAX_WRITE_BYTES = 5_000_000;
@@ -56,7 +58,7 @@ function requireTarget(req: Request): Target {
   if (!isValidTargetId(id)) throw new TmuxError(400, 'invalid target id');
   const target = getTarget(id);
   if (!target) throw new TmuxError(404, 'target not found');
-  if (req.method !== 'GET') invalidateSessionSnapshot(target.id);
+  if (req.method !== 'GET' && req.method !== 'HEAD') invalidateSessionSnapshot(target.id);
   return target;
 }
 
@@ -97,7 +99,7 @@ export const apiRouter = Router();
 // Invalidate after mutations too: a concurrent GET may have repopulated the
 // cache while a create/rename/install operation was still running.
 apiRouter.use((req, res, next) => {
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
     const match = /^\/targets\/([^/]+)/.exec(req.path);
     if (match) {
       try {
@@ -290,6 +292,26 @@ apiRouter.get(
   }),
 );
 
+apiRouter.get('/targets/:id/file/content', wrap(async (req, res) => {
+  const target = requireTarget(req);
+  rejectIfWinlocal(target);
+  const path = await requireSessionScopedPath(target, req.query.session, req.query.path);
+  if (req.query.download !== undefined && req.query.download !== '1') throw new TmuxError(400, 'invalid download option');
+  await serveFileContent(target, path, req, res, req.query.download === '1');
+}));
+
+apiRouter.get('/targets/:id/sessions/:name/messages', wrap(async (req, res) => {
+  const target = requireTarget(req);
+  rejectIfWinlocal(target);
+  const session = requireSessionName(req.params.name);
+  const cursor = req.query.cursor;
+  const direction = req.query.direction ?? 'newer';
+  if ((cursor !== undefined && (typeof cursor !== 'string' || cursor.length > 2048)) ||
+      (direction !== 'newer' && direction !== 'older')) throw new TmuxError(400, 'invalid message cursor');
+  res.set('Cache-Control', 'private, no-store');
+  res.json(await readAgentMessages(target, session, cursor as string | undefined, direction));
+}));
+
 apiRouter.put(
   '/targets/:id/file',
   wrap(async (req, res) => {
@@ -438,7 +460,8 @@ apiRouter.put(
 );
 
 // Central error mapper.
-apiRouter.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+apiRouter.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (res.headersSent) { next(err); return; }
   if (err instanceof TmuxError || err instanceof ManagerError) {
     res.status(err.status).json({ error: err.message });
     return;

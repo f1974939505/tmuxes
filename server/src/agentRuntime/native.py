@@ -244,6 +244,11 @@ def report(kind, payload):
             if not bound:
                 record.pop("binding", None)
         event = payload.get("hook_event_name")
+        # Reading stores only source metadata. Conversation content remains in
+        # the agent's own transcript and is fetched only by an open reader.
+        if bound and isinstance(payload.get("transcript_path"), str):
+            record["reading"] = {"transcript": payload["transcript_path"],
+                                 "cwd": payload.get("cwd") if isinstance(payload.get("cwd"), str) else ""}
         starting = event == "SessionStart" or payload.get("type") == "start"
         if bound and (not record.get("binding") or starting or event == "UserPromptSubmit"):
             record["binding"] = bound
@@ -423,14 +428,18 @@ def snapshot():
         for path in paths[:64]:
             try:
                 record = json.loads(path.read_text())
-                if time.time() - record.get("updated", 0) > 86400:
+                bound = record.get("binding") or {}
+                if record.get("kind") == "codex" and bound.get("proof") not in (
+                        "dedicated-codex-v1", "foreground-codex-v1", "foreground-direct-v1"):
                     collected[record["key"]] = (path, record.get("updated"), record.get("since"))
                     continue
+                # A live pane may stay idle/monitoring for days. Age cannot
+                # erase its status; ownership/liveness below retires history.
                 state = restore(record["state"])
                 capability = "events"
                 foreground = (record.get("binding") or {}).get("proof") in ("foreground-codex-v1", "foreground-direct-v1")
                 if record["kind"] == "codex" and foreground:
-                    state = codex_foreground.inspect(record, state)
+                    state = codex_foreground.inspect(record, state, deadline=deadline)
                     capability = "foreground hooks + completion record"
                 if record["kind"] == "codex" and not foreground:
                     try:
@@ -482,6 +491,9 @@ def snapshot():
                                 "since": record["since"], "updated": record["updated"],
                                 "capability": capability, "bindingKey":
                                 binding_key})
+                if record["kind"] == "codex" and foreground:
+                    records[-1]["completionDiagnostics"] = {"collectorVersion": Path(__file__).parent.name,
+                        **record.get("completionDiagnostics", {})}
                 collected[record["key"]] = (path, record.get("updated"), record.get("since"))
                 # Persist verification/resolved-task metadata, never over a
                 # newer event or a newer foreground observation revision.
@@ -490,9 +502,8 @@ def snapshot():
                     if (latest.get("updated") == record.get("updated")
                             and (not foreground or latest.get("state", {}).get("revision") == record.get("state", {}).get("revision"))):
                         if record["kind"] == "codex" and foreground:
-                            # Retain resolved failed launches after their rows
-                            # move outside the bounded transcript tail. A newer
-                            # hook always wins this guarded write.
+                            # Retain resolved tools/children and bounded scan
+                            # cursors. A newer hook always wins this guarded write.
                             foreground_state = record.get("foreground", {})
                             tasks = sorted(state.tasks)
                             if (latest.get("foreground") != foreground_state
@@ -555,6 +566,10 @@ def bind_record(key, session):
 
 
 def main():
+    if len(sys.argv) == 5 and sys.argv[1] == "messages":
+        import reading
+        print(json.dumps(reading.read(sys.argv[2], sys.argv[3], sys.argv[4]), ensure_ascii=False))
+        return
     if sys.argv[1:3] == ["launch", "codex"]:
         sys.exit(launch_codex())
     if len(sys.argv) == 2 and sys.argv[1] == "snapshot":

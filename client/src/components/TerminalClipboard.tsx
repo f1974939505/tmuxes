@@ -10,9 +10,11 @@ interface Props {
   overlay: ReactNode;
   children: ReactNode;
   fontSize: number;
+  onRead: () => void;
+  onRender: (text: string) => void;
 }
 
-export function TerminalClipboard({ terminal, actions, overlay, children, fontSize }: Props) {
+export function TerminalClipboard({ terminal, actions, overlay, children, fontSize, onRead, onRender }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const [snapshot, setSnapshot] = useState<string | null>(null);
@@ -125,6 +127,8 @@ export function TerminalClipboard({ terminal, actions, overlay, children, fontSi
         <span className={`copy-feedback${feedback === 'copyFailed' ? ' copy-error' : ''}`} role="status">
           {feedback ? t[feedback] : ''}
         </span>
+        <button onClick={onRead}>{t.reading}</button>
+        <button disabled={!hasSelection} onMouseDown={e => e.preventDefault()} onClick={() => onRender(selectedText())}>{t.renderSelection}</button>
         <div className="agent-toolbar">{actions}</div>
       </div>
       <div className="selection-hint" title={selecting ? t.snapshotHint : t.interactHint}>

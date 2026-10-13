@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createTerminal, type TerminalHandle } from '../hooks/useTerminal';
 import { createTmuxSocket, type TmuxSocket } from '../hooks/useTmuxSocket';
-import { api, ApiError, terminalSocketUrl } from '../api';
-import type { ConnStatus, LaunchAgent, Target } from '../types';
+import { api, ApiError, linkedFile, terminalSocketUrl } from '../api';
+import type { ConnStatus, LaunchAgent, OpenFile, Target } from '../types';
 import { useI18n } from '../i18n';
 import { StatusBanner } from './StatusBanner';
 import { TerminalClipboard } from './TerminalClipboard';
@@ -14,13 +14,16 @@ interface Props {
   targetLabel: string;
   session: string;
   fontSize: number;
+  onRead: () => void;
+  onRender: (text: string) => void;
+  onOpenFile: (file: OpenFile) => void;
 }
 
 const RESIZE_DEBOUNCE_MS = 80;
 
 /** Mounted with key={targetId/session}, so a selection change is a full
  *  remount — no stale terminal/socket state. */
-export function TerminalPanel({ targetId, targetKind, targetLabel, session, fontSize }: Props) {
+export function TerminalPanel({ targetId, targetKind, targetLabel, session, fontSize, onRead, onRender, onOpenFile }: Props) {
   const { t } = useI18n();
   const tRef = useRef(t);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -31,6 +34,9 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
   const [startingAgent, setStartingAgent] = useState<LaunchAgent | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [terminal, setTerminal] = useState<Terminal | null>(null);
+  const [fileError, setFileError] = useState('');
+  const onOpenFileRef = useRef(onOpenFile);
+  onOpenFileRef.current = onOpenFile;
 
   useEffect(() => {
     tRef.current = t;
@@ -42,7 +48,18 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
     setStatus({ kind: 'connecting' });
 
-    const handle = createTerminal(host, fontSize);
+    let disposed = false;
+    let fileRequest: AbortController | undefined;
+    const handle = createTerminal(host, fontSize, targetKind === 'winlocal' ? undefined : path => {
+      fileRequest?.abort(); fileRequest = new AbortController();
+      const signal = fileRequest.signal;
+      setFileError('');
+      void linkedFile({ targetId, session }, path, undefined, signal).then(file => {
+        if (!disposed && !signal.aborted) onOpenFileRef.current(file);
+      }).catch(e => {
+        if (!disposed && !signal.aborted) setFileError(`${tRef.current.failedOpenLinkedFile} ${e instanceof Error ? e.message : ''}`);
+      });
+    });
     handleRef.current = handle;
     setTerminal(handle.term);
     const initial = handle.refit() ?? { cols: 80, rows: 24 };
@@ -127,6 +144,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
     observer.observe(host);
 
     return () => {
+      disposed = true; fileRequest?.abort();
       window.clearTimeout(resizeTimer);
       observer.disconnect();
       dataSub.dispose();
@@ -163,7 +181,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
   return (
     <div className="panel">
-      <TerminalClipboard terminal={terminal} fontSize={fontSize}
+      <TerminalClipboard terminal={terminal} fontSize={fontSize} onRead={onRead} onRender={onRender}
         overlay={<StatusBanner status={status} onReconnect={() => setGeneration((g) => g + 1)} />}
         actions={targetKind !== 'winlocal' && (
         <>
@@ -199,6 +217,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
           </div>
         </div>
       )}
+      {fileError && <div className="linked-file-error" role="alert">{fileError} <button onClick={() => setFileError('')}>✕</button></div>}
     </div>
   );
 }

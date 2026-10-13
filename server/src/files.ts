@@ -282,16 +282,18 @@ export async function readFilePreview(t: Target, path: string): Promise<FilePrev
   }
 
   // wsl/ssh: read up to cap+1 bytes; if we got cap+1 the file is larger.
-  const r = await run(t, ['head', '-c', String(FILE_PREVIEW_CAP + 1), '--', path]);
-  if (r.code !== 0) {
+  const r = await runTargetCommand(t, opts => commandArgv(t, ['sh', '-c',
+    'head -c "$2" -- "$1" | base64', 'tmuxes-text-preview', path, String(FILE_PREVIEW_CAP + 1)], opts),
+    { timeoutMs: timeout(t) });
+  if (r.code !== 0 || r.stderr.trim()) {
     if (/No such file|not found/i.test(r.stderr)) throw new TmuxError(404, 'file not found');
     if (/Is a directory/i.test(r.stderr)) throw new TmuxError(400, 'path is a directory');
     if (/Permission denied/i.test(r.stderr)) throw new TmuxError(403, 'permission denied');
     throw new TmuxError(502, r.stderr.trim().split('\n')[0] || 'cannot read file');
   }
-  const truncated = r.stdout.length > FILE_PREVIEW_CAP;
-  const content = truncated ? r.stdout.slice(0, FILE_PREVIEW_CAP) : r.stdout;
-  return { path, content, truncated, binary: content.includes(NUL) };
+  const bytes = Buffer.from(r.stdout.replace(/\s/g, ''), 'base64');
+  const slice = bytes.subarray(0, FILE_PREVIEW_CAP);
+  return { path, content: slice.toString('utf8'), truncated: bytes.length > FILE_PREVIEW_CAP, binary: slice.includes(0) };
 }
 
 /** Overwrite a file ON THE TARGET with `content` (UTF-8). Local uses fs;

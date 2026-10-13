@@ -3,6 +3,8 @@ import type { SessionInfo, Selection } from '../types';
 import type { FoldersApi } from '../folders';
 import { useI18n } from '../i18n';
 import { SessionRow } from './SessionRow';
+import { useAttention } from '../attention';
+import { summarizeAttention } from '../offscreenAttention';
 
 const DND_TYPE = 'application/x-tmuxes';
 type DragPayload = { kind: 'session'; name: string } | { kind: 'folder'; id: string };
@@ -20,6 +22,19 @@ interface Props {
 
 export function SessionTree({ targetId, sessions, folders, selection, nowMs, select, onRename, onKill }: Props) {
   const { t } = useI18n();
+  const attention = useAttention();
+  const parents = new Map(folders.folders.map(folder => [folder.id, folder.parentId]));
+  const alertsIn = (id: string) => summarizeAttention(sessions.flatMap(session => {
+    const reason = attention.reasonFor(targetId, session.name);
+    if (!reason) return [];
+    const visited = new Set<string>();
+    let parent = folders.folderOf(session.name);
+    while (parent && !visited.has(parent)) {
+      if (parent === id) return [reason];
+      visited.add(parent); parent = parents.get(parent) ?? null;
+    }
+    return [];
+  }));
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -81,6 +96,7 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
       <>
         {subFolders.map((f) => {
           const isCollapsed = collapsed.has(f.id);
+          const alerts = isCollapsed ? alertsIn(f.id) : { count: 0, reason: undefined };
           return (
             <div
               key={f.id}
@@ -94,7 +110,8 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
               onDrop={dropInto(f.id)}
             >
               {renamingId === f.id ? (
-                <div className="folder-head" style={{ paddingLeft: 8 + depth * 14 }}>
+                <div className="folder-head" style={{ paddingLeft: 8 + depth * 14 }}
+                  data-attention={alerts.reason} data-attention-count={alerts.count || undefined} data-attention-label={f.name}>
                   <input
                     autoFocus
                     value={renameDraft}
@@ -105,10 +122,14 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
                     }}
                     onBlur={commitFolderRename}
                   />
+                  {alerts.count > 0 && <span className={`attn-badge ${alerts.reason}`} title={t.hiddenAlerts(alerts.count)}>▸ {alerts.count}</span>}
                 </div>
               ) : (
                 <div
                   className="folder-head"
+                  data-attention={alerts.reason}
+                  data-attention-count={alerts.count || undefined}
+                  data-attention-label={f.name}
                   style={{ paddingLeft: 8 + depth * 14 }}
                   draggable
                   onDragStart={startDrag({ kind: 'folder', id: f.id })}
@@ -118,6 +139,7 @@ export function SessionTree({ targetId, sessions, folders, selection, nowMs, sel
                   <span className="folder-name" title={f.name}>
                     {isCollapsed ? '📁' : '📂'} {f.name}
                   </span>
+                  {alerts.count > 0 && <span className={`attn-badge ${alerts.reason}`} title={t.hiddenAlerts(alerts.count)}>▸ {alerts.count}</span>}
                   <span className="folder-actions">
                     <button
                       title={t.newSubfolder}

@@ -120,7 +120,7 @@ def install(kind):
         home = Path(os.environ.get("CODEX_HOME", str(HOME / ".codex")))
         merge_hooks(home / "hooks.json", ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                                            "Stop", "SubagentStart", "SubagentStop", "Interrupt", "SessionEnd"), command)
-        message = "Review/trust the observer in /hooks, then restart Codex so all lifecycle events are tracked. The toolbar runs codex --no-daemon directly. Completion requires a matching local turn-complete record and no outstanding tools, subagents or goals. On Linux/WSL, native hooks verify foreground process ancestry to associate the pane. Unbound observations are discarded."
+        message = "Review/trust the observer in /hooks. The toolbar runs codex --no-daemon directly. Codex 0.160 can rebuild current work from native records, including nested agents, background commands and goals; existing trusted hooks use the update immediately. Older versions may require restarting Codex after its work ends. Foreground process identity verifies the pane; unbound observations are discarded."
     elif kind == "opencode":
         home = Path(os.environ.get("XDG_CONFIG_HOME", str(HOME / ".config"))) / "opencode"
         content = f'''// {MARKER}

@@ -7,6 +7,7 @@ import { useAttention } from '../attention';
 import { useI18n } from '../i18n';
 import { SessionTree } from './SessionTree';
 import { NativeObserverPanel } from './NativeObserverPanel';
+import { summarizeAttention } from '../offscreenAttention';
 
 interface Props {
   target: Target;
@@ -39,6 +40,10 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   const folders = useFolders(target.id, expanded && (target.kind !== 'ssh' || sshReady), target.kind === 'ssh');
   const attention = useAttention();
   const { t } = useI18n();
+  const alerts = summarizeAttention((sessions ?? []).flatMap(session => {
+    const reason = attention.reasonFor(target.id, session.name);
+    return reason ? [reason] : [];
+  }));
 
   // Avoid overlapping fetches when a poll and a manual refresh race.
   const inFlight = useRef(false);
@@ -202,11 +207,15 @@ export function TargetGroup({ target, selection, nowMs, select }: Props) {
   };
 
   return (
-    <div className="target-group">
-      <div className="target-head" onClick={() => setExpanded((v) => !v)}>
+    <div className="target-group" data-target-label={target.label}>
+      <div className="target-head" onClick={() => setExpanded((v) => !v)}
+        data-attention={!expanded ? alerts.reason : undefined}
+        data-attention-count={!expanded && alerts.count ? alerts.count : undefined}
+        data-attention-label={target.label}>
         <span className="caret">{expanded ? '▾' : '▸'}</span>
         <span className="label">{target.label}</span>
         <span className="kind">{target.kind}</span>
+        {!expanded && alerts.count > 0 && <span className={`attn-badge ${alerts.reason}`} title={t.hiddenAlerts(alerts.count)}>▸ {alerts.count}</span>}
         {expanded && loading && <span className="badge loading">…</span>}
         {expanded && error && (
           <span className="badge err" title={error}>

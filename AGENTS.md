@@ -1,6 +1,7 @@
 # tmuxes
 
 - Synchronize `README.md` and `README.en.md` for user-facing changes; sync tracked `server/README.md` or use prepack. Explain intentional language-only differences.
+- README changelogs contain only the latest source/release entry; move earlier entries to `CHANGELOG.md` and `CHANGELOG.en.md`. README screenshots must use synthetic targets, sessions, paths and output, with no private hosts, accounts or project data.
 - npm package is workspace `server`: publish with `npm publish --workspace server` only when authorized. Check `npm whoami`, registry version, and an unpublished version synchronized in root/server package.json and package-lock.json.
 - Before release run npm test, pack workspace server --dry-run, inspect tarball, then CLI --help and startup --no-open on a temporary port with homepage request. Expected payload: dist/public/bin/README/LICENSE/package metadata only.
 - After publish verify registry version and installed CLI. Use an OS-appropriate temporary npm cache if needed. Never persist publishing credentials in the repo or output.

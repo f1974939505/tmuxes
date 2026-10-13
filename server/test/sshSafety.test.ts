@@ -22,6 +22,47 @@ const argv = ['-o', 'BatchMode=yes', 'cluster', "'tmux'", "'list-sessions'"];
 beforeEach(() => { vi.resetModules(); spawn.mockReset(); });
 
 describe('SSH cluster iron rule (mock processes, no network)', () => {
+  it('media previews and message pages cannot open an offline destination', async () => {
+    const media = await import('../src/fileContent.js');
+    const reader = await import('../src/agentMessages.js');
+    await Promise.all(Array.from({ length: 12 }, async () => {
+      await expect(media.fileIdentity(target, '/project/a.png')).rejects.toMatchObject({ status: 503 });
+      await expect(media.serveFileContent(target, '/project/a.bin', { headers: {} } as any, {} as any, true)).rejects.toMatchObject({ status: 503 });
+      await expect(reader.readAgentMessages(target, 'session', undefined, 'newer')).rejects.toMatchObject({ status: 503 });
+    }));
+    expect(spawn).not.toHaveBeenCalled();
+  });
+  it('binary chunks and reading across browsers reuse exactly one explicit connection', async () => {
+    const child = fakeSsh();
+    child.stdin.write.mockImplementation((script: string) => {
+      const id = script.match(/__TMUXES_BEGIN_([a-f0-9]+)__/)! [1];
+      const output = script.includes('stat -c') ? '4|2026-10-13 00:00:00.000000|1' : script.includes('dd if=') ? Buffer.from([0, 255, 128, 12]).toString('base64') : script.includes('messages') ? JSON.stringify({ availability: 'ready', source: 'bound', messages: [] }) : '';
+      queueMicrotask(() => child.stdout.emit('data', Buffer.from(`\n__TMUXES_BEGIN_${id}__\n0\n${Buffer.from(output).toString('base64')}\n__TMUXES_STDERR_${id}__\n\n__TMUXES_END_${id}__\n`)));
+    });
+    spawn.mockReturnValue(child);
+    const ssh = await import('../src/sshManagement.js');
+    const media = await import('../src/fileContent.js');
+    const reader = await import('../src/agentMessages.js');
+    await ssh.connectSshTarget(target);
+    const meta = await media.fileIdentity(target, '/project/a.png');
+    const bytes = await media.readFileBlock(target, '/project/a.png', 0, 4, meta.identity);
+    expect(bytes).toEqual(Buffer.from([0, 255, 128, 12]));
+    await Promise.all(Array.from({ length: 20 }, (_, i) => reader.readAgentMessages({ ...target, id: `browser-${i}` }, 'session', undefined, 'newer')));
+    await Promise.all(Array.from({ length: 4 }, (_, i) => {
+      const res = { destroyed: false, set: vi.fn(), status: vi.fn(), write: vi.fn(() => true), end: vi.fn() };
+      return media.serveFileContent({ ...target, id: `download-browser-${i}` }, '/project/a.bin', { headers: {}, method: 'GET' } as any, res as any, true)
+        .then(() => expect(res.write).toHaveBeenCalledWith(Buffer.from([0, 255, 128, 12])));
+    }));
+    expect(spawn).toHaveBeenCalledTimes(1);
+    for (const [script] of child.stdin.write.mock.calls.slice(1)) {
+      expect(script).not.toContain('mktemp');
+      expect(script).toContain('__tmuxes_memory');
+    }
+    child.emit('close', 255, null);
+    await expect(reader.readAgentMessages(target, 'session', 'cursor', 'older')).rejects.toMatchObject({ status: 503 });
+    await expect(media.serveFileContent(target, '/project/a.bin', { headers: {} } as any, {} as any, true)).rejects.toMatchObject({ status: 503 });
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
   it('stream errors latch offline even without a write callback', async () => {
     const child = fakeSsh(); spawn.mockReturnValue(child);
     const ssh = await import('../src/sshManagement.js');

@@ -25,6 +25,10 @@ export function NativeObserverPanel({ targetId, observers, refresh }: {
       </div>
       <small>{observer.session ? `${observer.session}:${observer.window} · ${observer.pane}` : t.nativeUnbound}{observer.capability === 'limited' ? ` · ${t.nativeLimited}` : ''}</small>
       <small>{t.nativeLastEvent}: {observer.lastEvent || '—'} · {observer.updated ? new Date(observer.updated * 1000).toLocaleString() : '—'}</small>
+      {observer.kind === 'codex' && observer.completionDiagnostics?.tracked === false &&
+        <small>{observer.completionDiagnostics.coverage === 'replaying' ? t.nativeReplaying
+          : observer.completionDiagnostics.coverage === 'limited' ? t.nativeUnverifiedCompletion
+          : t.nativeIncompleteLifecycle}</small>}
 
     </div>;
   return <details className="native-observers">

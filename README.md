@@ -7,7 +7,7 @@
 ### 一个浏览器标签页，掌控一整群 CLI coding agent。
 
 **Claude Code · Codex · OpenCode · Hermes** —— 每个 agent 独占一个 tmux 会话，
-横跨 **本地 · SSH · WSL**，还自带每个 agent 工作目录的文件浏览器和 Git 面板。
+横跨 **本地 · SSH · WSL**，提供文件 / Git 面板、图片与 PDF 预览，以及支持 Markdown 公式的 Agent 阅读视图。
 
 🔔 **Agent 结束、报错停止或需要人工决策时，浏览器会提醒你** —— 支持 Claude Code、Codex、OpenCode、Hermes 的结构化事件；后台任务、子 agent、monitor 和等待唤醒不会直接当作结束。状态证据不足时显示「未知」。
 
@@ -22,7 +22,7 @@
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
 </p>
 
-<sub>🔒 仅本机 · ⚡ 一键启动 · 🔔 agent hook 提醒 · 🪟 Windows 上直通 WSL · 🧩 零配置</sub>
+<sub>🔒 仅本机 · ⚡ 一键启动 · 🔔 可选原生 hooks / 插件 · 📖 Markdown 与公式 · 🪟 Windows 上直通 WSL</sub>
 
 </div>
 
@@ -36,27 +36,41 @@
 
 | | |
 |---|---|
-| 🧠 **为 agent 而生** | 每个 agent 独占一个 tmux 会话。新建时可带初始命令（比如 `claude` 或 `codex`），选中后右侧就是一个**完全可交互的实时终端**。 |
-| 🔔 **结束 / 错误 / 决策提醒** | 新建会话时填写 agent 命令，或在空闲终端右上角启动四种 agent。按结构化事件区分运行、后台工作、人工决策、完成、失败和未知；已展开目标每 5 秒同步 tmux 状态，不再扫描终端文字猜测错误。 |
-| 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧边栏同时列出你的本机、`~/.ssh/config` 里的主机、（Windows 上）你的 WSL 发行版，以及（Windows）原生 PowerShell / cmd 会话 —— 全部并排排开。 |
-| 🗂️ **文件夹树** | 像资源管理器一样，把会话拖进**可拖拽的文件夹**里整理。按目标分别持久化到本地。 |
-| 📂 **实时文件浏览 + 编辑** | 侧边栏底部跟随每个会话的**工作目录** —— 点一个代码文件就能把终端一分为二，在下面**直接读和改**（可保存、撤销/重做）。 |
-| 🔀 **Git 面板** | 侧边栏底部可切到 Git 视图，基于当前会话工作目录查看仓库状态、未提交更改、提交历史和远端未合入提交；点击待提交文件会在右侧大区域底部打开类似 VS Code 的左右红绿 diff，点击 commit 会在同一区域显示完整 patch；支持切换分支、fetch、pull、push、sync 和一键提交全部工作区更改。Git 认证沿用目标机器已有配置，tmuxes 不保存凭据。 |
-| 🔁 **真·多端同步** | 基于原生 `tmux attach`：同一个会话开两个标签页，逐键同步、互为镜像。 |
-| ⚙️ **可调** | 侧边栏、终端、文件查看器的字号都能调，**实时生效**、刷新后仍保留。 |
-| 📋 **轻松复制** | 点「选择文本」即可无 Shift 拖选输出快照；支持复制按钮、`Ctrl+C` / `Ctrl+Shift+C`，以及可选的鼠标选中自动复制。 |
-| 🚀 **一键启动** | 双击 `start.cmd` / `start.command` / `start.sh` → 自动构建、启动、打开浏览器。 |
+| 🧠 **为 agent 而生** | 在不同 tmux 会话中运行 Claude Code、Codex、OpenCode 和 Hermes，右侧保留完整终端交互。Codex 按钮直接执行 `codex --no-daemon`。 |
+| 🔔 **结束 / 错误 / 决策提醒** | 依据原生结构化事件区分运行、后台工作、人工决策、完成、失败和未知。已展开目标每 5 秒同步状态；后台 shell、子 agent 和 monitor 不直接视为结束。 |
+| 🌐 **本地 · SSH · WSL · 原生 Windows** | 一个侧栏管理本地 tmux、SSH、WSL 与 PowerShell / cmd 会话；SSH 管理请求仅复用手动建立的持久连接。 |
+| 🗂️ **文件夹树与提醒定位** | 拖拽整理会话，按目标保存文件夹；视图外提醒显示上下箭头，折叠组汇总提醒。文件 / Git 区默认占左栏可用高度的一半。 |
+| 📂 **文件预览、编辑与下载** | 浏览工作目录，预览 PNG / JPG / GIF / WebP 与 PDF，渲染 Markdown 公式；文本可编辑、保存、撤销 / 重做，所有文件均可下载原始内容。PDF 支持反色阅读。 |
+| 📖 **Agent 阅读与路径链接** | 读取 Codex 0.160 / Claude Code 的近期提问与完整回答，支持表格和公式；终端、阅读视图及渲染选区中的文件路径可点击打开。 |
+| 🪟 **常驻文件标签** | 切换会话、窗口或目标后保留文件、编辑和文件阅读位置；预览区支持底部、右侧及最大化，最大化时终端保持挂载。 |
+| 🔀 **Git 面板** | 查看仓库状态、未提交更改、提交历史和远端提交；在共享预览区显示左右 diff 或完整 patch，支持切换分支、fetch、pull、push、sync 和提交全部更改。认证沿用目标机器配置。 |
+| 🔁 **多端同步** | 同一 tmux 会话可在多个浏览器标签中同时查看与输入，复用服务端保留的终端连接。 |
+| ⚙️ **可调布局与字号** | 分别调整侧栏、终端和预览字号；保存预览位置与尺寸，拖动分隔条调整布局。 |
+| 📋 **轻松复制** | 「选择文本」提供可直接拖选的输出快照；支持复制按钮、`Ctrl+C` / `Ctrl+Shift+C`，以及可选的选中自动复制。 |
+| 🚀 **一键启动** | 双击 `start.cmd` / `start.command`，或执行 `start.sh`，自动构建、启动并打开浏览器。 |
 
 ## 🖼️ 长这样
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/fig1.png" alt="tmuxes 截图 —— 一个标签页掌控一群 CLI agent" width="900">
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/fig1.png" alt="0.1.26 界面：多 Agent 会话、文件下载、常驻标签与 Markdown 公式预览" width="1000">
 </div>
+
+0.1.26 的真实界面，使用虚构目标、会话、路径和输出；不包含真实主机、账号或项目数据。
+
+<details>
+<summary>查看 Agent 阅读与 PDF 反色预览</summary>
+
+<p>回答中的 PDF、图片和 Markdown 路径可直接点击打开。</p>
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/agent-reading.png" alt="Agent 阅读视图：可点击文件路径、表格与公式" width="1000">
+<p>PDF 支持连续翻页、缩放、文字选择和反色；切换会话后保留打开的文件。</p>
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/pdf-preview.png" alt="PDF 反色预览与常驻文件标签" width="1000">
+
+</details>
 
 ## 🏗️ 架构
 
 ```text
-                          REST  (create · list · rename · kill · cwd · files · git)
+                          REST  (sessions · files / Range · messages · git)
   ┌────────────┐   ┌──────────────────────┐        ┌──────────────────────────────────┐
   │  Browser   │──▶│  Node · Express · ws │──pty──▶│ tmux                  (Linux/macOS)│
   │  xterm.js  │◀──│        node-pty      │──pty──▶│ ssh -tt user@host → tmux   (remote)│
@@ -65,7 +79,7 @@
 ```
 
 - **`client/`** —— React + Vite + TypeScript，终端基于 [`@xterm/xterm`](https://www.npmjs.com/package/@xterm/xterm)。
-- **`server/`** —— Node + Express + `ws` + `node-pty`。一个小型 REST API 跑短命的 tmux *管理*命令；单个 WebSocket 端点负责交互式 *attach* 的流式传输。
+- **`server/`** —— Node + Express + `ws` + `node-pty`。REST 提供会话管理、文件 / Range 传输、分页消息与 Git；WebSocket 负责交互式 *attach*，复用服务端保留的终端状态。SSH 管理请求仅使用手动建立的持久连接，断线后统一暂停，等待手动重连。
 
 > **Windows 上没有原生 tmux？** 没问题。服务端原生运行（node-pty 用 ConPTY），通过 `wsl.exe` 直通你 WSL 发行版里的 tmux。Linux/macOS 上则直接和本地 tmux 通信。远程主机用系统 `ssh` 二进制，复用你已有的 `~/.ssh` 密钥 / `ssh-agent` —— **绝不存储任何密码。**
 
@@ -120,7 +134,9 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 打开或刷新页面时，左侧所有目标栏默认收缩，包括 Windows Local、WSL Ubuntu、本地 tmux 和 SSH 目标；点击栏标题后展开。
 
-在目标的「Agent 状态接入」面板选择 agent，点击「安装 / 更新」一次。目标需要 **Python 3.9+ (`python3`)**、tmux 和已安装的 agent。安装保留已有配置并备份被修改的 hooks 文件；重启 agent 后，可以直接在 tmux pane 输入 `claude`、`codex`、`opencode` 或 `hermes`，不需要通过右上角按钮启动。按钮现在也只输入原始命令，不注入 `--remote`、`-c` 或启动包装器。
+左栏的会话区与下方「文件 / Git」区默认各占可用高度的一半，分隔条仍可拖动调整。视图外的未读结束、决策或错误提醒，会在会话区上下边缘显示小箭头与数量；点击箭头定位最近的提醒。折叠目标或文件夹会显示内部提醒汇总。提醒位置由浏览器计算，不增加远端读取或 SSH 请求。
+
+在目标的「Agent 状态接入」面板选择 agent，点击「安装 / 更新」一次。目标需要 **Python 3.9+ (`python3`)**、tmux 和已安装的 agent。安装保留配置并备份被修改的 hooks 文件；按各 agent 要求信任 hooks、启用插件并重启后，可直接在 tmux pane 输入 `claude`、`codex --no-daemon`、`opencode` 或 `hermes`。按钮输入相同命令，不注入 `--remote`、`-c` 或启动包装器。已信任的 Codex 0.160 接入更新无需为了补齐启动事件特意重启，详见下文。
 
 - **运行中 / 后台工作**：根任务仍执行，或关联的后台 shell、monitor、子 agent、goal、定时唤醒尚未结束。
 - **决策**：结构化事件表明需要用户输入；短暂且已解决的请求不提醒。
@@ -133,7 +149,7 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 | Agent | 接入方式与边界 |
 | --- | --- |
-| Codex | 合并 `CODEX_HOME/hooks.json`（默认 `~/.codex/hooks.json`），在 `/hooks` 审查并信任。前台启动使用 `--no-daemon`，hooks 单向写入元数据，按启动身份关联 pane。缺少后台任务完成证据时显示未知，不响应审批。本地 hook 契约验证版本：0.159.0。 |
+| Codex | 合并 `CODEX_HOME/hooks.json`（默认 `~/.codex/hooks.json`），在 `/hooks` 审查并信任。前台启动使用 `--no-daemon`，hooks 单向写入元数据，按启动身份关联 pane。缺少后台任务完成证据时显示未知，不响应审批。真实 CLI 契约验证版本：0.160.0。 |
 | Claude Code | 合并 `CLAUDE_CONFIG_DIR/settings.json`（默认 `~/.claude/settings.json`）。读取生命周期、问题、失败和后台任务字段；缺少后台字段或 Stop hook 继续运行时不宣称完成。其他 Stop hook 的首次继续决定可能不可见，确认期只能缓解竞态。 |
 | OpenCode | 安装全局 v1 插件，遵循 `XDG_CONFIG_HOME`。当前适配器仅支持 v1；v2 改变了插件 API，安装器会拒绝并保留原配置，尚不支持 v2 状态采集。 |
 | Hermes | 在 `HERMES_HOME/plugins/tmuxes-native-observer`（默认 `~/.hermes`）安装插件；执行 `hermes plugins enable tmuxes-native-observer` 后重启。缺少生命周期字段或后台任务计数时降级未知。命名 profile 需在相应环境分别安装。 |
@@ -142,15 +158,37 @@ npm start              # → http://localhost:7420   （设 TMUXES_OPEN=1 可自
 
 右上角 Codex 按钮直接向当前 pane 输入 `codex --no-daemon`，由当前交互 shell 执行。启动无需 Python、接入安装或额外后端；tmux 保持界面常驻。左侧接入面板只管理可选的状态采集，不再提供启动入口。原有 daemon 不会被自动停止。
 
-Codex 前台完成绿灯由原生 hooks 跟踪工具、子 agent 和 goal，并在正常刷新时核对本机会话文件中同一回合的完成事件；`Stop` 本身不会直接报完成。未返回的后台 shell、尚未确认结束的子 agent、活动或暂停的 goal 会阻止绿灯。会话文件只读取末尾最多 256 KiB，不保存对话正文，不连接 daemon，也不增加 SSH 登录。文件格式变化、缺少事件或读取失败时保持未知。更新后在目标「Agent 状态接入」选择 Codex，点击「安装 / 更新」，在 `/hooks` 信任后重启 Codex，使采集覆盖完整生命周期；仅重启 tmuxes 不会更新目标 hooks。
+Codex 0.160 前台状态由原生 hooks 确认当前进程和回合，再从本机会话记录增量核对命令、嵌套子 agent 和代码执行单元，并只读查询 goal 状态。当前回合确实结束且没有未结束工作，经过两次刷新确认才亮绿灯；`Stop` 本身不会直接报完成。即使漏掉启动、工具返回或 `Stop` 回调，也可以用完整的结构化记录恢复状态。新提问、用户中断、仍运行的 shell / monitor / 子 agent，以及活动或暂停的 goal 都不会被当作完成。
 
-Codex 的命令在启动阶段失败或被另一个 `PreToolUse` hook 拒绝时，可能没有 `PostToolUse`。采集器核对会话文件中同一工具调用、同一回合的明确未启动结果，解除这条待执行记录，避免结束后一直显示后台工作；其他 monitor、子 agent 和 goal 不受影响。hook 输入上限为 8 MiB，避免长工具结果或回答在原有 256 KiB 上限处被整条丢弃；正文仍不会写入状态记录。
+更新后在目标「Agent 状态接入」选择 Codex，点击「安装 / 更新」；首次安装仍需在 `/hooks` 信任。已信任的 0.160 接入可直接重建正在运行会话的状态，无需为了补齐启动事件重启 Codex；面板在首次分批核对期间显示提示。仅更新本机 tmuxes 不会更新目标采集器。旧版会话继续使用原有 hooks 核验方式，缺少完整生命周期时可能需要在任务结束后重启。
 
-Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。已观测到的暂停 goal、后台工作、分页不完整或不可验证的结束均不会报完成。前台采集只覆盖受支持 hooks 实际报告的工作，不发 hook 的特殊工具路径及手动 goal 变更不保证完整覆盖；绿灯不是对所有外部后台进程的证明。这是当前旁路方案的明确能力边界。
+Codex 的命令或图片读取失败时，可能只有 `PreToolUse`，没有 `PostToolUse`；子 agent 的一次等待结束也不代表新后台任务。0.160 采集器以实际执行记录消除这些残留。对于严格可识别的单次只读 `write_stdin` 等待，即使 Codex 没有再次领取返回值，只要对应命令已经明确退出，就不会永久显示后台工作；带循环、后续操作或其他工具的代码执行单元仍需自己的结束证据。
+
+每条 0.160 观测的主会话与子 agent 共享约 8 MiB 的单次读取预算和时间上限，保存游标后只读取新增记录。大图片分段跳过正文，不保存对话或工具输出；状态缓存仅保留身份和执行状态元数据。后台目标同样只读核对，采集不连接 Codex daemon、不增加常驻轮询器；SSH 目标始终复用已有管理连接，不增加登录。无法验证归属、格式或完整性的记录保持未知。hook 输入上限仍为 8 MiB。
+
+Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前显示未知、不触发人工决策提醒；结构化用户提问仍可提醒。0.160 的 goal 数据库用于核对手动状态变化；旧版仍依赖受支持的 hooks。会话记录属于版本相关格式，新的工作类型或无法读取的记录不会被猜测为结束。绿灯只证明已核验的 Codex 工作结束，不证明任意外部脱离管理的后台进程已经退出。
 
 采集器只保存有限状态元数据，不保存提示词或工具输出；安装文件位于 `~/.local/share/tmuxes/observer/`，状态文件位于 `~/.cache/tmuxes/observations/`。读取合并进已有会话刷新，通过现有管理连接执行，不增加 SSH 登录探测或独立轮询。`TMUXES_NO_AUTOHOOK` 不会关闭已经安装的原生 hooks；停用时在 agent 配置中仅删除指向 tmuxes observer 的 hook，OpenCode 删除对应插件文件，Hermes 执行 `hermes plugins disable tmuxes-native-observer`。
 
 也可以直接在目标 pane 输入 `codex --no-daemon`。可选的原生 hooks 状态采集仍依赖目标 Python 和 `/hooks` 信任；移除的是启动过程的 Python 依赖。Linux / WSL 上直接启动的 Codex 通过原生 hook 的真实进程祖先链、`--no-daemon` 参数、启动时间和前台进程组关联 pane，不需要启动器标识。需更新目标接入并信任 hooks；没有事件或无法核验归属时不猜测绑定。未关联记录不展示且会清理；已关联但证据不足时显示未知，不猜测完成。
+
+## 📖 文件预览与 Agent 阅读
+
+Agent 输出中的 PDF、图片、Markdown 和其他可预览文件路径可直接点击，在已有文件标签中打开或复用预览。原始终端、Agent 阅读及「渲染选中文本」都支持绝对路径和相对路径；带空格的路径请用引号或反引号包裹。终端也支持 Agent 自带的 `file://` 超链接；悬停显示下划线，点击打开，Shift 保留文字选择。相对终端路径在点击时按原会话当前工作目录解析；Markdown 文件内的路径按文档目录解析。链接保留来源，切换会话不会把旧输出绑定到新会话。路径识别不探测文件、不发起网络请求；点击后的读取沿用已有连接和会话目录权限。
+
+文件列表每个文件右侧、以及文件预览工具栏均提供「下载」，保存目标上的原始文件，支持图片、PDF、Markdown 和无法预览的其他格式；未保存的编辑需先保存才会包含在下载中。下载复用现有管理连接，按不超过 512 KiB 的块传输到浏览器，不受预览大小上限限制，不在服务端缓存整份文件，也不会发起新的 SSH 登录。
+
+打开的文件保留在预览区的文件标签中，切换 tmux 会话、窗口、目标或打开另一个文件后仍保留 PDF 页码与缩放、图片缩放与位置、Markdown 预览、未保存编辑及撤销记录。点击标签返回，文件来源固定为打开时的目标、会话和路径，标题显示来源；关闭文件或刷新页面才释放，不把文件内容写入浏览器持久存储。PDF 工具栏的「反色」将白底黑字切换为黑底白字，并记住颜色偏好。
+
+文件浏览器可打开 PNG、JPG/JPEG、GIF、WebP 和 PDF。图片支持适应面板、原始大小、缩放和拖动；PDF 支持连续翻页、页码跳转、缩放与文字选择。图片预览上限为 32 MiB，PDF 为 256 MiB；文件按块读取，预览关闭不会终止共享连接。PDF.js、字体与 worker 随软件打包，无需 CDN。
+
+Markdown 文件默认打开渲染预览，点击「源码」可继续编辑、保存和撤销；切回「预览」显示当前编辑内容。支持表格、代码块、`$...$` / `$$...$$` 公式，以及代码之外的 `\(...\)` / `\[...\]`。错误公式保留源码并提示；原始 HTML 不执行，外部图片点击后才加载。相对图片、Markdown 与 PDF 链接仍限制在当前会话工作目录内。
+
+终端上方点击「Agent 阅读」，可自动查看当前活跃 pane 的近期用户提问和完整回答，并加载更早消息。文件与阅读视图使用独立标签，面板可切换到底部或右侧、拖动尺寸及最大化；最大化保持终端挂载与尺寸，位置和尺寸在浏览器中保存。阅读自动跟随底部；向上阅读时保留位置。
+
+自动阅读支持 **Codex 0.160** 与已验证的 Claude Code JSONL 消息格式，依赖目标的原生接入。升级 tmuxes 后，在目标的「Agent 状态接入」分别为 Codex / Claude Code 点击一次「安装 / 更新」，等待新 hook 事件记录 transcript 路径；原有信任和其他配置保留。没有可靠关联或遇到新格式时明确提示，可用终端的「选择文本」选取输出后点击「渲染选中文本」。普通终端选区同样可渲染；快照可能包含折行或缺失内容。
+
+读取模块与状态灯采集独立，过滤思考过程、系统指令和工具日志。只有打开且可见的阅读标签每 3 秒增量读取，页面隐藏或标签切换后暂停；失败后暂停，手动连接成功或点击阅读刷新后恢复。每次读取有字节与时间预算，巨大日志分段处理；初始最多 50 条消息。对话仅传到当前浏览器的有界内存，不写入 tmuxes 状态文件、日志或浏览器持久存储。远程文件和对话读取均复用已经建立的管理连接，不能建立 SSH、探测连接或自动重连。
 
 ## 🔀 Git 面板
 
@@ -165,7 +203,7 @@ Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前�
 ## 🧩 目标（Targets）
 
 - **本地** *(Linux/macOS)* —— 你机器上的 tmux。Windows 上不显示。
-- **Windows 本机终端** *(Windows)* —— 服务端用 ConPTY 直接开 PowerShell / cmd 等本机 shell（自动探测 `pwsh` → `powershell` → `cmd` → Git Bash），新建时可在下拉里选 shell。会话随**服务端进程**存活（刷新 / 重连 / 多标签都不丢，重启服务端会丢）；这类会话没有 tmux 工作目录，故隐藏底部文件浏览器。
+- **Windows 本机终端** *(Windows)* —— 服务端用 ConPTY 直接开 PowerShell / cmd 等本机 shell（自动探测 `pwsh` → `powershell` → `cmd` → Git Bash），新建时可在下拉里选 shell。会话随**服务端进程**存活（刷新 / 重连 / 多标签都不丢，重启服务端会丢）；这类会话没有 tmux 工作目录，文件 / Git 功能不可用。文件预览、下载和路径链接沿用本地 tmux、WSL 和 SSH 范围。
 - **WSL 发行版** *(Windows)* —— 通过 `wsl.exe -l -q` 自动发现；每个发行版一个目标。发行版里必须装了 tmux。
 - **SSH 主机** —— 从你的 `~/.ssh/config` 的 `Host` 条目里发现（跳过通配符）。也可显式添加：
 
@@ -207,8 +245,9 @@ Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前�
   ```
 - WSL 小坑：`node-gyp` 会用 `PATH` 上的任意 `python3`。如果坏掉的 conda Python 把构建搞挂了：
   ```bash
-  npm config set python /usr/bin/python3
+  PYTHON=/usr/bin/python3 npm install
   ```
+  使用 `PYTHON` 环境变量选择解释器，见 [node-gyp 官方说明](https://github.com/nodejs/node-gyp#configuring-python-dependency)。
 
 </details>
 
@@ -227,9 +266,9 @@ Codex 的 `waitingOnApproval` 无法区分人工与自动审批，因此当前�
 
 - 只绑定 **`127.0.0.1`** —— 绑定地址在运行时不可配置，
 - **没有任何认证**，
-- **从不起 shell**（argv 数组 + `shell:false`），并对每个输入做白名单校验，
+- 终端提供真实 shell 访问；管理请求校验目标、会话名和路径，本地进程使用参数数组启动，不依赖 Node 隐式展开命令字符串，
 - 拒绝 `Origin` 非 localhost 的 WebSocket 升级（防 DNS-rebind），
-- 把文件浏览器 / 编辑器限制在所选 tmux 会话的**当前工作目录**之内。
+- 把文件浏览、编辑、预览、下载和路径链接读取限制在来源 tmux 会话的**当前工作目录**之内；Agent 阅读只能取得服务端确认绑定的记录。
 
 **请勿**对它做反向代理、隧道、端口转发，或暴露到 `0.0.0.0`。机器上任何本地用户都能用它。
 
@@ -299,77 +338,18 @@ Windows 的每个 PTY 都在独立子进程中运行。原生缩放或关闭卡�
 
 ## 📋 更新日志
 
-### 0.1.22
+### 0.1.26（2026-10-13）
 
-- **终端稳定性**：Windows PTY 独立进程隔离，限制输出积压并完善退出清理，避免单个终端拖住所有窗口；新增本机轮换诊断日志。
-- **Codex 完成状态**：前台 hooks 配合当前回合完成记录识别绿灯，保留后台任务与子 agent 判断。需在目标更新 Codex 接入、信任 `/hooks` 并重启 Codex。
-- **逻辑一致性**：修复控制消息校验、管理命令标准输入、SSH 流错误、连接身份、旧完成证据、命令启动错误及会话缓存竞态。
-- **手动 SSH 重试**：取消长时间冷却，失败后仍禁止自动重连；并发点击合并，旧连接的延迟失败不影响新连接。
-- **默认收缩**：所有左侧目标栏初始收缩，包括 Windows Local 和 WSL Ubuntu。
+- **Codex 完成状态**：适配 0.160 原生记录，增量恢复遗漏的工具与子 Agent 事件；仅在当前轮次完成且无后台任务、决策或目标时亮绿灯。
+- **文件预览与下载**：新增图片、PDF、Markdown 公式预览与原始文件下载；PDF 支持连续翻页、文字选择和反色。
+- **常驻文件标签**：跨会话、窗口和目标保留文件、PDF 页码、图片缩放及未保存编辑，支持底部 / 右侧 / 最大化布局。
+- **Agent 阅读**：支持 Codex 0.160 / Claude Code 的完整消息、增量更新与历史分页，并提供渲染选区后备；消息读取与状态灯采集独立。
+- **一键路径打开**：终端、回答正文及代码中的文件路径可点击打开，保留原目标与会话来源。
+- **侧栏布局与提醒**：文件 / Git 默认占一半；上下箭头定位视图外提醒，折叠组汇总未读提醒。
+- **预览样式修复**：隔离 PDF.js 与主侧栏的类名，防止加载 PDF 后侧栏变窄；文件工具栏按钮保持单行。
+- **文档展示**：使用纯虚构数据重拍当前界面，同步中英文使用说明；README 只保留最新条目，历史日志单独归档。
 
-### 0.1.21
-
-- **Codex 直接前台启动**：右上角按钮直接输入 `codex --no-daemon`，由交互 shell 执行，启动不依赖 Python 或额外 app-server；移除侧栏重复启动入口。
-- **可靠关联**：Linux / WSL 的原生 hooks 核验直接启动 Codex 的进程祖先链、前台进程组和进程身份；不同进程的同名会话记录隔离，避免串台。需要在目标重新点击“安装 / 更新”，并在 `/hooks` 信任接入；可选状态采集仍需要 Python。
-- **清理旧观测**：不再显示或保留未关联、已结束及被替代的观测元数据，不删除 agent 会话历史或终止后台进程。
-- **Claude 后台状态兼容**：独立读取后台任务与定时任务列表，缺失一个字段不再丢弃另一个列表的后台证据；证据不足不报完成。
-- **SSH 铁律保持**：管理请求只复用显式建立的连接；无自动连接、重连或逐次刷新 SSH 登录。
-
-### 0.1.20
-- **集群 SSH 铁律**：管理连接只能手动建立，所有平台复用持久连接；取消全部自动重连。失败后服务端统一锁住目标，轮询和其他网页不能自动绕过。早期版本的 10 分钟手动重连冷却已在0.1.22取消，并发点击仍合并。
-- **复用终端连接**：同一目标/会话的终端在网页刷新、切换与多客户端间复用，避免反复 SSH；多网页会话快照合并缓存。
-- **Codex 确定归属**：取消基于共享 daemon 环境和进程猜测的绑定。新增「绑定启动 Codex」，使用独立官方后端直连并核验启动标识与进程来源；退出 TUI 解除绑定，保留后台工作。需要重新点击「安装 / 更新」部署新版接入。
-- **准确显示 pane**：面板显示 session、window、pane；侧栏跟随当前 pane，不再混合其他窗口状态。
-
-### 0.1.19
-- **修复接入安装误报未安装**：安装时读取目标交互 shell 的 PATH 和 agent 配置目录，兼容通过 shell 初始化的工具路径；Codex、Claude、Hermes 的 hook 安装不再要求后台进程能找到 agent 可执行文件。此步骤仅在点击安装时执行，不增加状态轮询或 SSH 登录。
-
-### 0.1.18
-- **原生状态接入**：每个目标一次安装 hooks／插件，之后直接在 tmux pane 输入 agent 命令即可上报；保留已有配置并备份 hooks 文件。
-- **Codex 启动与恢复**：启动按钮不再注入 `--remote`、`-c` 或包装器，移除导致 `/resume` 连接错误的桥接路径。旧进程需退出重启；Codex hooks 需在 `/hooks` 正常信任。
-- **保守判定状态**：独立只读核验后台任务、子 agent 与 goal；不能证明完成时显示未知。共享 daemon 会话支持手动关联窗口；无法区分人工与自动审批时不发决策提醒。
-- **兼容性边界**：当前 OpenCode 插件只支持 v1，v2 安装会明确拒绝；Hermes 安装后需正常启用插件。接入方式与限制见上文。
-
-### 0.1.17
-- **Agent 提醒重做**：分别识别报错、等待用户决策和经确认的任务结束；后台任务、子 agent、monitor shell 及短暂停顿不作为整体结束，无法确认时显示未知状态。
-- **Codex 共享后台服务**：改用本地协议桥接，不再自动注入 `-c` hooks，消除因此触发的 embedded-mode 警告；恢复实际用户决策提醒，并过滤短暂的自动审批状态。
-- **四种 Agent 集成**：更新 Claude Code hooks，新增 OpenCode、Hermes 启动按钮与事件适配；自动集成要求 tmux 目标上的 Python 3.9+，兼容性限制及关闭方式见上文。
-
-### 0.1.16
-- **Node 24 支持**：修正 npm 包的 `engines.node` 声明为 `^22.12.0 || ^24.0.0`，消除 Node 24 上错误的 `EBADENGINE` 警告；同步所有 workspace、锁文件、安装说明及启动脚本提示。
-
-### 0.1.15
-- **终端复制**：新增复制按钮、选区复制快捷键、无需 Shift 的文本快照选择模式，以及可选的鼠标选中自动复制；无选区时保留交互终端的 `Ctrl+C` 中断行为。
-
-### 0.1.14
-- **恢复 Claude Code 决策提醒**：0.1.13 误把 Claude Code 的审批、权限确认和用户决策请求一起移除。本版只针对 Codex 移除决策提醒，Claude Code 的 `PermissionRequest`、`permission_prompt`、`elicitation_dialog` 重新触发「决策」badge、提示音和后台标签页闪烁。
-- **Codex 决策提醒保持移除**：Codex 的审批 / 决策请求仍不触发浏览器提醒，避免 `approvals_reviewer = "auto_review"` / Approve for me 自动审批流程误报。
-
-### 0.1.13
-- **移除决策提醒**：Codex 的审批、权限确认和用户决策请求不再触发浏览器提醒；tmuxes 只提醒 agent 结束和异常停止，避免 Codex 自动审批流程误报。（注：0.1.13 同时误移除了 Claude Code 的决策提醒，已在 0.1.14 恢复。）
-- **Git 面板**：侧边栏底部新增 Git 视图，支持当前会话工作目录的状态查看、未提交更改列表、文件 diff、分支切换、fetch、pull、push、sync，以及 stage 全部更改后创建 commit。
-- **提交历史 / 远端提交**：Git 面板会显示当前分支最近提交和 upstream 上尚未合入的远端提交，点击提交会在右侧大区域底部打开完整 patch；点击待提交文件会打开左右红绿 diff。
-- **credential-manager fallback**：fetch / pull / push 遇到目标环境配置了缺失的 `credential-manager` helper 时，会自动用临时禁用 credential helper 的方式重试一次，避免 public/SSH 仓库被错误 helper 阻断。
-
-### 0.1.12
-- **Codex auto-review 提醒修复**：Codex 开启 `approvals_reviewer = "auto_review"` / Approve for me 时，审批请求会保持 running 状态，不再误触发 `决策` badge、提示音或后台标签页闪烁；人工审批配置仍会正常提醒。
-
-### 0.1.11
-- **文档 / 发布规范**：补齐 npm 发布检查流程，明确只发布 `server` workspace，发布前后都要验证 `npx` / `npm exec` 入口和本机启动 smoke test。
-- **安全约束**：发布流程不得提交或粘贴 `.npmrc` token、`NPM_TOKEN`、SSH 私钥、一次性验证码或任何个人凭据。
-- **README 重整**：安装说明加入 `npx --help` 验证、Windows 排错提示，并压缩早期版本更新。
-
-### 0.1.10
-- **发布修正**：重新发布 npm `latest` 包，确认线上 `tmuxes` bin、前端 `public` 资源和 `npx tmuxes@latest` 入口可用。
-
-### 0.1.9
-- **修复: Windows SSH 原生管理命令改用应用层长连接**。避免 Windows OpenSSH `ControlMaster` mux socket 的 `getsockname failed: Not a socket`，同时避免短命管理命令反复新建 SSH 连接。
-- **改进: 文件浏览器合并远端目录刷新**。一次远端调用同时读取 pane 工作目录、校验路径并列目录，减少 SSH 管理流量。
-
-### 0.1.0 - 0.1.8
-- **早期功能成型**：完成本地 / SSH / WSL / Windows shell 目标、tmux attach 多端同步、拖拽文件夹树、工作目录文件浏览与编辑。
-- **agent 提醒演进**：从活动转静止提醒升级到 Claude Code / Codex 官方 lifecycle hooks，支持结束和异常停止状态。
-- **Windows / SSH 稳定性**：修复 ConPTY 下 `Ctrl+C` 退出、恢复浏览器原生右键，并将 SSH 管理命令改为长期复用连接且中断后只自动重试一次。
+0.1.25 及更早版本见 [历史更新日志](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.md)。
 
 <div align="center">
 <sub>用 React、TypeScript、node-pty &amp; xterm.js 打造 —— 外加大量 tmux。盯娃愉快。🤖</sub>

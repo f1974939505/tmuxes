@@ -7,7 +7,7 @@
 ### One browser tab to run, watch, and wrangle a whole swarm of CLI coding agents.
 
 **Claude Code · Codex · OpenCode · Hermes** — each in its own tmux session,
-live across **Local · SSH · WSL**, with a file browser and Git panel for every agent's working directory.
+live across **Local · SSH · WSL**, with Files / Git panels, image and PDF previews, and an Agent reading view with Markdown formulas.
 
 🔔 **Get notified when an agent finishes, fails, or needs a human decision** — structured events from Claude Code, Codex, OpenCode, and Hermes. Background tasks, subagents, monitors, and scheduled wakeups do not directly count as completion. Incomplete evidence is shown as “unknown”.
 
@@ -22,7 +22,7 @@ live across **Local · SSH · WSL**, with a file browser and Git panel for every
 <img alt="xterm.js" src="https://img.shields.io/badge/xterm.js-6-1f6feb?style=flat-square">
 </p>
 
-<sub>🔒 localhost-only · ⚡ one-click launch · 🔔 agent-hook notifications · 🪟 reaches into WSL on Windows · 🧩 zero config</sub>
+<sub>🔒 localhost-only · ⚡ one-click launch · 🔔 optional native hooks / plugins · 📖 Markdown &amp; math · 🪟 reaches into WSL on Windows</sub>
 
 </div>
 
@@ -36,27 +36,41 @@ live across **Local · SSH · WSL**, with a file browser and Git panel for every
 
 | | |
 |---|---|
-| 🧠 **Built for agents** | Every agent gets its own tmux session. Create one (with an initial command like `claude` or `codex`), select it, and the right pane becomes a **fully interactive live terminal**. |
-| 🔔 **Done / error / decision notifications** | Enter an agent command when creating a session, or launch any of the four agents from an idle terminal's toolbar. Structured events distinguish running, background work, human decisions, completion, failure, and unknown state. Expanded targets sync tmux status every 5 seconds without scanning terminal text for errors. |
-| 🌐 **Local · SSH · WSL · native Windows** | One sidebar lists your local machine, your `~/.ssh/config` hosts, your WSL distros (on Windows), and native PowerShell / cmd sessions (on Windows) — all side by side. |
-| 🗂️ **Folder tree** | Organize sessions into **drag-and-drop folders** like a file explorer. Persists locally, per target. |
-| 📂 **Live file browser + editor** | The bottom of the sidebar follows each session's **working directory** — click a code file to split the terminal and **read or edit** it inline (save, undo/redo). |
-| 🔀 **Git panel** | Switch the sidebar bottom to Git view to inspect the current session's repository status, uncommitted changes, commit history, and incoming remote commits; click a pending file to open a VS Code-like side-by-side red/green diff in the bottom viewer region, and click a commit to show its full patch there; check out branches, fetch, pull, push, sync, and commit all working-tree changes. Git auth comes from the target machine's existing setup; tmuxes stores no credentials. |
-| 🔁 **True multi-client sync** | Powered by native `tmux attach`: open the same session in two tabs and they mirror each other, keystroke for keystroke. |
-| ⚙️ **Tweakable** | Adjustable font sizes for the sidebar, terminal, and file viewer — applied live, saved across reloads. |
-| 📋 **Easy copying** | Click **Select text** to drag-select an output snapshot without Shift; includes a Copy button, `Ctrl+C` / `Ctrl+Shift+C`, and optional automatic copying of mouse selections. |
-| 🚀 **One click** | Double-click `start.cmd` / `start.command` / `start.sh` → it builds, launches, and opens your browser. |
+| 🧠 **Built for agents** | Run Claude Code, Codex, OpenCode and Hermes in separate tmux sessions with full terminal interaction. The Codex button enters `codex --no-daemon` directly. |
+| 🔔 **Done / error / decision alerts** | Native structured events distinguish running, background work, human decisions, completion, failure and unknown. Expanded targets sync every 5 seconds; background shells, subagents and monitors do not imply completion. |
+| 🌐 **Local · SSH · WSL · native Windows** | One sidebar manages local tmux, SSH, WSL and PowerShell / cmd sessions. SSH management reads reuse only manually established persistent connections. |
+| 🗂️ **Folders & alert navigation** | Drag sessions into folders saved per target. Arrows locate offscreen alerts; collapsed groups summarize reminders. Files / Git use half the sidebar by default. |
+| 📂 **Preview, edit & download** | Browse working directories, preview PNG / JPG / GIF / WebP and PDF, and render Markdown math. Edit, save and undo text; download original files in any format. PDFs support inverted colors. |
+| 📖 **Agent reading & path links** | Read recent prompts and complete Codex 0.160 / Claude Code replies with tables and math. Click file paths in the terminal, reading view or rendered selection to open them. |
+| 🪟 **Persistent file tabs** | Keep files, edits and file reading positions across sessions, windows and targets. Dock at the bottom or right, or maximize while the terminal remains mounted. |
+| 🔀 **Git panel** | Inspect status, changes, history and incoming commits; show side-by-side diffs or full patches in the shared preview area. Supports branches, fetch, pull, push, sync and commit-all using target authentication. |
+| 🔁 **Multi-client sync** | View and type in the same tmux session from multiple tabs, reusing retained server-side terminal connections. |
+| ⚙️ **Layout & font controls** | Adjust sidebar, terminal and preview fonts separately, save dock position and dimensions, and drag dividers to resize. |
+| 📋 **Easy copying** | Select text opens a directly selectable output snapshot. Includes Copy, `Ctrl+C` / `Ctrl+Shift+C` and optional copy-on-selection. |
+| 🚀 **One-click launch** | Double-click `start.cmd` / `start.command`, or run `start.sh`, to build, start and open the browser. |
 
 ## 🖼️ What it looks like
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/fig1.png" alt="tmuxes screenshot — one tab to run a swarm of CLI agents" width="900">
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/fig1.png" alt="0.1.26 UI: agent sessions, downloads, persistent tabs and rendered Markdown math" width="1000">
 </div>
+
+The actual 0.1.26 UI, using fictional targets, sessions, paths and output. No real hosts, accounts or project data appear. The demo UI uses Chinese.
+
+<details>
+<summary>Agent reading and PDF with inverted colors</summary>
+
+<p>Click PDF, image and Markdown paths in replies to open files.</p>
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/agent-reading.png" alt="Agent reading: clickable file paths, tables and math" width="1000">
+<p>PDFs support continuous scrolling, zoom, text selection and inverted colors; open files survive session switches.</p>
+<img src="https://raw.githubusercontent.com/f1974939505/tmuxes/main/fig/pdf-preview.png" alt="PDF with inverted colors and persistent file tabs" width="1000">
+
+</details>
 
 ## 🏗️ Architecture
 
 ```text
-                          REST  (create · list · rename · kill · cwd · files · git)
+                          REST  (sessions · files / Range · messages · git)
   ┌────────────┐   ┌──────────────────────┐        ┌──────────────────────────────────┐
   │  Browser   │──▶│  Node · Express · ws │──pty──▶│ tmux                  (Linux/macOS)│
   │  xterm.js  │◀──│        node-pty      │──pty──▶│ ssh -tt user@host → tmux   (remote)│
@@ -65,7 +79,7 @@ live across **Local · SSH · WSL**, with a file browser and Git panel for every
 ```
 
 - **`client/`** — React + Vite + TypeScript, terminal via [`@xterm/xterm`](https://www.npmjs.com/package/@xterm/xterm).
-- **`server/`** — Node + Express + `ws` + `node-pty`. A small REST API runs short-lived tmux *management* commands; a single WebSocket endpoint streams the interactive *attach*.
+- **`server/`** — Node + Express + `ws` + `node-pty`. REST provides session management, file / Range transfers, paged messages and Git. WebSocket streams interactive *attach* using retained server-side terminal state. SSH management reads use only a manually established persistent connection; failures pause access until manual reconnect.
 
 > **No native tmux on Windows?** No problem. The server runs natively (node-pty uses ConPTY) and reaches tmux **inside your WSL distros** via `wsl.exe`. On Linux/macOS it talks to local tmux directly. Remote hosts use the **system `ssh` binary**, reusing your existing `~/.ssh` keys / `ssh-agent` — **no passwords are ever stored.**
 
@@ -120,7 +134,7 @@ npm start              # → http://localhost:7420   (set TMUXES_OPEN=1 to auto-
 
 On page load or refresh, all sidebar target groups start collapsed, including Windows Local, WSL Ubuntu, local tmux, and SSH targets. Click a group header to expand it.
 
-Open **Agent status integration** on a target, select an agent, and click **Install / update** once. The target needs **Python 3.9+ (`python3`)**, tmux, and the installed agent. Installation preserves existing configuration and backs up modified hook files. Restart the agent, then type ordinary `claude`, `codex`, `opencode`, or `hermes` commands in a tmux pane. Toolbar buttons also enter the original command, without injected `--remote`, `-c`, or a launch wrapper.
+Open **Agent status integration**, select an agent and click **Install / update** once. The target needs **Python 3.9+ (`python3`)**, tmux and the installed agent. Installation preserves configuration and backs up modified hooks. Trust hooks, enable plugins and restart as required, then type `claude`, `codex --no-daemon`, `opencode` or `hermes` directly. Toolbar buttons enter those same commands without injected `--remote`, `-c` or wrappers. Updating a trusted Codex 0.160 integration does not require restarting merely to recover startup evidence; see below.
 
 - **Running / background**: the root is working, or associated shells, monitors, subagents, goals, or scheduled wakeups remain.
 - **Decision**: structured evidence indicates user input is needed; briefly resolved requests stay quiet.
@@ -133,7 +147,7 @@ Installation reads the target interactive shell PATH and exported configuration 
 
 | Agent | Integration and limits |
 | --- | --- |
-| Codex | Merges `CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`); review and trust in `/hooks`. Foreground launch uses `--no-daemon`; hooks write metadata one way and bind by launch identity. Missing background-completion evidence stays unknown; the observer never answers approvals. Local hook contract verified with CLI 0.159.0. |
+| Codex | Merges `CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`); review and trust in `/hooks`. Foreground launch uses `--no-daemon`; hooks write metadata one way and bind by launch identity. Missing background-completion evidence stays unknown; the observer never answers approvals. Real CLI contract verified with 0.160.0. |
 | Claude Code | Merges `CLAUDE_CONFIG_DIR/settings.json` (default `~/.claude/settings.json`). Reads lifecycle, questions, failures, and background fields. Missing background evidence or continued Stop hooks prevent completion. Another Stop hook's first continuation decision may be invisible; the confirmation period only mitigates this race. |
 | OpenCode | Installs a global v1 plugin, respecting `XDG_CONFIG_HOME`. Only v1 is currently supported. The v2 plugin API changed; installation refuses v2 without modifying its configuration. v2 status collection is not implemented. |
 | Hermes | Installs under `HERMES_HOME/plugins/tmuxes-native-observer` (default `~/.hermes`). Run `hermes plugins enable tmuxes-native-observer`, then restart. Missing lifecycle fields or background counters degrade to unknown. Install separately in each named profile's environment. |
@@ -142,15 +156,39 @@ The panel shows only observations linked to current panes. Unbound, ended, and s
 
 The toolbar Codex button types `codex --no-daemon` directly into the current pane for the interactive shell to execute. Launching requires no Python, observer installation, or extra backend; tmux keeps the TUI alive. The sidebar integration panel only manages optional status collection and no longer offers a launch button. Existing daemons are not automatically stopped.
 
-Foreground Codex completion uses native hooks to track tools, subagents, and goals, then checks the matching turn-complete event in the local transcript during ordinary refreshes; `Stop` alone never reports success. Outstanding background shells, unconfirmed subagent completion, and active or paused goals prevent a green light. Each transcript read is limited to its last 256 KiB; conversation content is not persisted, no daemon is contacted, and no SSH login is added. Changed formats, missing events, or read failures remain unknown. After updating, select Codex in the target's **Agent status integration**, click **Install / update**, trust it in `/hooks`, and restart Codex to track its full lifecycle; restarting tmuxes alone does not update the target hooks.
+For foreground Codex 0.160, native hooks identify the current process and turn. The collector then incrementally verifies commands, nested subagents, and code execution cells in local session records, and reads goal status without modifying it. A green light requires the current turn and all observed work to finish, confirmed across two refreshes; `Stop` alone never reports success. Complete structured records can recover missing startup, tool-result, or `Stop` callbacks. A new prompt, user interruption, running shell / monitor / subagent, or active or paused goal never counts as completion.
 
-A Codex command that fails before launch or is denied by another `PreToolUse` hook may never emit `PostToolUse`. The collector checks the local transcript for an explicit not-started result matching the tool call and turn, then removes that pending entry so a finished turn does not remain background work forever. Other monitors, subagents, and goals remain outstanding. Hook input is bounded at 8 MiB so long tool results or answers are not discarded at the former 256 KiB limit; their content is still never stored in status records.
+After updating, select Codex in the target's **Agent status integration** and click **Install / update**; first installation still requires trust in `/hooks`. An already-trusted 0.160 integration can reconstruct a running session's status without restarting Codex to recover its startup event. The panel shows a hint during this initial incremental check. Updating local tmuxes alone does not update the target collector. Older sessions retain the existing hook verification path and may need a restart after work finishes if lifecycle records are incomplete.
 
-Codex `waitingOnApproval` cannot identify human versus automatic review, so it currently shows unknown without a human-decision alert. Structured user questions can still alert. Observed paused goals, background work, incomplete pagination, and unverifiable endings prevent completion alerts. Foreground collection covers work actually reported by supported hooks; specialized paths without hooks and manual goal changes are not guaranteed complete coverage. A green light is not proof that all external background processes have ended. These are explicit limits of passive observation.
+Failed commands or image reads may emit `PreToolUse` without `PostToolUse`; a completed subagent wait also does not create new background work. The 0.160 collector uses actual execution records to remove these stale entries. A narrowly recognized single read-only `write_stdin` wait no longer stays background work forever after its exact command has exited, even if Codex never collects the result again. Code cells containing loops, later actions, or other tools still require their own completion evidence.
+
+Each 0.160 observation shares an approximately 8 MiB read budget and a time limit across its root and subagents. Saved cursors allow subsequent reads to process only new records. Large images are skipped incrementally; the status cache retains identity and execution metadata, never conversation or tool output. Background work is also checked read-only. Collection does not contact a Codex daemon or add a persistent poller; SSH targets always reuse the existing management connection without new logins. Unverifiable ownership, formats, or incomplete records remain unknown. Hook input remains bounded at 8 MiB.
+
+Codex `waitingOnApproval` cannot identify human versus automatic review, so it currently shows unknown without a human-decision alert. Structured user questions can still alert. The 0.160 goal database also covers manual goal status changes; older versions still depend on supported hooks. Session records are version-sensitive: unfamiliar work types or unreadable records are never guessed to be complete. A green light verifies observed Codex work, not arbitrary detached external background processes.
 
 The collector stores bounded status metadata, never prompts or tool output. Installed files live under `~/.local/share/tmuxes/observer/`; records live under `~/.cache/tmuxes/observations/`. Reads are batched into the existing session refresh using the existing management connection, without additional SSH login probes or independent polling. `TMUXES_NO_AUTOHOOK` does not disable installed native integrations. To disable, remove only hooks pointing to the tmuxes observer, delete the corresponding OpenCode plugin file, or run `hermes plugins disable tmuxes-native-observer`.
 
 You can also type `codex --no-daemon` yourself in the target pane. Optional native hook collection still requires target Python and `/hooks` trust; Python is removed from the launch path. On Linux / WSL, direct launches bind through native hook process ancestry, the --no-daemon argument, process start time, and the terminal foreground process group, without a launcher identity. Update the target integration and trust its hooks; missing events or unverifiable ownership never imply a guessed binding. Unbound observations are hidden and cleaned up; incomplete linked observations stay unknown instead of guessing completion.
+
+The sidebar session area and Files / Git area each use half the available height by default; drag the divider to resize them. Unread completion, decision or error alerts outside the viewport show a small arrow and count at the top or bottom of the session area. Click it to locate the nearest reminder. Collapsed targets and folders summarize their hidden alerts. Position detection runs entirely in the browser and adds no remote reads or SSH requests.
+
+## 📖 File previews and agent reading
+
+PDF, image, Markdown and other previewable file paths in agent output are clickable and open or reuse persistent file tabs. The raw terminal, Agent reading and Render selection support absolute and relative paths; quote paths containing spaces or wrap them in backticks. The terminal also handles agents' own `file://` links: hover to underline, click to open, and use Shift for text selection. Relative terminal paths resolve against the originating session's current directory on click; paths inside Markdown files resolve against the document directory. Switching sessions keeps old output bound to its original source. Recognition performs no file probes or network requests; clicked files use the existing connection and session directory permissions.
+
+Each file row and the preview toolbar provide Download, which saves the original target file, including images, PDFs, Markdown and formats without previews. Save edits first to include them in the download. Downloads reuse the existing management connection and stream blocks of at most 512 KiB to the browser, without preview size limits, whole-file server caches or new SSH logins.
+
+Open files remain in preview tabs when switching tmux sessions, windows or targets, or opening another file. Tabs preserve PDF page/zoom, image zoom/position, rendered Markdown, unsaved edits and undo history. Click a tab to return; its target, session and path stay fixed, with the source shown in the title. Closing the file or refreshing the page releases it; file content is never written to browser persistent storage. The PDF toolbar's Invert colors button switches white pages and black text to black pages and white text, and remembers the color preference.
+
+The file browser opens PNG, JPG/JPEG, GIF, WebP and PDF files. Images support fit, original size, zoom and dragging; PDFs support continuous scrolling, page jumps, zoom and selectable text. Preview limits are 32 MiB for images and 256 MiB for PDFs. Files transfer in bounded blocks; closing a preview never terminates the shared connection. PDF.js, fonts and its worker are bundled locally without a CDN.
+
+Markdown opens in rendered preview mode. Switch to Source to edit, save and undo; Preview renders the current editor content. Tables, code blocks, `$...$` / `$$...$$` math and `\(...\)` / `\[...\]` outside code are supported. Invalid formulas retain their source with an error hint. Raw HTML is disabled; external images load only after a click. Relative image, Markdown and PDF links stay within the current session's working directory.
+
+Click Agent reading above the terminal to automatically view recent user prompts and complete replies from the active pane, with earlier-message pagination. Files and reading have separate tabs. Dock the preview at the bottom or right, resize it, or maximize it. Maximizing preserves the mounted terminal and its geometry; dock position and size are stored in the browser. Reading follows the bottom while preserving your position when scrolling up.
+
+Automatic reading supports **Codex 0.160** and verified Claude Code JSONL message shapes through the target's native integration. After upgrading tmuxes, click Install / Update once for each agent in the target's Agent integration panel, then wait for a new hook event to record its transcript path. Existing trust and other configuration are preserved. Missing bindings and unsupported formats show an explicit hint. As a fallback, select terminal output (including through Select text) and click Render selection. Terminal snapshots may contain wrapping or missing content.
+
+Reading is independent of status-light collection and filters reasoning, system instructions and tool logs. Only an open, visible reading tab fetches incremental updates every 3 seconds; hidden pages and inactive tabs pause. Failures pause updates until a successful manual connection or a reading refresh. Each read has byte and time budgets; large logs are processed in bounded segments, with up to 50 initial messages. Conversation content stays in bounded browser/server memory and is never written to tmuxes state files, logs or browser persistent storage. Remote file and conversation reads reuse the established management connection and cannot initiate SSH, probe connectivity or reconnect automatically.
 
 ## 🔀 Git Panel
 
@@ -165,7 +203,7 @@ Switch the sidebar bottom from `Files` to `Git`. The Git panel is scoped to the 
 ## 🧩 Targets
 
 - **Local** *(Linux/macOS)* — your machine's tmux. Not shown on Windows.
-- **Native Windows shells** *(Windows)* — PowerShell / cmd spawned directly via ConPTY (auto-detects `pwsh` → `powershell` → `cmd` → Git Bash); pick the shell when creating. Sessions live as long as the server process (survive refresh / reconnect / multi-tab; lost on server restart). They have no tmux working directory, so the file browser is hidden for them.
+- **Native Windows shells** *(Windows)* — PowerShell / cmd spawned directly via ConPTY (auto-detects `pwsh` → `powershell` → `cmd` → Git Bash); pick the shell when creating. Sessions live as long as the server process (survive refresh / reconnect / multi-tab; lost on server restart). They have no tmux working directory, so Files / Git are unavailable. Previews, downloads and path links use the existing local tmux, WSL and SSH scope.
 - **WSL distros** *(Windows)* — auto-discovered via `wsl.exe -l -q`; one target per distro. tmux must be installed inside the distro.
 - **SSH hosts** — discovered from your `~/.ssh/config` `Host` entries (wildcards skipped). Add extras explicitly:
 
@@ -207,8 +245,9 @@ All platforms need **Node 22.x (22.12.0 or later) or 24.x** and **npm 10+**. The
   ```
 - WSL gotcha: `node-gyp` uses whatever `python3` is on `PATH`. If a broken conda Python breaks the build:
   ```bash
-  npm config set python /usr/bin/python3
+  PYTHON=/usr/bin/python3 npm install
   ```
+  Select the interpreter through the `PYTHON` environment variable; see the [official node-gyp guidance](https://github.com/nodejs/node-gyp#configuring-python-dependency).
 
 </details>
 
@@ -227,9 +266,9 @@ By design it:
 
 - binds to **`127.0.0.1` only** — the bind address is not configurable at runtime,
 - has **no authentication**,
-- **never spawns a shell** (argv arrays + `shell:false`) and allowlist-validates every input,
+- provides real shell access through the terminal; management requests validate targets, session names and paths, with local processes launched through argv arrays rather than implicit Node command-string expansion,
 - rejects WebSocket upgrades whose `Origin` isn't localhost (anti DNS-rebind),
-- scopes the file browser/editor to the selected tmux session's current working directory.
+- scopes browsing, editing, previews, downloads and path-link reads to the originating tmux session working directory; Agent reading only accesses server-verified bound records.
 
 **Do not** reverse-proxy, tunnel, port-forward, or expose it on `0.0.0.0`. Any local user on the machine can use it.
 
@@ -300,77 +339,18 @@ If typing an initial command or sending Enter fails after session creation, the 
 
 ## 📋 Changelog
 
-### 0.1.22
+### 0.1.26 (2026-10-13)
 
-- **Terminal stability:** isolate Windows PTYs in child processes, bound output queues, and complete shutdown cleanup so one terminal cannot freeze all windows; add rotating local diagnostic logs.
-- **Codex completion:** combine foreground hooks with matching turn-complete records while retaining background-task and subagent checks. Update the target Codex integration, trust `/hooks`, and restart Codex.
-- **Logic consistency:** fix control-message validation, management stdin, SSH stream errors, connection identity, stale completion evidence, command-launch errors, and session-cache races.
-- **Manual SSH retry:** remove the long cooldown while keeping automatic reconnect disabled; coalesce concurrent clicks and ignore late failures from old connections.
-- **Collapsed by default:** all sidebar target groups start collapsed, including Windows Local and WSL Ubuntu.
+- **Codex completion:** replay 0.160 native records incrementally to recover missed tool and subagent events. Green requires the current turn to finish with no pending background tasks, decisions or goals.
+- **File previews & downloads:** image, PDF and Markdown math previews, plus original file downloads. PDFs support continuous scrolling, text selection and inverted colors.
+- **Persistent file tabs:** retain files, PDF pages, image zoom and unsaved edits across sessions, windows and targets, with bottom / right / maximized layouts.
+- **Agent reading:** complete Codex 0.160 / Claude Code messages, incremental updates and history paging, with rendered selections as a fallback. Reading is independent of status collection.
+- **Clickable paths:** open files from terminal output, reply prose and code while retaining their original target and session.
+- **Sidebar & reminders:** Files / Git use half the height; arrows locate offscreen alerts and collapsed groups summarize unread reminders.
+- **Preview style fixes:** isolate the main sidebar class from PDF.js so loading a PDF cannot narrow it; file toolbar buttons stay on one line.
+- **Documentation:** new screenshots use entirely fictional data; both READMEs reflect the current UI and retain only the latest entry, with older logs archived separately.
 
-### 0.1.21
-
-- **Direct foreground Codex:** the toolbar types `codex --no-daemon` into the interactive shell. Launching requires neither Python nor an extra app-server; the duplicate sidebar launch control is removed.
-- **Verified ownership:** on Linux / WSL, native hooks verify direct Codex process ancestry, foreground process group, and process identity. Identical session IDs in different processes remain isolated. Install / update the target integration again and trust it in `/hooks`; optional status collection still requires Python.
-- **Old observation cleanup:** unbound, ended, and superseded observation metadata is no longer displayed or retained. Agent session history and background processes are untouched.
-- **Claude background compatibility:** background-task and cron lists are read independently, preserving positive evidence when one field is missing. Incomplete evidence never reports completion.
-- **SSH constraints preserved:** management requests reuse an explicitly established connection; no automatic connection, reconnection, or per-refresh SSH login.
-
-### 0.1.20
-- **Cluster SSH iron rule:** management connections are explicitly opened and persist across requests on every platform. All automatic reconnects are removed. Server-side failure latches prevent polling and other browsers from automatically reconnecting. The original ten-minute manual-retry cooldown is removed in the 0.1.22; concurrent clicks still coalesce.
-- **Reuse terminal connections:** refreshes, tab switches and multiple browsers share the existing target/session terminal; session snapshots are coalesced and cached across browsers.
-- **Verified Codex ownership:** shared-daemon environment/process guesses no longer bind panes. Launch bound Codex uses a private official backend with verified launch identity and ancestry. TUI exit unbinds the pane while preserving background work. Install / update the integration again to deploy the new runtime.
-- **Exact pane display:** the panel identifies session/window/pane; sidebar state follows the active pane instead of mixing other windows.
-
-### 0.1.19
-- **Fix false agent-not-installed errors:** installation reads the target interactive shell PATH and exported agent configuration directories. Codex, Claude, and Hermes hook setup no longer requires an agent executable in the management process PATH. This runs only during explicit installation, without extra status polling or SSH logins.
-
-### 0.1.18
-- **Native status integration:** install hooks/plugins once per target, then launch agents with ordinary commands in tmux panes. Existing configuration is preserved and modified hook files are backed up.
-- **Codex launch and resume:** toolbar launches no longer inject `--remote`, `-c`, or wrappers, removing the bridge path behind the `/resume` connection failure. Restart old processes and trust Codex hooks through `/hooks`.
-- **Conservative status checks:** independently read background tasks, subagents, and goals; unverifiable completion stays unknown. Shared-daemon sessions can be linked manually to panes. Ambiguous human/automatic approval states do not trigger decision alerts.
-- **Compatibility limits:** the OpenCode plugin currently supports v1 only and refuses v2 installation. Hermes requires normal plugin enablement after installation. See the integration section above.
-
-### 0.1.17
-- **Agent alerts redesigned:** distinguish errors, pending user decisions, and verified task completion; background tasks, subagents, monitor shells, and brief pauses do not count as overall completion. Unverifiable activity is shown as unknown.
-- **Codex shared background server:** use a local protocol bridge instead of injecting `-c` hooks, removing the resulting embedded-mode warning; restore actual user-decision alerts while filtering brief automatic approvals.
-- **Four agent integrations:** update Claude Code hooks and add OpenCode and Hermes launch buttons and event adapters. Automatic integration requires Python 3.9+ on the tmux target; compatibility limits and the opt-out are documented above.
-
-### 0.1.16
-- **Node 24 support:** corrected `engines.node` to `^22.12.0 || ^24.0.0`, removing the incorrect `EBADENGINE` warning on Node 24; synchronized all workspaces, lockfile, installation guidance, and launcher messages.
-
-### 0.1.15
-- **Terminal copying**: added a Copy button, selection copy shortcuts, a text snapshot selection mode without Shift, and optional automatic copying of mouse selections; interactive `Ctrl+C` still interrupts when nothing is selected.
-
-### 0.1.14
-- **Claude Code decision alerts restored:** 0.1.13 accidentally removed Claude Code's approval, permission, and user-decision alerts too. This version re-scopes the removal to Codex only; Claude Code's `PermissionRequest`, `permission_prompt`, and `elicitation_dialog` events once again fire the `decision` badge, sound, and flashing background tab.
-- **Codex decision alerts stay removed:** Codex approval / decision requests still do not trigger browser alerts, avoiding false positives from `approvals_reviewer = "auto_review"` / Approve for me.
-
-### 0.1.13
-- **decision alerts removed:** Codex approval, permission, and user-decision requests no longer trigger browser alerts; tmuxes only alerts when an agent finishes or stops abnormally, avoiding Codex auto-approval false positives. (Note: 0.1.13 also accidentally removed Claude Code's decision alerts, restored in 0.1.14.)
-- **Git panel:** added a Git view in the sidebar bottom for the current session's working directory, with status, uncommitted changes, file diffs, branch checkout, fetch, pull, push, sync, and commit-all.
-- **commit history / remote commits:** the Git panel shows recent commits on the current branch and incoming upstream commits; click any commit to inspect its full patch in the bottom viewer region, and click any pending file to open a side-by-side red/green diff.
-- **credential-manager fallback:** fetch / pull / push automatically retry once with credential helpers temporarily disabled when the target Git config references a missing `credential-manager` helper, so public/SSH repositories are not blocked by a broken helper.
-
-### 0.1.12
-- **Codex auto-review alert fix:** when Codex uses `approvals_reviewer = "auto_review"` / Approve for me, approval requests stay in the running state instead of incorrectly firing the `decision` badge, sound, or flashing background tab; manual approval mode still alerts normally.
-
-### 0.1.11
-- **docs / publishing rules:** added the npm publishing checklist, clarified that only the `server` workspace is published, and requires `npx` / `npm exec` plus local startup smoke tests before and after release.
-- **security constraints:** publishing must not commit or paste `.npmrc` tokens, `NPM_TOKEN`, SSH private keys, one-time passwords, or any personal credentials.
-- **README refresh:** added `npx --help` verification, Windows troubleshooting notes, and condensed early release history.
-
-### 0.1.10
-- **publish fix:** republished the npm `latest` package and verified the online `tmuxes` bin, bundled `public` assets, and `npx tmuxes@latest` entrypoint.
-
-### 0.1.9
-- **fix: native Windows SSH management commands now use an app-owned long-lived connection.** Avoids Windows OpenSSH `ControlMaster` mux socket failures (`getsockname failed: Not a socket`) while preventing short management calls from repeatedly opening SSH connections.
-- **improve: file browser remote directory refresh is now coalesced.** One remote call reads the pane cwd, validates scope, and lists the directory, reducing SSH management traffic.
-
-### 0.1.0 - 0.1.8
-- **early feature set:** built local / SSH / WSL / native Windows shell targets, tmux attach multi-client sync, draggable folders, and the working-directory file browser/editor.
-- **agent alerts:** evolved from active-to-quiet notifications to official Claude Code / Codex lifecycle hooks with done and abnormal-stop states.
-- **Windows / SSH stability:** fixed ConPTY `Ctrl+C` shutdown, restored native browser right-click, and moved SSH management calls to long-lived reusable connections with only one automatic reconnect.
+See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.25 and earlier.
 
 <div align="center">
 <sub>Built with React, TypeScript, node-pty &amp; xterm.js — plus a lot of tmux. Happy babysitting. 🤖</sub>

@@ -1,10 +1,12 @@
-import type { OpenTextPreview } from '../types';
+import type { OpenFile, OpenTextPreview } from '../types';
 import { useSettings } from '../settings';
 import { useI18n } from '../i18n';
+import { MarkdownView } from './LazyMarkdownView';
 
 interface Props {
   preview: OpenTextPreview;
   onClose: () => void;
+  onOpenFile?: (file: OpenFile) => void;
 }
 
 interface DiffLine {
@@ -110,7 +112,7 @@ function SideBySideDiff({ content }: { content: string }) {
   );
 }
 
-export function TextViewer({ preview, onClose }: Props) {
+export function TextViewer({ preview, onClose, onOpenFile }: Props) {
   const { settings } = useSettings();
   const { t } = useI18n();
 
@@ -127,7 +129,7 @@ export function TextViewer({ preview, onClose }: Props) {
         </button>
       </div>
       <div className="viewer-body">
-        {preview.mode === 'diff' ? (
+        {preview.mode === 'markdown' ? <div className="markdown-scroll" style={{ fontSize: settings.viewerFontSize }}><MarkdownView text={preview.content} source={preview.source} onOpenFile={onOpenFile} /></div> : preview.mode === 'diff' ? (
           <div style={{ fontSize: settings.viewerFontSize }}>
             <SideBySideDiff content={preview.content} />
           </div>

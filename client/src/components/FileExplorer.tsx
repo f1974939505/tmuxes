@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FileEntry, OpenFile, Selection } from '../types';
 import { api, ApiError } from '../api';
-import { basename, isTextFile, joinPath, parentPath } from '../util';
+import { basename, previewKind, joinPath, parentPath } from '../util';
 import { useI18n } from '../i18n';
+import { FileDownload } from './FileDownload';
 
 interface Props {
   selection: Selection | null;
@@ -98,7 +99,7 @@ export function FileExplorer({ selection, openFile, enabled, pauseOnError, onOpe
     const full = joinPath(path, entry.name);
     if (entry.type === 'dir') {
       setManualPath(full);
-    } else if (isTextFile(entry.name)) {
+    } else if (previewKind(entry.name)) {
       onOpenFile({ targetId: selection.targetId, session: selection.session, path: full, name: entry.name });
     }
   };
@@ -134,9 +135,9 @@ export function FileExplorer({ selection, openFile, enabled, pauseOnError, onOpe
       )}
       <div className="explorer-list">
         {entries.map((e) => {
-          const openable = e.type === 'dir' || isTextFile(e.name);
+          const openable = e.type === 'dir' || !!previewKind(e.name);
           const isOpen =
-            openFile?.targetId === selection.targetId && path && openFile.path === joinPath(path, e.name);
+            openFile?.targetId === selection.targetId && openFile.session === selection.session && path && openFile.path === joinPath(path, e.name);
           return (
             <div
               key={e.name}
@@ -144,8 +145,9 @@ export function FileExplorer({ selection, openFile, enabled, pauseOnError, onOpe
               onClick={() => openable && navigate(e)}
               title={e.name}
             >
-              <span className="file-icon">{e.type === 'dir' ? '📁' : isTextFile(e.name) ? '📄' : '▫'}</span>
+              <span className="file-icon">{e.type === 'dir' ? '📁' : previewKind(e.name) === 'image' ? '🖼' : previewKind(e.name) ? '📄' : '▫'}</span>
               <span className="file-name">{e.name}</span>
+              {e.type === 'file' && path && <FileDownload compact file={{ targetId: selection.targetId, session: selection.session, path: joinPath(path, e.name), name: e.name }} />}
             </div>
           );
         })}

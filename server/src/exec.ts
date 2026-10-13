@@ -13,6 +13,8 @@ export interface RunOptions {
   encoding?: BufferEncoding;
   /** Written to the child's stdin (then closed) — used to pipe file contents. */
   input?: string;
+  /** Text-only bounded reads may avoid remote management scratch files. */
+  memoryOnly?: boolean;
 }
 
 /**

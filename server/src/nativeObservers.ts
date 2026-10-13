@@ -2,6 +2,7 @@ import type { SessionInfo } from './tmux/formats.js';
 import type { AgentKind, AgentState, AttentionReason } from './agentState.js';
 
 export interface NativeObserver {
+  completionDiagnostics?: { tracked: boolean; coverage?: 'complete' | 'replaying' | 'limited' };
   lastEvent?: string;
   key: string;
   kind: AgentKind;
