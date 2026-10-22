@@ -93,6 +93,22 @@ class NativeTests(unittest.TestCase):
             observation = native.snapshot()["observers"][0]
         self.assertEqual((observation["session"], observation["state"]), ("current", "running"))
 
+    def test_process_identity_upgrade_does_not_duplicate_current_pane(self):
+        from types import SimpleNamespace
+        bound = {"socket": "/sock", "pane": "%1", "pid": 20, "stamp": "old ps stamp"}
+        with patch.object(native, "binding", return_value=bound), patch.object(native.time, "time", return_value=10):
+            native.report("claude", {"session_id": "old-session", "hook_event_name": "UserPromptSubmit"})
+        with patch.object(native, "binding", return_value={**bound, "stamp": "proc:boot:42"}), \
+             patch.object(native.time, "time", return_value=20):
+            native.report("claude", {"session_id": "new-session", "hook_event_name": "UserPromptSubmit"})
+        with patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+             patch.object(native, "command", return_value="%1|/sock|0|1|1|current"), \
+             patch.object(native, "alive", return_value=True), \
+             patch.object(native, "process", return_value=(10, "proc:boot:42")):
+            observations = native.snapshot()["observers"]
+        self.assertEqual([r["id"] for r in observations], ["new-session"])
+        self.assertEqual(len(list(self.base.glob("*.json"))), 1)
+
     def test_160_ledger_and_missing_stop_survive_snapshot_persistence(self):
         from types import SimpleNamespace
         transcript = self.base / "rollout.jsonl"
@@ -365,6 +381,49 @@ class NativeTests(unittest.TestCase):
 
 
 class BindingTests(unittest.TestCase):
+    def test_linux_process_identity_uses_start_ticks_without_ps(self):
+        # /proc comm may contain spaces/parentheses; field 22 is starttime.
+        fields = ["S", "20"] + ["0"] * 17 + ["987654"] + ["0"] * 3
+        with patch.object(native.Path, "read_text", side_effect=["100 (agent (worker)) " + " ".join(fields), "test-boot\n"]), \
+             patch.object(native, "command") as command:
+            self.assertEqual(native.process(100), (20, "proc:test-boot:987654"))
+            command.assert_not_called()
+
+    def test_existing_ps_identity_remains_alive_after_upgrade(self):
+        with patch.object(native, "process", return_value=(10, "proc:boot:42")), \
+             patch.object(native, "legacy_process", return_value=(10, "old stamp")) as legacy:
+            self.assertTrue(native.alive({"pid": 20, "stamp": "old stamp"}))
+            self.assertFalse(native.alive({"pid": 20, "stamp": "proc:boot:41"}))
+            self.assertEqual(legacy.call_count, 1)
+
+    def test_wsl_hook_without_tmux_variables_matches_only_real_ancestor_pane(self):
+        with patch.dict(native.os.environ, {}, clear=True), \
+             patch.object(native.os, "getppid", return_value=100), \
+             patch.object(native, "process", side_effect=lambda pid: {100: (20, "hook"), 20: (10, "agent"), 10: (1, "shell")}.get(pid)), \
+             patch.object(native, "command", return_value="/tmp/tmux-1000/default|%1|90\n/tmp/tmux-1000/default|%2|10") as command:
+            self.assertEqual(native.binding(), {"socket": "/tmp/tmux-1000/default", "pane": "%2", "pid": 20, "stamp": "agent"})
+            command.assert_called_once_with(["tmux", "list-panes", "-a", "-F", "#{socket_path}|#{pane_id}|#{pane_pid}"])
+
+    def test_missing_pane_variable_can_use_explicit_socket_without_scanning(self):
+        with patch.dict(native.os.environ, {"TMUX": "/tmp/custom.sock,1,0"}, clear=True), \
+             patch.object(native.os, "getppid", return_value=100), \
+             patch.object(native, "process", side_effect=lambda pid: {100: (20, "hook"), 20: (10, "agent")}.get(pid)), \
+             patch.object(native, "command", return_value="/tmp/custom.sock|%2|10") as command:
+            self.assertEqual(native.binding()["pane"], "%2")
+            self.assertEqual(command.call_args.args[0][:3], ["tmux", "-S", "/tmp/custom.sock"])
+
+    def test_missing_tmux_variables_never_guess_daemon_or_ambiguous_pane(self):
+        with patch.dict(native.os.environ, {}, clear=True), \
+             patch.object(native.os, "getppid", return_value=100), \
+             patch.object(native, "process", side_effect=lambda pid: {100: (20, "hook"), 20: (1, "daemon")}.get(pid)), \
+             patch.object(native, "command", return_value="/sock|%1|10"):
+            self.assertIsNone(native.binding())
+        with patch.dict(native.os.environ, {}, clear=True), \
+             patch.object(native.os, "getppid", return_value=100), \
+             patch.object(native, "process", side_effect=lambda pid: {100: (20, "hook"), 20: (10, "agent")}.get(pid)), \
+             patch.object(native, "command", return_value="/sock|%1|10\n/sock|%2|10"):
+            self.assertIsNone(native.binding())
+
     def test_direct_codex_requires_foreground_flag_and_real_pane_ancestry(self):
         owner = {"socket": "/sock", "pane": "%1", "pid": 20, "stamp": "agent"}
         with patch.object(native, "binding", return_value=owner), \

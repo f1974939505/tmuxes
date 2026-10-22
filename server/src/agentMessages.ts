@@ -7,7 +7,7 @@ import { TmuxError } from './tmux/sessions.js';
 export interface AgentMessage { id: string; role: 'user' | 'assistant'; markdown: string; truncated?: boolean; before?: string | null; after?: string }
 export interface AgentMessages {
   availability: 'ready' | 'unavailable' | 'unsupported'; source: string | null;
-  messages: AgentMessage[]; before?: string; after?: string; reset?: boolean; limited?: boolean; cwd?: string;
+  messages: AgentMessage[]; before?: string; after?: string; reset?: boolean; jumpedToLatest?: boolean; limited?: boolean; oversized?: boolean; cwd?: string;
 }
 const pending = new Map<string, Promise<AgentMessages>>();
 

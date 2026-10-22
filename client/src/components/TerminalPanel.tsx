@@ -197,7 +197,7 @@ export function TerminalPanel({ targetId, targetKind, targetLabel, session, font
 
   return (
     <div className="panel">
-      <TerminalClipboard terminal={terminal} fontSize={fontSize} onRead={onRead} onRender={onRender}
+      <TerminalClipboard terminal={terminal} fontSize={fontSize} onRead={onRead} onRender={onRender} connected={status.kind === 'connected'}
         overlay={<StatusBanner status={status} onReconnect={() => setGeneration((g) => g + 1)} />}
         actions={targetKind !== 'winlocal' && (
         <>

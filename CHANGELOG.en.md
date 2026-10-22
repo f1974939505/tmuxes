@@ -4,6 +4,14 @@
 
 [Current features and latest source changes](./README.en.md#-changelog). Entries below describe their original versions; use the README for current connection, safety and integration behavior.
 
+### 0.1.27 (2026-10-13)
+
+- **Live files:** check only the visible file about every 3 seconds; unchanged content is not retransmitted, and returning to a tab checks immediately. Text / Markdown update automatically; images and PDFs reload only on changes while retaining zoom, page and reading positions.
+- **Edit protection:** external updates preserve unsaved edits and show a conflict. Saving checks the file version; overwriting external changes requires confirmation. A toolbar button also reloads manually.
+- **Terminal display:** retain the latest resize until ready and remeasure after font loading, browser zoom and visibility changes. Browser and server use matching Unicode 11 widths to prevent cursor offsets from modern emoji.
+- **Stable layout:** keep terminal controls on one line and reserve at least 320 pixels for the terminal beside a right preview. Limited space temporarily docks previews at the bottom; widening restores the preferred layout.
+- **Connection safety:** file checks reuse existing management connections. Hidden tabs stop polling; connection and permission errors pause until manual refresh or connection. No additional SSH logins.
+
 ### 0.1.26 (2026-10-13)
 
 - **Codex completion:** replay 0.160 native records incrementally to recover missed tool and subagent events. Green requires the current turn to finish with no pending background tasks, decisions or goals.

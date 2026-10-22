@@ -189,7 +189,7 @@ export interface OpenTextPreview {
 export interface AgentMessage { id: string; role: 'user' | 'assistant'; markdown: string; truncated?: boolean; before?: string | null; after?: string }
 export interface AgentMessages {
   availability: 'ready' | 'unavailable' | 'unsupported'; source: string | null;
-  messages: AgentMessage[]; before?: string | null; after?: string | null; reset?: boolean; limited?: boolean; cwd?: string;
+  messages: AgentMessage[]; before?: string | null; after?: string | null; reset?: boolean; jumpedToLatest?: boolean; limited?: boolean; oversized?: boolean; cwd?: string;
 }
 
 export interface Selection {

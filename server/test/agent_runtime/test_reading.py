@@ -64,7 +64,7 @@ class ReadingTests(unittest.TestCase):
         pending = self.page(token)
         self.assertTrue(reading.decode(pending["after"])["skip"])
         next_page = self.page(pending["after"])
-        self.assertGreater(reading.decode(next_page["after"])["offset"], reading.decode(pending["after"])["offset"])
+        self.assertEqual(reading.decode(next_page["after"])["offset"], self.path.stat().st_size)
         with self.path.open("ab") as f:
             f.write(b'"}\n' + json.dumps(codex("after huge tool")).encode() + b"\n")
         final = self.page(next_page["after"])
@@ -85,9 +85,75 @@ class ReadingTests(unittest.TestCase):
                     {"type": "response_item", "payload": {"type": "reasoning", "text": "thought"}},
                     codex("$x^2$", ident="m1")])
         result = self.page()
-        self.assertEqual([{k: m[k] for k in ("id", "role", "markdown")} for m in result["messages"]],
-                         [{"id": "m1", "role": "assistant", "markdown": "$x^2$"}])
+        self.assertEqual([{k: m[k] for k in ("role", "markdown")} for m in result["messages"]],
+                         [{"role": "assistant", "markdown": "$x^2$"}])
         self.assertEqual(reading.decode(result["messages"][0]["after"])["offset"], self.path.stat().st_size)
+
+    def test_latest_is_prioritized_after_a_large_incremental_backlog(self):
+        self.write([codex("first")])
+        token = self.page()["after"]
+        with self.path.open("ab") as stream:
+            stream.write(b"".join(json.dumps(codex(str(i))).encode() + b"\n" for i in range(180)))
+        latest = self.page(token)
+        self.assertTrue(latest["reset"])
+        self.assertEqual([m["markdown"] for m in latest["messages"]], [str(i) for i in range(130, 180)])
+        previous = self.page(latest["before"], "older")
+        self.assertEqual([m["markdown"] for m in previous["messages"]], [str(i) for i in range(80, 130)])
+
+    def test_empty_tool_tail_keeps_an_advancing_older_cursor_to_recent_answer(self):
+        self.write([codex("recent answer"), {"type": "tool", "output": "x" * 8192}])
+        with patch.object(reading, "BUDGET", 512):
+            result = self.page()
+            self.assertEqual(result["messages"], [])
+            tail = reading.decode(result["after"])["offset"]
+            offsets = [reading.decode(result["before"])["offset"]]
+            for _ in range(20):
+                result = self.page(result["before"], "older")
+                if result["messages"]:
+                    break
+                offsets.append(reading.decode(result["before"])["offset"])
+        self.assertTrue(all(a > b for a, b in zip(offsets, offsets[1:])))
+        self.assertEqual([m["markdown"] for m in result["messages"]], ["recent answer"])
+        self.assertEqual(tail, self.path.stat().st_size)
+        self.assertIsNone(result["before"])
+
+    def test_chunk_boundary_does_not_discard_a_complete_latest_row(self):
+        self.write([codex("old"), codex("latest")])
+        latest_bytes = len(json.dumps(codex("latest")).encode()) + 1
+        with patch.object(reading, "BUDGET", latest_bytes):
+            result = self.page()
+        self.assertEqual([m["markdown"] for m in result["messages"]], ["latest"])
+        self.assertEqual([m["markdown"] for m in self.page(result["before"], "older")["messages"]], ["old"])
+
+    def test_reused_provider_ids_do_not_hide_distinct_messages(self):
+        self.write([codex("before resume", ident="reused"), codex("after resume", ident="reused")])
+        result = self.page()
+        self.assertEqual(len({m["id"] for m in result["messages"]}), 2)
+        self.assertEqual([m["id"] for m in self.page()["messages"]], [m["id"] for m in result["messages"]])
+
+    def test_long_messages_are_complete_and_do_not_block_older_pagination(self):
+        long_text = "完整回答 " * (200 * 1024)
+        self.write([codex("older"), codex(long_text)])
+        latest = self.page()
+        self.assertEqual([m["markdown"] for m in latest["messages"]], [long_text])
+        self.assertNotIn("truncated", latest["messages"][0])
+        self.assertEqual([m["markdown"] for m in self.page(latest["before"], "older")["messages"]], ["older"])
+
+    def test_oversized_records_are_reported_instead_of_silently_disappearing(self):
+        self.write([codex("readable"), codex("x" * (8 * 1024 * 1024))])
+        latest = self.page()
+        self.assertTrue(latest["oversized"])
+        self.assertTrue(latest["before"])
+        self.assertEqual([m["markdown"] for m in self.page(latest["before"], "older")["messages"]], ["readable"])
+
+    def test_all_history_remains_reachable_well_past_the_browser_window(self):
+        self.write([codex(str(i)) for i in range(1200)])
+        result = self.page()
+        seen = [m["markdown"] for m in result["messages"]]
+        while result["before"]:
+            result = self.page(result["before"], "older")
+            seen = [m["markdown"] for m in result["messages"]] + seen
+        self.assertEqual(seen, [str(i) for i in range(1200)])
 
     def test_claude_filters_sidechains_tools_thinking_and_compaction(self):
         def row(content, **extra):

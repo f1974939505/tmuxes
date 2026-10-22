@@ -9,7 +9,10 @@ import time
 
 PAGE = 50
 BUDGET = 8 * 1024 * 1024
-ROW_LIMIT = 8 * 1024 * 1024
+# Keep one complete response below the management channel's response limit,
+# including JSON and pagination cursors. This is a per-record safety budget,
+# not a limit on how far back a conversation can be read.
+ROW_LIMIT = 7 * 1024 * 1024
 TEXT_LIMIT = 1024 * 1024
 
 
@@ -62,11 +65,10 @@ def message(line, offset, kind, sid):
             return None
         if not text.strip():
             return None
-        # Source offsets are stable even when providers omit or reuse ids.
-        result = {"id": str(row.get("uuid") or item.get("id") or offset), "role": role, "markdown": text[:256 * 1024],
+        # Providers can reuse message ids after a resume. The append-only source
+        # offset distinguishes these messages while remaining stable on rereads.
+        result = {"id": str(offset), "role": role, "markdown": text,
                   "_start": offset, "_end": offset + len(line)}
-        if len(text) > 256 * 1024:
-            result["truncated"] = True
         return result
     except (ValueError, TypeError, AttributeError):
         return None
@@ -81,12 +83,14 @@ def page(stream, stat, source, kind, sid, raw="", direction="newer"):
         reset = digest(stream.read(min(token["offset"], 64))) != token.get("anchor")
     if reset:
         token = None
-    messages, used, limited = [], 0, False
+    messages, used, limited, oversized = [], 0, False, False
     deadline = time.monotonic() + 0.25
     backwards = token is None or direction == "older"
     if backwards:
         end = token["offset"] if token else stat.st_size
         start = max(0, end - BUDGET)
+        stream.seek(max(0, start - 1))
+        at_boundary = start == 0 or stream.read(1) == b"\n"
         stream.seek(start)
         data = stream.read(end - start)
         lines = data.splitlines(keepends=True)
@@ -98,12 +102,13 @@ def page(stream, stat, source, kind, sid, raw="", direction="newer"):
         after = start + last_complete if last_complete else (0 if start == 0 else end)
         skip = not last_complete and start > 0
         before = after
-        first = 1 if start else 0
+        first = 0 if at_boundary else 1
+        oversized = any(len(line) > ROW_LIMIT for line in lines)
         for i in range(len(lines) - 1, first - 1, -1):
             if not lines[i].endswith(b"\n"):
                 continue
             item = message(lines[i], offsets[i], kind, sid)
-            if item and used + len(item["markdown"].encode()) > TEXT_LIMIT:
+            if item and messages and used + len(item["markdown"].encode()) > TEXT_LIMIT:
                 limited = True
                 break
             before = offsets[i]
@@ -131,12 +136,12 @@ def page(stream, stat, source, kind, sid, raw="", direction="newer"):
                 position += len(part)
                 if not skip:
                     buffer += part
-                    if len(buffer) >= ROW_LIMIT:
-                        buffer, skip = b"", True
+                    if len(buffer) > ROW_LIMIT:
+                        buffer, skip, oversized = b"", True, True
                 if part.endswith(b"\n"):
                     item = None if skip else message(buffer, row_start, kind, sid)
                     next_offset = position
-                    if item and used + len(item["markdown"].encode()) > TEXT_LIMIT:
+                    if item and messages and used + len(item["markdown"].encode()) > TEXT_LIMIT:
                         limited = True
                         break
                     after = next_offset
@@ -151,14 +156,23 @@ def page(stream, stat, source, kind, sid, raw="", direction="newer"):
                     row_start = after
             if len(messages) >= PAGE or limited:
                 break
-        limited = limited or stream.tell() < stat.st_size
+        limited = limited or stream.tell() < stat.st_size or (len(messages) >= PAGE and after < stat.st_size)
+        if limited and after < stat.st_size:
+            # A viewer returning after a long absence must see the newest
+            # answers, not spend minutes chasing old incremental pages. The
+            # displaced history remains reachable through the older cursor.
+            latest = page(stream, stat, source, kind, sid)
+            latest["reset"] = True
+            latest["jumpedToLatest"] = True
+            latest["oversized"] = oversized or latest["oversized"]
+            return latest
     for item in messages:
         begin, end = item.pop("_start"), item.pop("_end")
         item["before"] = cursor(stream, source, begin, stat) if begin > 0 else None
         item["after"] = cursor(stream, source, end, stat)
     return {"availability": "ready", "source": source, "messages": messages, "reset": reset,
             "before": cursor(stream, source, before, stat) if before > 0 else None,
-            "after": cursor(stream, source, after, stat, skip), "limited": limited}
+            "after": cursor(stream, source, after, stat, skip), "limited": limited, "oversized": oversized}
 
 
 def read(session, raw="", direction="newer"):

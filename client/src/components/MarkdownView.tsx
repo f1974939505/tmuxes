@@ -18,7 +18,7 @@ function validateMath({ prefix }: { prefix: string }) {
   return (tree: MathNode) => {
     const visit = (node: MathNode) => {
       if (node.type === 'math' || node.type === 'inlineMath') {
-        try { katex.renderToString(node.value ?? '', { trust: false, throwOnError: true, maxExpand: 1000, maxSize: 20 }); }
+        try { katex.renderToString(node.value ?? '', { displayMode: node.type === 'math', trust: false, throwOnError: true, maxExpand: 1000, maxSize: 20 }); }
         catch (error) {
           const display = node.type === 'math';
           const source = node.value ?? '';

@@ -103,6 +103,8 @@ export function SettingsButton() {
               checked={settings.copyOnSelect}
               onChange={(v) => setSetting('copyOnSelect', v)}
             />
+            <Toggle label={t.rightClickToTerminal} checked={settings.rightClickToTerminal}
+              onChange={v => setSetting('rightClickToTerminal', v)} />
             <div className="settings-title">{t.notifications}</div>
             <Toggle
               label={t.alertWhenAgent}

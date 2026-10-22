@@ -66,6 +66,18 @@ def command(argv):
 
 
 def process(pid):
+    # WSL/Linux exposes stable start ticks. Unlike ps lstart, this identity is
+    # independent of the hook's locale and does not fork a process per ancestor.
+    try:
+        stat = Path("/proc", str(int(pid)), "stat").read_text()
+        fields = stat[stat.rfind(")") + 2:].split()
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        return int(fields[1]), "proc:" + boot + ":" + fields[19]
+    except (OSError, ValueError, IndexError):
+        return legacy_process(pid)
+
+
+def legacy_process(pid):
     try:
         fields = command(["ps", "-o", "ppid=", "-o", "lstart=", "-p", str(int(pid))]).split(None, 1)
         return int(fields[0]), fields[1]
@@ -76,20 +88,42 @@ def process(pid):
 def binding():
     """Require real process ancestry; inherited daemon TMUX_PANE is not proof."""
     pane, tmux_env = os.environ.get("TMUX_PANE", ""), os.environ.get("TMUX", "")
-    if not re.fullmatch(r"%\d+", pane) or not tmux_env:
+    # Some WSL launchers/agent hook environments remove TMUX variables. An
+    # existing local server can still prove the pane using its shell PID and
+    # our actual ancestry; no command name/session-ID guessing is involved.
+    ancestors = {}
+    pid = os.getppid()
+    for _ in range(32):
+        info = process(pid)
+        if not info or pid <= 1 or pid in ancestors:
+            break
+        ancestors[pid] = info
+        pid = info[0]
+    if not ancestors:
         return None
-    sock = tmux_env.rsplit(",", 2)[0]
+    sock = tmux_env.rsplit(",", 2)[0] if tmux_env else ""
     try:
-        shell_pid = int(command(["tmux", "-S", sock, "display-message", "-p", "-t", pane, "#{pane_pid}"]))
-        pid = os.getppid()
-        for _ in range(32):
-            info = process(pid)
-            if not info or pid <= 1:
-                break
-            parent, stamp = info
-            if parent == shell_pid or pid == shell_pid:
-                return {"socket": sock, "pane": pane, "pid": pid, "stamp": stamp}
-            pid = parent
+        if re.fullmatch(r"%\d+", pane) and sock:
+            shell_pid = int(command(["tmux", "-S", sock, "display-message", "-p", "-t", pane, "#{pane_pid}"]))
+            for pid, (parent, stamp) in ancestors.items():
+                if parent == shell_pid or pid == shell_pid:
+                    return {"socket": sock, "pane": pane, "pid": pid, "stamp": stamp}
+            return None  # stale/inherited daemon variables must fail closed
+        args = ["tmux", *(["-S", sock] if sock else []), "list-panes", "-a", "-F",
+                "#{socket_path}|#{pane_id}|#{pane_pid}"]
+        matches = []
+        for row in command(args).splitlines():
+            candidate_socket, candidate_pane, raw_pid = row.rsplit("|", 2)
+            shell_pid = int(raw_pid)
+            if not re.fullmatch(r"%\d+", candidate_pane):
+                continue
+            for pid, (parent, stamp) in ancestors.items():
+                if parent == shell_pid or pid == shell_pid:
+                    matches.append({"socket": candidate_socket, "pane": candidate_pane,
+                                    "pid": pid, "stamp": stamp})
+                    break
+        if len(matches) == 1:
+            return matches[0]
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
     return None
@@ -198,7 +232,13 @@ def launch_codex():
 
 def alive(bound):
     info = process(bound.get("pid", 0)) if bound else None
-    return bool(info and info[1] == bound.get("stamp"))
+    if info and info[1] == bound.get("stamp"):
+        return True
+    # Existing hooks may have recorded ps timestamps before the /proc upgrade.
+    if info and not str(bound.get("stamp", "")).startswith("proc:"):
+        legacy = legacy_process(bound.get("pid", 0))
+        return bool(legacy and legacy[1] == bound.get("stamp"))
+    return False
 
 
 def restore(data):
@@ -462,7 +502,12 @@ def snapshot():
                 if record["kind"] == "codex" and (not bound or bound.get("proof") not in ("dedicated-codex-v1", "foreground-codex-v1", "foreground-direct-v1")):
                     bound = None
                 location = panes.get((bound["socket"], bound["pane"])) if bound and alive(bound) else None
-                binding_key = json.dumps(bound, sort_keys=True) if location else None
+                identity = dict(bound) if location else None
+                if identity and not str(identity.get("stamp", "")).startswith("proc:"):
+                    current_process = process(identity["pid"])
+                    if current_process:
+                        identity["stamp"] = current_process[1]
+                binding_key = json.dumps(identity, sort_keys=True) if identity else None
                 if record["kind"] == "claude" and record.get("state", {}).get("event") == "SessionEnd":
                     location = None
                 session = location["name"] if location else None

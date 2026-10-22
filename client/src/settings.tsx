@@ -17,6 +17,8 @@ export interface Settings {
   notifySound: boolean;
   /** Copy completed mouse selections to the system clipboard. */
   copyOnSelect: boolean;
+  /** Deliver right clicks to mouse-aware terminal applications instead of the UI menu. */
+  rightClickToTerminal: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -27,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyAttention: true,
   notifySound: true,
   copyOnSelect: false,
+  rightClickToTerminal: false,
 };
 
 export const FONT_LIMITS = { min: 8, max: 28 };
@@ -48,6 +51,7 @@ function coerceSettings(value: Partial<Settings>): Settings {
     ...value,
     language,
     copyOnSelect: value.copyOnSelect === true,
+    rightClickToTerminal: value.rightClickToTerminal === true,
   };
 }
 
