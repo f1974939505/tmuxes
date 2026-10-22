@@ -1,9 +1,20 @@
 import type { Terminal } from '@xterm/xterm';
 
+/** xterm clears selections when a mouse protocol is set, even to its current
+ * value. A tmux redraw may repeat this declaration without changing modes. */
+export function ignoreRedundantMouseModes(terminal: Pick<Terminal, 'modes' | 'parser'>) {
+  return terminal.parser.registerCsiHandler({ prefix: '?', final: 'h' }, params => {
+    const mode = { x10: 9, vt200: 1000, drag: 1002, any: 1003 }[terminal.modes.mouseTrackingMode as string];
+    // Leave mixed commands, encoding changes, subparameters and real protocol
+    // transitions to xterm. Only consume a pure, already-effective setting.
+    return mode !== undefined && params.length > 0 && params.every(param => param === mode);
+  });
+}
+
 /** Keep ordinary left drags local even when tmux/TUIs enable mouse reporting.
  * Ctrl/Meta+left and Shift+right route to the application. xterm still owns
  * selection, coordinates and protocol encoding; the wheel is untouched. */
-export function attachTerminalMouse(surface: HTMLElement, terminal: Pick<Terminal, 'modes' | 'element' | 'clearSelection'>,
+export function attachTerminalMouse(surface: HTMLElement, terminal: Pick<Terminal, 'modes' | 'element' | 'clearSelection' | 'hasSelection'>,
   options: () => { selecting: boolean; rightClickToTerminal: boolean },
   open: (x: number, y: number) => void): () => void {
   const document = surface.ownerDocument;
@@ -51,6 +62,14 @@ export function attachTerminalMouse(surface: HTMLElement, terminal: Pick<Termina
     stop(event);
   };
   const move = (event: MouseEvent) => {
+    // ANY-motion mode reports hovering as user input, which clears xterm's
+    // selection immediately after release. Selecting locally owns the pointer
+    // until a new click/key/wheel or an explicit application gesture.
+    if (!event.buttons && terminal.hasSelection() && terminal.modes.mouseTrackingMode === 'any'
+        && terminal.element?.contains(event.target as Node)) {
+      event.stopImmediatePropagation();
+      return;
+    }
     if (left && !relayed.has(event) && (event.buttons & 1)) { relay(event, left.target, leftModifiers(left.select)); return; }
     if (held && !relayed.has(event) && (event.buttons & 2)) relay(event, held);
   };

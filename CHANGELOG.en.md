@@ -4,6 +4,17 @@
 
 [Current features and latest source changes](./README.en.md#-changelog). Entries below describe their original versions; use the README for current connection, safety and integration behavior.
 
+### 0.1.28 (2026-10-22)
+
+- **Latest-first reading:** load recent answers first, continue backwards through tool-only log segments, page through older history and return to the latest messages. Keep a bounded movable window instead of a fixed reachable-history limit.
+- **Reading scroll:** even a slight upward scroll immediately stops following, so updates cannot pull you back to the bottom. Scroll down to the bottom or click Latest messages to resume.
+- **Complete replies:** remove the 256 Ki-character truncation and keep reused provider message IDs distinct. Oversized records still have an explicit safety-budget hint.
+- **Interactive terminal menu:** right-click to copy, paste, select, render text, scroll or redraw; Shift+right-click reaches mouse-aware terminal applications. Alt+right-click keeps the browser menu. Clipboard-denied browsers have a manual paste dialog.
+- **Consistent live selection:** ordinary left drags select in the browser across SSH, WSL and local sessions, even with tmux mouse reporting. Ctrl/⌘+left reaches the application. File and web links no longer swallow a selection start or open while being dragged.
+- **Math parsing:** fix multiline formulas whose opening or closing `$$` shares a line with content swallowing later prose. Preserve matrix row breaks and Markdown containers, and validate display equations in display mode, including equation numbering.
+- **WSL agent binding:** prove ownership through real process ancestry and pane PIDs even when hooks lose tmux environment variables. Stable Linux process identities remain compatible with older observations; ambiguous or daemon ownership still fails closed.
+- **Connection rule:** reading and status collection reuse existing management connections without automatic SSH login, connectivity probes or retries.
+
 ### 0.1.27 (2026-10-13)
 
 - **Live files:** check only the visible file about every 3 seconds; unchanged content is not retransmitted, and returning to a tab checks immediately. Text / Markdown update automatically; images and PDFs reload only on changes while retaining zoom, page and reading positions.

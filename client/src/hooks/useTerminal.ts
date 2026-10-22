@@ -4,6 +4,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { fileReference } from '../fileLinks';
 import { fileLinkProvider } from '../terminalFileLinks';
+import { ignoreRedundantMouseModes } from '../terminalMouse';
 
 export interface TerminalHandle {
   term: Terminal;
@@ -72,6 +73,7 @@ export function createTerminal(container: HTMLElement, fontSize: number, onOpenP
     hover: (_event, value) => { hovered = reference(value); }, leave: () => { hovered = undefined; },
   }));
   term.open(container);
+  const mouseModes = ignoreRedundantMouseModes(term);
   const links = onOpenPath ? term.registerLinkProvider(fileLinkProvider(term, activate, path => {
     hovered = path ? { kind: 'file', value: path } : undefined;
   })) : undefined;
@@ -79,6 +81,9 @@ export function createTerminal(container: HTMLElement, fontSize: number, onOpenP
   // a drag beginning on a path must still start xterm's normal text selection.
   const down = (event: PointerEvent) => {
     pressed = undefined; pending = undefined;
+    // Hover reports are paused while text is selected. The first click clears
+    // that selection; never activate a link left over from an earlier hover.
+    if (term.hasSelection()) { hovered = undefined; return; }
     if (event.button !== 0 || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
     pressed = { x: event.clientX, y: event.clientY, pointer: event.pointerId, dragged: false };
   };
@@ -132,6 +137,7 @@ export function createTerminal(container: HTMLElement, fontSize: number, onOpenP
       document.removeEventListener('pointercancel', cancel, true);
       window.removeEventListener('blur', cancel);
       links?.dispose();
+      mouseModes.dispose();
       try {
         term.dispose();
       } catch {

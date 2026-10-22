@@ -295,7 +295,7 @@ When switching or reopening sessions, tmuxes restores the screen, cursor, full-s
 
 **Copy to your system clipboard:** click **Select text** above the terminal, drag to select, then click **Copy** or press `Ctrl+C` / `Ctrl+Shift+C` (`⌘C` on macOS). No Shift-drag is needed. This view is a snapshot of the current terminal buffer when opened; the task keeps running. Click **Return to terminal** or press `Esc` to return to the live terminal; reopen it for a fresh snapshot. It is not full session history: full-screen programs may expose only their current screen, and tmux history not loaded into the browser is not included.
 
-**Select directly in the live terminal:** ordinary left dragging selects text locally, including when tmux or an agent enables mouse reporting over SSH or WSL. No snapshot is required. Ctrl+left-click / drag (also ⌘ on macOS) reaches terminal applications; the wheel keeps its existing behavior. Dragging from a file path or web link selects text, and only a complete ordinary click opens the link.
+**Select directly in the live terminal:** ordinary left dragging selects text locally, including when tmux or an agent enables mouse reporting over SSH or WSL. No snapshot is required. The selection remains after releasing the left button, so you can move to the toolbar or open the right-click menu to copy. Ctrl+left-click / drag (also ⌘ on macOS) reaches terminal applications; the wheel keeps its existing behavior. Dragging from a file path or web link selects text, and only a complete ordinary click opens the link.
 
 In interactive mode, `Ctrl+C` copies a selection and otherwise interrupts the program; `Ctrl+Shift+C` is reserved for copying. Right-click opens the tmuxes menu for copy, paste, select all, rendered selection, reading, buffer scrolling and redraw (`Ctrl+L`). The toolbar also provides Paste and Terminal menu. Shift+right-click reaches mouse-aware terminal programs; Shift+left-drag still selects text. Alt+right-click keeps the native browser clipboard menu. Settings can make ordinary right clicks reach terminal applications by default. Firefox may additionally show its browser menu on Shift+right-click ([browser limitation](https://developer.mozilla.org/en-US/docs/Web/API/Element/contextmenu_event)); use the setting to send ordinary right clicks instead.
 
@@ -349,18 +349,11 @@ If typing an initial command or sending Enter fails after session creation, the 
 
 ## 📋 Changelog
 
-### 0.1.28 (2026-10-22)
+### 0.1.29 (2026-10-22)
 
-- **Latest-first reading:** load recent answers first, continue backwards through tool-only log segments, page through older history and return to the latest messages. Keep a bounded movable window instead of a fixed reachable-history limit.
-- **Reading scroll:** even a slight upward scroll immediately stops following, so updates cannot pull you back to the bottom. Scroll down to the bottom or click Latest messages to resume.
-- **Complete replies:** remove the 256 Ki-character truncation and keep reused provider message IDs distinct. Oversized records still have an explicit safety-budget hint.
-- **Interactive terminal menu:** right-click to copy, paste, select, render text, scroll or redraw; Shift+right-click reaches mouse-aware terminal applications. Alt+right-click keeps the browser menu. Clipboard-denied browsers have a manual paste dialog.
-- **Consistent live selection:** ordinary left drags select in the browser across SSH, WSL and local sessions, even with tmux mouse reporting. Ctrl/⌘+left reaches the application. File and web links no longer swallow a selection start or open while being dragged.
-- **Math parsing:** fix multiline formulas whose opening or closing `$$` shares a line with content swallowing later prose. Preserve matrix row breaks and Markdown containers, and validate display equations in display mode, including equation numbering.
-- **WSL agent binding:** prove ownership through real process ancestry and pane PIDs even when hooks lose tmux environment variables. Stable Linux process identities remain compatible with older observations; ambiguous or daemon ownership still fails closed.
-- **Connection rule:** reading and status collection reuse existing management connections without automatic SSH login, connectivity probes or retries.
+- **Retain live selections:** moving the pointer after releasing the left mouse button no longer clears selected text. Repeated declarations of the same mouse mode also preserve selection, so you can move to the toolbar or open the right-click menu to copy.
 
-See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.27 and earlier.
+See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.28 and earlier.
 
 <div align="center">
 <sub>Built with React, TypeScript, node-pty &amp; xterm.js — plus a lot of tmux. Happy babysitting. 🤖</sub>
