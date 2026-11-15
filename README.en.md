@@ -194,6 +194,8 @@ Click Agent reading above the terminal to view recent user prompts and complete 
 
 Automatic reading parses verified **Codex / Claude Code JSONL message shapes** through the target's native integration. After upgrading tmuxes, click Install / Update once for each agent in the target's Agent integration panel, then wait for a new hook event to record its transcript path. Existing trust and other configuration are preserved. Missing bindings and unsupported formats show an explicit hint. As a fallback, select terminal output (including through Select text) and click Render selection. Terminal snapshots may contain wrapping or missing content.
 
+Codex reading validates the record header, session ID and message shape. Resumed transcripts retain their original creation version, so a difference from the current CLI version alone does not reject an otherwise supported record.
+
 Reading is independent of status-light collection and filters reasoning, system instructions and tool logs. Only an open, visible reading tab fetches incremental updates every 3 seconds; hidden pages and inactive tabs pause. Failures pause updates until a successful manual connection or a reading refresh. Each read has byte and time budgets; large logs are processed in bounded segments, with up to 50 initial messages. Individual replies are no longer truncated to 256 Ki characters. A record exceeding the 7 MiB safety budget is skipped with a hint to read it in the original terminal. Scrolling up preserves your position while ownership checks continue; switching the active pane or conversation clears stale content. Conversation content stays in bounded browser/server memory and is never written to tmuxes state files, logs or browser persistent storage. Remote file and conversation reads reuse the established management connection and cannot initiate SSH, probe connectivity or reconnect automatically.
 
 ## 🔀 Git Panel
@@ -349,11 +351,12 @@ If typing an initial command or sending Enter fails after session creation, the 
 
 ## 📋 Changelog
 
-### 0.1.29 (2026-10-22)
+### 0.1.30 (2026-11-15)
 
-- **Retain live selections:** moving the pointer after releasing the left mouse button no longer clears selected text. Repeated declarations of the same mouse mode also preserve selection, so you can move to the toolbar or open the right-click menu to copy.
+- **Read resumed Codex sessions:** validate the record header, session ID and recognized message shape rather than restricting the CLI version that originally created the transcript. Resumed older records and upgraded Codex sessions can use the same supported message format. Active pane / process ownership checks, incremental reads, pagination and existing management connection reuse remain in place.
+- **Stable PDF fit to panel:** reserve scrollbar space so pages near the panel height boundary do not repeatedly change scale, flicker or redraw. Fixed zoom, continuous scrolling and text selection remain available.
 
-See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.28 and earlier.
+See [release history](https://github.com/f1974939505/tmuxes/blob/main/CHANGELOG.en.md) for 0.1.29 and earlier.
 
 <div align="center">
 <sub>Built with React, TypeScript, node-pty &amp; xterm.js — plus a lot of tmux. Happy babysitting. 🤖</sub>

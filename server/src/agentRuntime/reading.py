@@ -40,6 +40,23 @@ def decode(raw):
         return None
 
 
+def codex_metadata(header, sid):
+    """Identify the supported envelope, independently of the CLI build number.
+
+    A resumed rollout retains the version that originally created it. Hooks
+    and the live pane/process binding prove ownership; message() only accepts
+    known conversation records and ignores tools, reasoning and unknown rows.
+    """
+    try:
+        row = json.loads(header)
+        meta = row.get("payload")
+        if row.get("type") == "session_meta" and isinstance(meta, dict) and meta.get("id") == sid:
+            return meta
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+
 def message(line, offset, kind, sid):
     if len(line) > ROW_LIMIT:
         return None
@@ -212,8 +229,8 @@ def read(session, raw="", direction="newer"):
             header = stream.readline(64 * 1024)
             kind, sid = record["kind"], record["id"]
             if kind == "codex":
-                meta = json.loads(header).get("payload", {})
-                if (meta.get("id") != sid or not str(meta.get("cli_version", "")).startswith("0.160.")):
+                meta = codex_metadata(header, sid)
+                if meta is None:
                     return {**empty, "availability": "unsupported"}
             else:
                 stream.seek(0)

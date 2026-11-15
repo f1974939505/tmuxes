@@ -4,6 +4,10 @@
 
 [Current features and latest source changes](./README.en.md#-changelog). Entries below describe their original versions; use the README for current connection, safety and integration behavior.
 
+### 0.1.29 (2026-10-22)
+
+- **Retain live selections:** moving the pointer after releasing the left mouse button no longer clears selected text. Repeated declarations of the same mouse mode also preserve selection, so you can move to the toolbar or open the right-click menu to copy.
+
 ### 0.1.28 (2026-10-22)
 
 - **Latest-first reading:** load recent answers first, continue backwards through tool-only log segments, page through older history and return to the latest messages. Keep a bounded movable window instead of a fixed reachable-history limit.

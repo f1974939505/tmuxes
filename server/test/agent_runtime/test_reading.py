@@ -181,16 +181,28 @@ class ReadingTests(unittest.TestCase):
         with patch.object(native, "STORE", store), patch.object(native, "alive", return_value=True), patch.object(native, "command", return_value="%2|/socket|session"):
             self.assertEqual(reading.read("session")["availability"], "unavailable")
 
-    def test_format_version_is_verified(self):
-        self.write([{"type": "session_meta", "payload": {"id": "sid", "cli_version": "0.161.0"}}, codex("answer")])
+    def test_resumed_rollouts_are_verified_by_envelope_and_identity_not_cli_version(self):
         store = Path(self.tmp.name) / "store"
         store.mkdir()
         record = {"key": "key", "kind": "codex", "id": "sid", "since": 1,
                   "binding": {"pane": "%1", "socket": "/socket", "pid": 12, "proof": "foreground-direct-v1"},
                   "reading": {"transcript": str(self.path)}}
         (store / "record.json").write_text(json.dumps(record))
-        with patch.object(native, "STORE", store), patch.object(native, "alive", return_value=True), patch.object(native, "command", return_value="%1|/socket|session"):
-            self.assertEqual(reading.read("session")["availability"], "unsupported")
+        for version in ("0.159.3", "0.160.0", "0.167.2"):
+            with self.subTest(version=version):
+                self.write([{"type": "session_meta", "payload": {"id": "sid", "cli_version": version}}, codex("answer")])
+                with patch.object(native, "STORE", store), patch.object(native, "alive", return_value=True), patch.object(native, "command", side_effect=["%1|/socket|session", "%1"]):
+                    result = reading.read("session")
+                    self.assertEqual(result["availability"], "ready")
+                    self.assertEqual(result["messages"][0]["markdown"], "answer")
+
+    def test_codex_metadata_rejects_other_sessions_and_unknown_headers(self):
+        for header in ({"type": "session_meta", "payload": {"id": "another"}},
+                       {"type": "new_format", "payload": {"id": "sid"}},
+                       {"type": "session_meta", "payload": []}, [], None):
+            with self.subTest(header=header):
+                self.assertIsNone(reading.codex_metadata(json.dumps(header), "sid"))
+        self.assertIsNone(reading.codex_metadata(b'{"type":"session_meta"', "sid"))
 
 
 if __name__ == "__main__":
