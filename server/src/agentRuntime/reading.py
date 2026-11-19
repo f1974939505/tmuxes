@@ -206,7 +206,7 @@ def read(session, raw="", direction="newer"):
             try:
                 record = json.loads(path.read_text())
                 bound = record.get("binding", {})
-                if (record.get("kind") not in ("codex", "claude") or bound.get("pane") != pane
+                if (record.get("kind") not in ("codex", "claude", "hermes") or bound.get("pane") != pane
                         or bound.get("socket") != socket or not alive(bound)):
                     continue
                 if record["kind"] == "codex" and bound.get("proof") not in ("foreground-codex-v1", "foreground-direct-v1"):
@@ -220,6 +220,14 @@ def read(session, raw="", direction="newer"):
         if record.get("state", {}).get("event") == "SessionEnd":
             return empty
         reading = record.get("reading", {})
+        if record["kind"] == "hermes":
+            try:
+                import hermes_msgs
+                result = hermes_msgs.page(record["id"], raw, direction)
+                result["cwd"] = reading.get("cwd") or hermes_msgs.session_meta(record["id"]).get("cwd", "")
+                return result
+            except (OSError, ValueError, TypeError, ImportError):
+                return empty
         path = Path(reading.get("transcript") or record.get("foreground", {}).get("transcript") or "")
         if not path.is_absolute():
             return empty

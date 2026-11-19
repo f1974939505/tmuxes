@@ -351,6 +351,10 @@ If typing an initial command or sending Enter fails after session creation, the 
 
 ## 📋 Changelog
 
+### Unreleased
+
+- **Hermes status and reading:** bind gateway-hosted Hermes sessions by working directory and pane, and read prompts and answers from `~/.hermes/state.db` in the Agent reading view.
+
 ### 0.1.30 (2026-11-15)
 
 - **Read resumed Codex sessions:** validate the record header, session ID and recognized message shape rather than restricting the CLI version that originally created the transcript. Resumed older records and upgraded Codex sessions can use the same supported message format. Active pane / process ownership checks, incremental reads, pagination and existing management connection reuse remain in place.
