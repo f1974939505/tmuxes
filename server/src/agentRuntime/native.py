@@ -129,6 +129,69 @@ def binding():
     return None
 
 
+def hermes_binding(sid):
+    """Join a gateway-hosted Hermes session to its tmux pane.
+
+    Hermes agent hooks fire in the gateway daemon (no TMUX_*), so ancestry
+    binding cannot succeed. The TUI client process does live in the pane, so
+    match on the session's cwd plus a Hermes client process in the pane, then
+    prefer the pane created nearest the session's start time.
+    """
+    try:
+        import hermes_msgs
+        meta = hermes_msgs.session_meta(sid)
+        cwd = str(Path(meta.get("cwd") or "").resolve())
+        started = float(meta.get("started_at") or 0)
+    except (OSError, ValueError, TypeError, ImportError):
+        return None
+    if not cwd or cwd == "/":
+        return None
+    try:
+        rows = command(["tmux", "list-panes", "-a", "-F",
+                        "#{socket_path}|#{pane_id}|#{pane_pid}|#{pane_current_path}|#{session_name}|#{session_created}"]).splitlines()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    bound_panes = set()
+    try:
+        for path in STORE.glob("*.json"):
+            try:
+                other = json.loads(path.read_text())
+            except (OSError, ValueError, TypeError):
+                continue
+            pane = (other.get("binding") or {}).get("pane")
+            if pane:
+                bound_panes.add(pane)
+    except OSError:
+        pass
+    candidates = []
+    for row in rows:
+        try:
+            sock, pane, raw_pid, pane_cwd, name, created = row.rsplit("|", 5)
+            if str(Path(pane_cwd).resolve()) != cwd or not re.fullmatch(r"%\d+", pane):
+                continue
+            pid = int(raw_pid)
+            info = process(pid)
+            if not info:
+                continue
+            try:
+                argv = command(["ps", "-o", "command=", "-p", str(pid)]).lower()
+            except (OSError, ValueError, subprocess.SubprocessError):
+                argv = ""
+            if "hermes" not in argv:
+                continue
+            candidates.append({"socket": sock, "pane": pane, "pid": pid, "stamp": info[1],
+                               "session": name, "created": int(created), "bound": pane in bound_panes})
+        except (ValueError, TypeError):
+            continue
+    if not candidates:
+        return None
+    free = [c for c in candidates if not c["bound"]] or candidates
+    free.sort(key=lambda c: abs(c["created"] - started))
+    chosen = free[0]
+    return {"socket": chosen["socket"], "pane": chosen["pane"], "pid": chosen["pid"],
+            "stamp": chosen["stamp"], "proof": "hermes-cwd-v1", "session": chosen["session"]}
+
+
 def process_arguments(pid):
     # Linux/WSL: preserve argv boundaries; never persist prompts or arguments.
     try:
@@ -265,7 +328,8 @@ def report(kind, payload):
         return
     scope = str(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve()) if kind == "codex" else ""
     claim = launch_claim() if kind == "codex" else None
-    bound = claim["binding"] if claim else (direct_codex_binding() if kind == "codex" else binding())
+    bound = claim["binding"] if claim else (direct_codex_binding() if kind == "codex"
+             else (binding() or (hermes_binding(sid) if kind == "hermes" else None)))
     # A resumed session ID can exist in multiple processes/panes concurrently.
     # Keep their event streams separate; one process cannot end another's work.
     owner_scope = json.dumps(bound, sort_keys=True) if bound and not claim else ""
@@ -286,6 +350,12 @@ def report(kind, payload):
         event = payload.get("hook_event_name")
         # Reading stores only source metadata. Conversation content remains in
         # the agent's own transcript and is fetched only by an open reader.
+        if kind == "hermes" and bound:
+            try:
+                import hermes_msgs
+                record["reading"] = {"cwd": hermes_msgs.session_meta(sid).get("cwd", "")}
+            except (OSError, ValueError, TypeError, ImportError):
+                pass
         if bound and isinstance(payload.get("transcript_path"), str):
             record["reading"] = {"transcript": payload["transcript_path"],
                                  "cwd": payload.get("cwd") if isinstance(payload.get("cwd"), str) else ""}
